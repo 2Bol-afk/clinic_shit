@@ -1,0 +1,193 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+  .auth-hero {
+    background: linear-gradient(135deg, rgba(25,135,84,.12), rgba(25,135,84,.04));
+    border-radius: 1rem;
+    padding: 2rem;
+  }
+  .auth-card {
+    border: 0;
+    border-radius: 1rem;
+    box-shadow: 0 1rem 2rem rgba(25,135,84,.12);
+    backdrop-filter: blur(6px);
+  }
+  .brand-badge {
+    display: inline-flex; align-items: center; gap: .5rem;
+    padding: .5rem .75rem; border-radius: 999px;
+    background: #eaf7f0; color: #198754; font-weight: 600;
+  }
+  .floating-label { position: relative; }
+  .floating-label input { padding-top: 1.25rem; }
+  .floating-label label {
+    position: absolute; top: .4rem; left: .75rem; font-size: .8rem; color: #6c757d;
+  }
+  .shake { animation: shake .3s linear 1; }
+  @keyframes shake { 0%{transform:translateX(0)} 25%{transform:translateX(-4px)} 50%{transform:translateX(4px)} 75%{transform:translateX(-2px)} 100%{transform:translateX(0)} }
+</style>
+
+<div class="row g-4 align-items-center">
+  <div class="col-lg-6">
+    <div class="auth-hero h-100 d-flex flex-column justify-content-center">
+      <span class="brand-badge mb-3"><i class="bi bi-hospital"></i> Community Health Clinic</span>
+      <h2 class="fw-bold mb-2">Welcome back</h2>
+      <p class="text-muted mb-4">Sign in to manage patient visits, consultations, labs, pharmacy, and vaccinations. New patients can register to receive their digital QR pass.</p>
+      <ul class="list-unstyled text-muted small mb-0">
+        <li class="mb-2"><i class="bi bi-qr-code-scan text-success me-2"></i>Fast QR-based check-in across stations</li>
+        <li class="mb-2"><i class="bi bi-clipboard2-pulse text-success me-2"></i>Doctor notes, prescriptions, and lab requests</li>
+        <li class="mb-2"><i class="bi bi-bar-chart-line text-success me-2"></i>Real-time dashboards and reports</li>
+      </ul>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div id="loginCard" class="card auth-card">
+      <div class="card-body p-4 p-md-5">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <h3 class="mb-0 d-flex align-items-center"><i class="bi bi-box-arrow-in-right text-success me-2"></i>Sign in</h3>
+        </div>
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger" role="alert">
+            {% for e in form.non_field_errors %}{{ e }}{% endfor %}
+          </div>
+        {% endif %}
+
+        <form id="loginForm" method="post" action="/accounts/login/" class="mb-3 needs-validation" novalidate>
+          {% csrf_token %}
+          <div class="floating-label mb-3">
+            <label>Email or Username</label>
+            <div class="input-group input-group-lg">
+              <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+              <input type="text" name="username" class="form-control" required autofocus placeholder="you@example.com" value="{{ form.username.value|default:'' }}">
+              <div class="invalid-feedback">Please enter your email or username.</div>
+            </div>
+            {% if form.username.errors %}
+              <div class="text-danger small mt-1">{% for e in form.username.errors %}{{ e }}{% endfor %}</div>
+            {% endif %}
+          </div>
+          <div class="floating-label mb-3">
+            <label>Password</label>
+            <div class="input-group input-group-lg">
+              <span class="input-group-text"><i class="bi bi-shield-lock"></i></span>
+              <input id="passwordInput" type="password" name="password" class="form-control" required placeholder="••••••••">
+              <button class="btn btn-outline-secondary" type="button" id="togglePwd" tabindex="-1"><i class="bi bi-eye"></i></button>
+              <div class="invalid-feedback">Please enter your password.</div>
+            </div>
+            {% if form.password.errors %}
+              <div class="text-danger small mt-1">{% for e in form.password.errors %}{{ e }}{% endfor %}</div>
+            {% endif %}
+          </div>
+          <button class="btn btn-success w-100 btn-lg d-flex align-items-center justify-content-center gap-2" type="submit">
+            <i class="bi bi-box-arrow-in-right"></i> Login
+          </button>
+        </form>
+        <div class="text-center text-muted small">New patient?
+          <button class="btn btn-link p-0 align-baseline" data-bs-toggle="modal" data-bs-target="#signupModal">Register & get QR</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Signup Modal -->
+<div class="modal fade" id="signupModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-person-plus me-2 text-success"></i>New patient? Register & get QR</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        {% if signup_form and signup_form.non_field_errors %}
+          <div class="alert alert-danger" role="alert">
+            {% for e in signup_form.non_field_errors %}{{ e }}{% endfor %}
+          </div>
+        {% endif %}
+        <form id="signupForm" method="post" action="/patients/signup/" class="row g-2 needs-validation" novalidate>
+          {% csrf_token %}
+          <div class="col-12">
+            <label class="form-label">Full Name</label>
+            <input type="text" name="full_name" class="form-control" required value="{{ signup_form.full_name.value|default:'' }}">
+            <div class="invalid-feedback">Full name is required.</div>
+            {% if signup_form and signup_form.full_name.errors %}
+              <div class="text-danger small">{% for e in signup_form.full_name.errors %}{{ e }}{% endfor %}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Age</label>
+            <input type="number" min="0" name="age" class="form-control" required value="{{ signup_form.age.value|default:'' }}">
+            <div class="invalid-feedback">Valid age is required.</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Contact Number</label>
+            <input type="text" name="contact" class="form-control" required value="{{ signup_form.contact.value|default:'' }}">
+            <div class="invalid-feedback">Contact number is required.</div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Address</label>
+            <textarea name="address" class="form-control" rows="2" required>{{ signup_form.address.value|default:'' }}</textarea>
+            <div class="invalid-feedback">Address is required.</div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Email</label>
+            <input type="email" name="email" class="form-control" required value="{{ signup_form.email.value|default:'' }}">
+            <div class="invalid-feedback">Valid email is required.</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Password</label>
+            <input type="password" name="password" class="form-control" required>
+            <div class="invalid-feedback">Password is required.</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Confirm Password</label>
+            <input type="password" name="password_confirm" class="form-control" required>
+            <div class="invalid-feedback">Please confirm your password.</div>
+          </div>
+          <div class="col-12">
+            <button class="btn btn-success w-100" type="submit"><i class="bi bi-check2-circle me-1"></i> Register & Get QR</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  // Bootstrap client-side validation
+  const forms = document.querySelectorAll('.needs-validation');
+  Array.from(forms).forEach(form => {
+    form.addEventListener('submit', event => {
+      if (!form.checkValidity()) {
+        event.preventDefault();
+        event.stopPropagation();
+        document.getElementById('loginCard')?.classList.add('shake');
+        setTimeout(()=>document.getElementById('loginCard')?.classList.remove('shake'), 400);
+      }
+      form.classList.add('was-validated');
+    }, false);
+  });
+  // Password toggle
+  const toggle = document.getElementById('togglePwd');
+  const pwd = document.getElementById('passwordInput');
+  if (toggle && pwd) {
+    toggle.addEventListener('click', () => {
+      const isText = pwd.getAttribute('type') === 'text';
+      pwd.setAttribute('type', isText ? 'password' : 'text');
+      toggle.querySelector('i').classList.toggle('bi-eye');
+      toggle.querySelector('i').classList.toggle('bi-eye-slash');
+    });
+  }
+  // Auto open signup modal on hash or server-side errors
+  const hasErrors = {% if signup_form and signup_form.errors %}true{% elif signup_form and signup_form.non_field_errors %}true{% else %}false{% endif %};
+  const hasQuery = '{{ request.GET.signup|default:"" }}' !== '';
+  if (location.hash === '#signup' || hasErrors || hasQuery) {
+    const modal = new bootstrap.Modal(document.getElementById('signupModal'));
+    modal.show();
+  }
+})();
+</script>
+{% endblock %}
+
+

@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-8">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex align-items-center"><i class="bi bi-qr-code-scan text-success me-2"></i>Scan QR / Enter Patient Code</div>
+      <div class="card-body">
+        <form method="post" class="row g-3">
+          {% csrf_token %}
+          <div class="col-12">
+            <label class="form-label">Patient Code</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-upc-scan"></i></span>
+              <input type="text" class="form-control" name="patient_code" placeholder="Scan or type code" required value="{{ prefill_code|default:'' }}">
+            </div>
+          </div>
+          <div class="col-12" {% if is_reception %}style="display:none"{% endif %}>
+            <label class="form-label">Service Station</label>
+            <select class="form-select" name="service" required id="serviceSelect">
+              <option value="reception">Reception/Triage</option>
+              <option value="doctor">Doctor Consultation</option>
+              <option value="lab">Laboratory</option>
+              <option value="pharmacy">Pharmacy</option>
+              <option value="vaccination">Vaccination/Immunization</option>
+            </select>
+          </div>
+          <input type="hidden" name="service" value="reception" {% if not is_reception %}disabled{% endif %}>
+          <div id="serviceFields" class="col-12">
+            <div data-svc="reception" class="svc d-none">
+              <div {% if is_reception %}style="display:none"{% endif %}>
+                <label class="form-label">Queue Number</label>
+                <input type="number" min="1" name="queue_number" class="form-control">
+              </div>
+              <label class="form-label mt-2">Department</label>
+              <select class="form-select" name="department">
+                <option value="General Medicine">General Medicine</option>
+                <option value="Pediatrics">Pediatrics</option>
+                <option value="OB-GYN">OB-GYN</option>
+                <option value="Others">Others</option>
+              </select>
+            </div>
+            <div data-svc="doctor" class="svc d-none">
+              <label class="form-label">Symptoms</label>
+              <textarea name="symptoms" class="form-control" rows="2"></textarea>
+              <label class="form-label mt-2">Diagnosis</label>
+              <textarea name="diagnosis" class="form-control" rows="2"></textarea>
+              <label class="form-label mt-2">Prescription Notes</label>
+              <textarea name="prescription_notes" class="form-control" rows="2"></textarea>
+              <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" name="doctor_done" id="doctorDone">
+                <label class="form-check-label" for="doctorDone">Mark consultation as Done</label>
+              </div>
+            </div>
+            <div data-svc="lab" class="svc d-none">
+              <label class="form-label">Requested Tests</label>
+              <textarea name="lab_tests" class="form-control" rows="2"></textarea>
+              <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" name="lab_completed" id="labCompleted">
+                <label class="form-check-label" for="labCompleted">Completed</label>
+              </div>
+            </div>
+            <div data-svc="pharmacy" class="svc d-none">
+              <label class="form-label">Medicines Dispensed</label>
+              <textarea name="medicines" class="form-control" rows="2"></textarea>
+              <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" name="dispensed" id="dispensed">
+                <label class="form-check-label" for="dispensed">Dispensed</label>
+              </div>
+            </div>
+            <div data-svc="vaccination" class="svc d-none">
+              <label class="form-label">Vaccine Type</label>
+              <input type="text" name="vaccine_type" class="form-control">
+              <label class="form-label mt-2">Dose</label>
+              <input type="text" name="vaccine_dose" class="form-control" placeholder="e.g., 1st, 2nd, Booster">
+              <label class="form-label mt-2">Vaccination Date</label>
+              <input type="date" name="vaccination_date" class="form-control">
+            </div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Notes</label>
+            <textarea name="notes" class="form-control" rows="3" placeholder="Optional"></textarea>
+          </div>
+          <div class="col-12">
+            <button class="btn btn-success" type="submit"><i class="bi bi-check2-circle me-1"></i>Log Visit</button>
+          </div>
+        </form>
+        {% if success %}
+          <div class="alert alert-success mt-3">Visit logged for {{ patient.full_name }}.</div>
+        {% endif %}
+        {% if error %}
+          <div class="alert alert-danger mt-3">{{ error }}</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  const sel = document.getElementById('serviceSelect');
+  const blocks = document.querySelectorAll('#serviceFields .svc');
+  function sync(){
+    blocks.forEach(b=>b.classList.add('d-none'));
+    const value = sel ? sel.value : 'reception';
+    const active = document.querySelector('#serviceFields .svc[data-svc="'+value+'"]');
+    if(active) active.classList.remove('d-none');
+  }
+  if(sel){ sel.addEventListener('change', sync); }
+  {% if is_reception %}
+    if(sel){ sel.value = 'reception'; }
+  {% elif is_doctor %}
+    if(sel){ sel.value = 'doctor'; }
+  {% endif %}
+  sync();
+})();
+</script>
+{% endblock %}
+
+

@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block content %}
+<h4>Welcome, {{ patient.full_name }}</h4>
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-body">
+        <div><strong>Patient Code:</strong> {{ patient.patient_code }}</div>
+        <div><strong>Email:</strong> {{ patient.email }}</div>
+        {% if patient.qr_code %}
+          <img src="{{ patient.qr_code.url }}" class="img-fluid mt-2" alt="QR">
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header">Latest Updates</div>
+      <div class="card-body">
+        <p><strong>Latest Doctor Notes:</strong> {{ latest_doctor.diagnosis|default:'-' }}<br>
+           <strong>Prescription:</strong> {{ latest_doctor.prescription_notes|default:'-' }}</p>
+        <p><strong>Latest Pharmacy Dispense:</strong> {{ latest_pharmacy.medicines|default:'-' }}</p>
+      </div>
+    </div>
+    <div class="card mt-3">
+      <div class="card-header">Visit History</div>
+      <div class="card-body">
+        <ul class="list-group">
+          {% for v in visits %}
+            <li class="list-group-item">
+              <div class="d-flex justify-content-between">
+                <div>
+                  {{ v.timestamp|date:'Y-m-d H:i' }} — {{ v.get_service_display }}
+                  {% if v.service == 'doctor' %}
+                    <div class="small">Diagnosis: {{ v.diagnosis|default:'-' }}</div>
+                    <div class="small">Prescription: {{ v.prescription_notes|default:'-' }}</div>
+                  {% elif v.service == 'pharmacy' %}
+                    <div class="small">Medicines: {{ v.medicines|default:'-' }}</div>
+                  {% elif v.service == 'vaccination' %}
+                    <div class="small">Vaccine: {{ v.vaccine_type }} ({{ v.vaccine_dose }}) on {{ v.vaccination_date|default:'-' }}</div>
+                  {% elif v.service == 'lab' %}
+                    <div class="small">Tests: {{ v.lab_tests|default:'-' }}{% if v.lab_completed %} (Completed){% endif %}</div>
+                  {% elif v.service == 'reception' %}
+                    <div class="small">Queue #: {{ v.queue_number|default:'-' }}</div>
+                  {% endif %}
+                </div>
+                <span class="badge bg-secondary">{{ v.created_by }}</span>
+              </div>
+            </li>
+          {% empty %}
+            <li class="list-group-item">No visits yet.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

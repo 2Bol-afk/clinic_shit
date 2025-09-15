@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3>Patients</h3>
+  <a class="btn btn-primary" href="/">Register New</a>
+  <div>
+    <a class="btn btn-outline-secondary" href="/patients/reports/daily.csv">Download Daily CSV</a>
+    <a class="btn btn-outline-secondary" href="/patients/reports/daily.xlsx">Download Daily Excel</a>
+  </div>
+  </div>
+<div class="table-responsive">
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Name</th><th>Email</th><th>Code</th><th>Age</th><th>Registered</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in patients %}
+        <tr>
+          <td><a href="/patients/{{ p.id }}/">{{ p.full_name }}</a></td>
+          <td>{{ p.email }}</td>
+          <td>{{ p.patient_code }}</td>
+          <td>{{ p.age }}</td>
+          <td>{{ p.created_at|date:'Y-m-d H:i' }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5">No patients yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+

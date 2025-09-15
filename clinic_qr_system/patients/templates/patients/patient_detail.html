@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-body">
+        <h5>{{ patient.full_name }}</h5>
+        <div>Email: {{ patient.email }}</div>
+        <div>Code: <strong>{{ patient.patient_code }}</strong></div>
+        <div>Age: {{ patient.age }}</div>
+        <div>Contact: {{ patient.contact }}</div>
+        <div>Address: {{ patient.address }}</div>
+        {% if patient.qr_code %}
+          <img src="{{ patient.qr_code.url }}" class="img-fluid mt-2" alt="QR">
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header">Visit History</div>
+      <div class="card-body">
+        <ul class="list-group">
+          {% for v in visits %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span>{{ v.timestamp|date:'Y-m-d H:i' }} — {{ v.get_service_display }}<br><small>{{ v.notes }}</small></span>
+              <span class="badge bg-secondary">{{ v.created_by }}</span>
+            </li>
+          {% empty %}
+            <li class="list-group-item">No visits yet.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+

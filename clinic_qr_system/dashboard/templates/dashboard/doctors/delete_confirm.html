@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block content %}
+<h3>Delete Doctor</h3>
+<div class="alert alert-warning">Are you sure you want to delete {{ doctor.full_name }} ({{ doctor.specialization }})? This will also remove their login.</div>
+<form method="post">{% csrf_token %}
+  <button class="btn btn-danger" type="submit">Delete</button>
+  <a class="btn btn-secondary" href="/dashboard/doctors/">Cancel</a>
+</form>
+{% endblock %}

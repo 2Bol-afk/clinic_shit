@@ -1,0 +1,27 @@
+# Virtualenv
+venv/
+env/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.*
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-workspace
+
+# System
+.DS_Store
+Thumbs.db
+

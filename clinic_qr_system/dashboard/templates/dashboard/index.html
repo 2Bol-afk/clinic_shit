@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0 d-flex align-items-center"><i class="bi bi-speedometer2 text-success me-2"></i>Admin Dashboard</h3>
+  <a href="/dashboard/doctors/" class="btn btn-success"><i class="bi bi-person-plus me-1"></i>Manage Doctors</a>
+</div>
+<div class="row g-3">
+  <div class="col-md-3">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-center">
+          <i class="bi bi-people-fill text-success fs-2 me-3"></i>
+          <div>
+            <div class="h6 text-muted">Total Patients</div>
+            <div class="display-6">{{ total_patients }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-center">
+          <i class="bi bi-clipboard2-check-fill text-success fs-2 me-3"></i>
+          <div>
+            <div class="h6 text-muted">Patients Served Today</div>
+            <div class="display-6">{{ patients_served_today }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-center">
+          <i class="bi bi-person-badge-fill text-success fs-2 me-3"></i>
+          <div>
+            <div class="h6 text-muted">Doctors</div>
+            <div class="display-6">{{ num_doctors }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="h6 text-muted"><i class="bi bi-diagram-3-fill text-success me-2"></i>Per Service Today</div>
+        <ul class="mb-0 small">
+          {% for row in per_service %}
+            <li>{{ row.service }}: {{ row.count }}</li>
+          {% empty %}
+            <li>No visits yet.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="card shadow-sm mt-4">
+  <div class="card-header"><i class="bi bi-activity me-2"></i>Recent Activity</div>
+  <div class="card-body">
+    <ul class="list-group list-group-flush">
+      {% for a in activity_logs %}
+        <li class="list-group-item d-flex justify-content-between">
+          <span><i class="bi bi-person-check text-success me-2"></i><strong>{{ a.actor }}</strong> — {{ a.verb }}: {{ a.description }} {% if a.patient %} for <a href="/patients/{{ a.patient.id }}/">{{ a.patient.full_name }}</a>{% endif %}</span>
+          <span class="text-muted small">{{ a.created_at|date:'Y-m-d H:i' }}</span>
+        </li>
+      {% empty %}
+        <li class="list-group-item">No activity yet.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endblock %}
+
+
