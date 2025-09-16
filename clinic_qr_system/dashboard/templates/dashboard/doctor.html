@@ -1,43 +1,27 @@
 {% extends 'base.html' %}
 {% block content %}
 <h4 class="d-flex align-items-center mb-3"><i class="bi bi-stethoscope text-success me-2"></i>Doctor Dashboard ({{ today }})</h4>
+<div class="mb-3">
+  <a href="#" class="btn btn-lg btn-outline-success qr-scan-btn" data-intent="staff">
+    📷 Verify QR
+  </a>
+  <small class="text-muted ms-2">Confirm patient identity via QR</small>
+  <hr>
+</div>
 <div class="row g-3">
-  <div class="col-md-7">
-    <div class="card shadow-sm">
-      <div class="card-header"><i class="bi bi-journal-medical me-2"></i>Latest Consultations Today</div>
-      <div class="card-body">
-        <table class="table table-sm">
-          <thead><tr><th>Time</th><th>Patient</th><th>Symptoms</th><th>Diagnosis</th><th>Prescription</th></tr></thead>
-          <tbody>
-            {% for v in visits %}
-              <tr>
-                <td>{{ v.timestamp|date:'H:i' }}</td>
-                <td><a href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a></td>
-                <td>{{ v.symptoms }}</td>
-                <td>{{ v.diagnosis }}</td>
-                <td>{{ v.prescription_notes }}</td>
-              </tr>
-            {% empty %}
-              <tr><td colspan="5">No consultations yet.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-5">
+  <div class="col-lg-6">
     <div class="card shadow-sm mb-3">
-      <div class="card-header"><i class="bi bi-person-walking me-2"></i>Waiting (Reception)</div>
+      <div class="card-header d-flex align-items-center"><i class="bi bi-person-walking me-2 text-primary"></i><span class="fw-semibold">Waiting (Reception)</span></div>
       <div class="card-body">
         {% if unfinished %}
           <div class="alert alert-warning">Finish your current consultation before claiming another patient.</div>
         {% endif %}
-        <ul class="list-group">
+        <ul class="list-group list-group-flush">
           {% for r in waiting %}
             <li class="list-group-item d-flex justify-content-between align-items-center">
               <span>
                 <a href="/patients/{{ r.patient.id }}/"><i class="bi bi-person-fill me-1"></i>{{ r.patient.full_name }}</a>
-                <small class="text-muted">(Queue #{{ r.queue_number|default:'-' }}, {{ r.department|default:'General Medicine' }})</small>
+                <small class="text-muted ms-2">Queue #{{ r.queue_number|default:'-' }} · {{ r.department|default:'General Medicine' }}</small>
               </span>
               <form method="post" action="/dashboard/doctors/claim/">
                 {% csrf_token %}
@@ -52,21 +36,121 @@
       </div>
     </div>
     <div class="card shadow-sm">
-      <div class="card-header"><i class="bi bi-clock-history me-2"></i>Your Recent Actions</div>
+      <div class="card-header d-flex align-items-center"><i class="bi bi-person-check me-2 text-info"></i><span class="fw-semibold">Claimed · Waiting to Arrive</span></div>
       <div class="card-body">
-        <ul class="list-group">
-          {% for v in timeline %}
-            <li class="list-group-item">
-              <i class="bi bi-person-badge me-1"></i>{{ v.timestamp|date:'H:i' }} — {{ v.patient.full_name }}
-              {% if v.diagnosis %}<div class="small">Dx: {{ v.diagnosis }}</div>{% endif %}
-              {% if v.prescription_notes %}<div class="small">Rx: {{ v.prescription_notes }}</div>{% endif %}
+        <ul class="list-group list-group-flush">
+          {% for r in claimed_waiting %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span>
+                <a href="/patients/{{ r.patient.id }}/"><i class="bi bi-person-fill me-1"></i>{{ r.patient.full_name }}</a>
+                <small class="text-muted ms-2">Dept: {{ r.department|default:'General Medicine' }}</small>
+              </span>
+              <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#docVerifyModal" data-visit="{{ r.id }}"><i class="bi bi-qr-code-scan me-1"></i>Verify</button>
             </li>
           {% empty %}
-            <li class="list-group-item">No recent actions.</li>
+            <li class="list-group-item">No claimed patients waiting to arrive.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card shadow-sm mb-3">
+      <div class="card-header"><i class="bi bi-clipboard2-pulse me-2"></i>Ready to Consult</div>
+      <div class="card-body">
+        <ul class="list-group">
+          {% for r in verified_claimed %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span>
+                <a href="/patients/{{ r.patient.id }}/"><i class="bi bi-person-fill me-1"></i>{{ r.patient.full_name }}</a>
+                <small class="text-muted">(Department: {{ r.department|default:'General Medicine' }})</small>
+              </span>
+              <a class="btn btn-success btn-sm" href="/dashboard/doctors/consult/{{ r.id }}/"><i class="bi bi-play-circle me-1"></i>Start Consultation</a>
+            </li>
+          {% empty %}
+            <li class="list-group-item">No verified patients ready for consultation.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    <div class="card shadow-sm">
+      <div class="card-header"><i class="bi bi-clipboard2-data me-2"></i>Not Done Consultations</div>
+      <div class="card-body">
+        <ul class="list-group">
+          {% for v in not_done %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span>
+                <a href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a>
+                <small class="text-muted ms-2">Started: {{ v.timestamp|date:'H:i' }}</small>
+              </span>
+              <div class="d-flex gap-2">
+                <a class="btn btn-outline-primary btn-sm" href="/dashboard/doctors/consult/edit/{{ v.id }}/"><i class="bi bi-pencil-square me-1"></i>Edit</a>
+                <form method="post" action="/dashboard/doctors/consult/{{ v.id }}/finish/">
+                  {% csrf_token %}
+                  <button class="btn btn-outline-success btn-sm" type="submit"><i class="bi bi-check2-circle me-1"></i>Finish</button>
+                </form>
+              </div>
+            </li>
+          {% empty %}
+            <li class="list-group-item">No in-progress consultations.</li>
           {% endfor %}
         </ul>
       </div>
     </div>
   </div>
 </div>
+<!-- Verify Modal -->
+<div class="modal fade" id="docVerifyModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-qr-code-scan me-2"></i>Verify Arrival</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" action="/dashboard/doctors/verify/">
+        {% csrf_token %}
+        <div class="modal-body">
+          <input type="hidden" name="reception_visit_id" id="docVerifyVisitId">
+          <label class="form-label">Scan/Enter Patient Code</label>
+          <input type="text" class="form-control" name="verify_code" placeholder="Patient code" required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-success" type="submit">Verify Arrival</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  const modal = document.getElementById('docVerifyModal');
+  if(modal){
+    modal.addEventListener('show.bs.modal', function (event){
+      const btn = event.relatedTarget;
+      if(!btn) return;
+      const id = btn.getAttribute('data-visit');
+      const input = modal.querySelector('#docVerifyVisitId');
+      if(input) input.value = id || '';
+    });
+  }
+})();
+</script>
+<script>
+// Auto-refresh lists every 10 seconds
+(function(){
+  setTimeout(function(){ location.reload(); }, 10000);
+})();
+// Disable Claim button immediately on click to prevent double-claiming
+(function(){
+  document.addEventListener('submit', function(e){
+    const form = e.target;
+    if(!form || !form.action) return;
+    if(form.action.includes('/dashboard/doctors/claim/')){
+      const btn = form.querySelector('button[type="submit"]');
+      if(btn){ btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Claiming…'; }
+    }
+  });
+})();
+</script>
 {% endblock %}

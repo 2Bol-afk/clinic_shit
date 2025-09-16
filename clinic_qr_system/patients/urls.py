@@ -11,6 +11,10 @@ urlpatterns = [
     path('reports/daily.xlsx', views.report_daily_xlsx, name='report_daily_xlsx'),
     path('portal/', views.portal_home, name='patient_portal'),
     path('signup/', views.signup, name='patient_signup'),
+    path('password/change/', views.PatientPasswordChangeView.as_view(), name='patient_password_change'),
+    path('password/first/', views.password_first_change, name='patient_password_first'),
+    path('qr-login/', views.qr_login, name='patient_qr_login'),
+    path('api/qr-scan/', views.qr_scan_api, name='patient_qr_scan_api'),
 ]
 
 

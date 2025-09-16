@@ -19,10 +19,13 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import RedirectView
+from django.contrib.auth import views as auth_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('django.contrib.auth.urls')),
+    # Ensure password change URL works for patient flow
+    path('accounts/password_change/', auth_views.PasswordChangeView.as_view(), name='password_change'),
     path('', RedirectView.as_view(url='/accounts/login/', permanent=False)),
     path('patients/', include('patients.urls')),
     path('visits/', include('visits.urls')),

@@ -1,30 +1,163 @@
 {% extends 'base.html' %}
 {% block content %}
-<h4>Laboratory Dashboard</h4>
+<h4 class="d-flex align-items-center mb-3"><i class="bi bi-flask text-success me-2"></i>Laboratory Dashboard</h4>
+<div class="mb-3">
+  <a href="#" class="btn btn-lg btn-outline-success qr-scan-btn" data-intent="staff">📷 Load QR</a>
+  <small class="text-muted ms-2">Open patient by QR to view results</small>
+  <hr>
+</div>
 <div class="row g-3">
   <div class="col-md-6">
-    <h6>Pending Lab Requests from Doctors</h6>
-    <ul class="list-group">
-      {% for v in pending %}
+    <h6>Unclaimed (Reception-tagged for Lab)</h6>
+    <ul class="list-group mb-3">
+      {% for v in pending_unclaimed %}
         <li class="list-group-item">
-          <a href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a>
-          <div class="small text-muted">Requested tests: {{ v.lab_tests|default:'-' }}</div>
-          <div class="small">Dr Notes: {{ v.prescription_notes|default:'-' }}</div>
-          <div class="small">At: {{ v.timestamp|date:'Y-m-d H:i' }}</div>
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <a href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a>
+              <div class="small text-muted">From Reception · Queue: {{ v.queue_number|default:'—' }} <span class="badge text-bg-success ms-2">Claimed</span></div>
+              <div class="small">At: {{ v.timestamp|date:'Y-m-d H:i' }}</div>
+            </div>
+            <form method="post" action="/dashboard/lab/claim/" class="d-flex align-items-center gap-2">
+              {% csrf_token %}
+              <input type="hidden" name="reception_visit_id" value="{{ v.id }}">
+              <button class="btn btn-outline-primary btn-sm" type="submit"><i class="bi bi-person-plus me-1"></i>Claim</button>
+            </form>
+          </div>
         </li>
       {% empty %}
-        <li class="list-group-item">No pending requests.</li>
+        <li class="list-group-item">No unclaimed tickets.</li>
+      {% endfor %}
+    </ul>
+    <h6>Claimed · Waiting to Arrive (verify QR on arrival)</h6>
+    <ul class="list-group">
+      {% for v in pending_claimed %}
+        <li class="list-group-item">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <a href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a>
+              <div class="small text-muted">From Reception · Queue: {{ v.queue_number|default:'—' }}</div>
+              <div class="small">At: {{ v.timestamp|date:'Y-m-d H:i' }}</div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#verifyModal" data-visit="{{ v.id }}"><i class="bi bi-qr-code-scan me-1"></i>Verify</button>
+            </div>
+          </div>
+        </li>
+      {% empty %}
+        <li class="list-group-item">No claimed tickets waiting to arrive.</li>
       {% endfor %}
     </ul>
   </div>
+  <!-- Verify Modal -->
+  <div class="modal fade" id="verifyModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-qr-code-scan me-2"></i>Verify Arrival</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <form method="post" action="/dashboard/lab/receive/">
+          {% csrf_token %}
+          <div class="modal-body">
+            <input type="hidden" name="reception_visit_id" id="verifyVisitId">
+            <label class="form-label">Scan/Enter Patient Code</label>
+            <input type="text" class="form-control" name="verify_code" placeholder="Patient code" required>
+            <label class="form-label mt-2">Test Type</label>
+            <select name="lab_test_type" class="form-select" required>
+              <option value="urinalysis">Urinalysis</option>
+              <option value="fecalysis">Fecalysis</option>
+              <option value="fbs">Fasting Blood Sugar (FBS)</option>
+              <option value="pregnancy">Pregnancy Test (hCG)</option>
+              <option value="lipid">Lipid Profile</option>
+              <option value="rdt">Rapid Diagnostic Test (RDT)</option>
+              <option value="blood_typing">Blood Typing (ABO/Rh)</option>
+            </select>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button class="btn btn-success" type="submit">Verify & Receive</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
   <div class="col-md-6">
-    <h6>Recently Completed Labs</h6>
+    <h6>In Progress</h6>
+    <ul class="list-group mb-3">
+      {% for v in in_progress %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <div>
+            <a class="fw-semibold" href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a>
+            <div class="small">Tests: {{ v.lab_tests|default:'-' }}</div>
+            <div class="small text-muted">Logged: {{ v.timestamp|date:'Y-m-d H:i' }}{% if v.queue_number %} · Queue: {{ v.queue_number }}{% endif %}</div>
+          </div>
+          <div class="d-flex gap-2">
+            <a class="btn btn-primary btn-sm" href="/dashboard/lab/work/{{ v.id }}/"><i class="bi bi-pencil-square me-1"></i>Open Work</a>
+            <form method="post" action="/dashboard/lab/{{ v.id }}/done/">
+              {% csrf_token %}
+              <input type="hidden" name="notes" value="Completed">
+              <button class="btn btn-outline-success btn-sm" type="submit"><i class="bi bi-check2-circle me-1"></i>Mark Done</button>
+            </form>
+          </div>
+        </li>
+      {% empty %}
+        <li class="list-group-item">No in-progress labs.</li>
+      {% endfor %}
+    </ul>
+    <script>
+    (function(){
+      // Fill hidden input with selected reception visit id when opening modal
+      const modal = document.getElementById('verifyModal');
+      if (modal) {
+        modal.addEventListener('show.bs.modal', function (event) {
+          const button = event.relatedTarget;
+          if (!button) return;
+          const id = button.getAttribute('data-visit');
+          const input = modal.querySelector('#verifyVisitId');
+          if (input) input.value = id || '';
+        });
+      }
+    })();
+    (function(){
+      // Map test types to starter templates
+      const templates = {
+        urinalysis: "Urinalysis (Urine Test):\nColor/Clarity: \nSugar: \nProtein: \nBlood: \nLeukocytes/Nitrites: \nNotes: \n",
+        fecalysis: "Fecalysis (Stool Examination):\nConsistency/Color: \nMicroscopy (OVA/Parasites): \nOccult Blood: \nBacteria: \nNotes: \n",
+        fbs: "Fasting Blood Sugar (FBS):\nFasting Hours: \nGlucose: __ mg/dL\nReference: 70–99 mg/dL (fasting)\nNotes: \n",
+        pregnancy: "Pregnancy Test (hCG):\nSpecimen: Urine/Blood\nhCG: Positive / Negative\nNotes: \n",
+        lipid: "Lipid Profile:\nTotal Cholesterol: __ mg/dL\nLDL: __ mg/dL\nHDL: __ mg/dL\nTriglycerides: __ mg/dL\nNotes: \n",
+        rdt: "Rapid Diagnostic Test (RDT):\nAssay: Dengue/Malaria/COVID-19\nResult: Positive / Negative\nControl: Valid / Invalid\nNotes: \n",
+        blood_typing: "Blood Typing (ABO/Rh):\nABO Group: A / B / AB / O\nRh Factor: Positive / Negative\nCrossmatch (if applicable): Compatible / Incompatible\nNotes: \n"
+      };
+      document.addEventListener('change', function(e){
+        const sel = e.target.closest('.lab-type');
+        if(!sel) return;
+        const targetId = sel.getAttribute('data-target');
+        const ta = document.getElementById(targetId);
+        if(!ta) return;
+        const key = sel.value;
+        if(!key) return;
+        // If empty, fill; otherwise append with spacing
+        const base = templates[key] || '';
+        if(!base) return;
+        if(!ta.value.trim()) {
+          ta.value = base;
+        } else {
+          const sep = ta.value.endsWith('\n') ? '' : '\n\n';
+          ta.value = ta.value + sep + base;
+        }
+        ta.focus();
+      });
+    })();
+    </script>
+    <h6>Recently Completed</h6>
     <ul class="list-group">
       {% for v in completed %}
         <li class="list-group-item">
           <a href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a>
           <div class="small">Tests: {{ v.lab_tests|default:'-' }}</div>
-          <div class="small">At: {{ v.timestamp|date:'Y-m-d H:i' }}</div>
+          <div class="small text-muted">Done: {{ v.lab_completed_at|date:'Y-m-d H:i'|default:v.timestamp|date:'Y-m-d H:i' }}</div>
         </li>
       {% empty %}
         <li class="list-group-item">No completed labs yet.</li>
@@ -32,4 +165,21 @@
     </ul>
   </div>
 </div>
+<script>
+// Auto-refresh lists every 10 seconds
+(function(){
+  setTimeout(function(){ location.reload(); }, 10000);
+})();
+// Disable Claim/Receive buttons immediately on click to prevent double actions
+(function(){
+  document.addEventListener('submit', function(e){
+    const form = e.target;
+    if(!form || !form.action) return;
+    if(form.action.includes('/dashboard/lab/claim/') || form.action.includes('/dashboard/lab/receive/')){
+      const btn = form.querySelector('button[type="submit"]');
+      if(btn){ btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Processing…'; }
+    }
+  });
+})();
+</script>
 {% endblock %}

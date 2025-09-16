@@ -4,10 +4,13 @@ from django.contrib.auth.models import User
 
 
 DEPARTMENT_CHOICES = [
-    ('General Medicine', 'General Medicine'),
-    ('Pediatrics', 'Pediatrics'),
-    ('OB-GYN', 'OB-GYN'),
-    ('Others', 'Others'),
+    ('Pediatrics', 'Pediatrics (Children’s Health)'),
+    ('OB-GYN', 'Obstetrics and Gynecology (OB-GYN)'),
+    ('Cardiology', 'Cardiology (Heart Care)'),
+    ('Radiology', 'Radiology'),
+    ('Surgery', 'Surgery'),
+    ('Dermatology', 'Dermatology (Skin Care)'),
+    ('ENT', 'ENT (Ear, Nose, Throat)'),
 ]
 
 class Patient(models.Model):
@@ -19,6 +22,7 @@ class Patient(models.Model):
     email = models.EmailField(unique=True)
     patient_code = models.CharField(max_length=20, unique=True)
     qr_code = models.ImageField(upload_to='qr_codes/', blank=True, null=True)
+    must_change_password = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:

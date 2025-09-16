@@ -1,58 +1,80 @@
 {% extends 'base.html' %}
 {% block content %}
-<h4>Welcome, {{ patient.full_name }}</h4>
+<h4 class="d-flex align-items-center mb-3"><i class="bi bi-person-vcard text-success me-2"></i>Patient Dashboard</h4>
+<div class="card shadow-sm mb-3">
+  <div class="card-body">
+    <label class="form-label">Scan QR / Enter Patient Code</label>
+    <div class="input-group">
+      <span class="input-group-text"><i class="bi bi-qr-code-scan"></i></span>
+      <input type="text" class="form-control" id="pScanCode" placeholder="Scan or type code" value="{{ patient.patient_code }}">
+      <button class="btn btn-outline-secondary" id="pScanBtn"><i class="bi bi-search me-1"></i>Load</button>
+    </div>
+    <div class="small text-muted mt-1">Tip: Your patient code is prefilled.</div>
+  </div>
+</div>
+
 <div class="row g-3">
-  <div class="col-md-4">
-    <div class="card">
+  <div class="col-lg-4">
+    <div class="card shadow-sm">
       <div class="card-body">
-        <div><strong>Patient Code:</strong> {{ patient.patient_code }}</div>
-        <div><strong>Email:</strong> {{ patient.email }}</div>
+        <h5 class="mb-1">{{ patient.full_name }}</h5>
+        <div class="small text-muted">ID: {{ patient.id }} · Code: <strong>{{ patient.patient_code }}</strong></div>
+        <div class="mt-2">Age: {{ patient.age }}</div>
+        <div>Email: {{ patient.email }}</div>
+        <div class="mt-2">Allergies: <span class="text-muted">Not recorded</span></div>
+        <div>Chronic Conditions: <span class="text-muted">Not recorded</span></div>
         {% if patient.qr_code %}
-          <img src="{{ patient.qr_code.url }}" class="img-fluid mt-2" alt="QR">
+          <img src="{{ patient.qr_code.url }}" class="img-fluid mt-2 rounded" alt="QR">
         {% endif %}
       </div>
     </div>
-  </div>
-  <div class="col-md-8">
-    <div class="card">
-      <div class="card-header">Latest Updates</div>
-      <div class="card-body">
-        <p><strong>Latest Doctor Notes:</strong> {{ latest_doctor.diagnosis|default:'-' }}<br>
-           <strong>Prescription:</strong> {{ latest_doctor.prescription_notes|default:'-' }}</p>
-        <p><strong>Latest Pharmacy Dispense:</strong> {{ latest_pharmacy.medicines|default:'-' }}</p>
+    <div class="card shadow-sm mt-3">
+      <div class="card-header"><i class="bi bi-activity me-1"></i>Latest Updates</div>
+      <div class="card-body small">
+        <div><strong>Latest Doctor Diagnosis:</strong> {{ latest_doctor.diagnosis|default:'—' }}</div>
+        <div><strong>Prescription:</strong><br>{{ latest_doctor.prescription_notes|linebreaksbr|default:'—' }}</div>
+        <div class="mt-2"><strong>Latest Pharmacy:</strong> {{ latest_pharmacy.medicines|default:'—' }}</div>
       </div>
     </div>
-    <div class="card mt-3">
-      <div class="card-header">Visit History</div>
-      <div class="card-body">
-        <ul class="list-group">
+  </div>
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-header"><i class="bi bi-clock-history me-1"></i>Your Visits & Timeline</div>
+      <div class="card-body p-0">
+        <ul class="list-group list-group-flush">
           {% for v in visits %}
             <li class="list-group-item">
-              <div class="d-flex justify-content-between">
+              <div class="d-flex align-items-start">
+                <div class="me-2">{% if v.service == 'doctor' %}🩺{% elif v.service == 'lab' %}🧪{% elif v.service == 'pharmacy' %}💊{% elif v.service == 'vaccination' %}💉{% else %}📌{% endif %}</div>
                 <div>
-                  {{ v.timestamp|date:'Y-m-d H:i' }} — {{ v.get_service_display }}
-                  {% if v.service == 'doctor' %}
-                    <div class="small">Diagnosis: {{ v.diagnosis|default:'-' }}</div>
-                    <div class="small">Prescription: {{ v.prescription_notes|default:'-' }}</div>
-                  {% elif v.service == 'pharmacy' %}
-                    <div class="small">Medicines: {{ v.medicines|default:'-' }}</div>
-                  {% elif v.service == 'vaccination' %}
-                    <div class="small">Vaccine: {{ v.vaccine_type }} ({{ v.vaccine_dose }}) on {{ v.vaccination_date|default:'-' }}</div>
-                  {% elif v.service == 'lab' %}
-                    <div class="small">Tests: {{ v.lab_tests|default:'-' }}{% if v.lab_completed %} (Completed){% endif %}</div>
-                  {% elif v.service == 'reception' %}
-                    <div class="small">Queue #: {{ v.queue_number|default:'-' }}</div>
-                  {% endif %}
+                  <div class="fw-semibold">{{ v.timestamp|date:'Y-m-d H:i' }} — {{ v.get_service_display }}</div>
+                  <div class="small text-muted">{{ v.notes|default:'' }}</div>
                 </div>
-                <span class="badge bg-secondary">{{ v.created_by }}</span>
               </div>
             </li>
           {% empty %}
-            <li class="list-group-item">No visits yet.</li>
+            <li class="list-group-item text-center text-muted">No visits yet.</li>
           {% endfor %}
         </ul>
       </div>
     </div>
   </div>
 </div>
+
+<script>
+(function(){
+  const btn = document.getElementById('pScanBtn');
+  const inp = document.getElementById('pScanCode');
+  if(btn && inp){
+    const go = ()=>{
+      const code = (inp.value||'').trim();
+      if(!code) return;
+      // Redirect to own dashboard with code param (future: could use API to load family members)
+      location.href = '/patients/portal/?code=' + encodeURIComponent(code);
+    };
+    btn.addEventListener('click', go);
+    inp.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); go(); }});
+  }
+})();
+</script>
 {% endblock %}

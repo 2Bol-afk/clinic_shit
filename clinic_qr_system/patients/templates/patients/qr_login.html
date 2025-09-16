@@ -1,0 +1,444 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+  .qr-scanner-card {
+    background: linear-gradient(135deg, rgba(25,135,84,.08), rgba(25,135,84,.02));
+    border: 2px dashed #198754;
+    border-radius: 1.5rem;
+    padding: 3rem 2rem;
+    text-align: center;
+    transition: all 0.3s ease;
+  }
+  .qr-scanner-card:hover {
+    border-color: #157347;
+    background: linear-gradient(135deg, rgba(25,135,84,.12), rgba(25,135,84,.04));
+  }
+  .qr-icon {
+    font-size: 4rem;
+    color: #198754;
+    margin-bottom: 1rem;
+  }
+  .patient-info-card {
+    background: white;
+    border-radius: 1rem;
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,.1);
+    padding: 2rem;
+    margin-top: 2rem;
+    display: none;
+  }
+  .patient-info-card.show {
+    display: block;
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+  .status-normal { background: #d1edff; color: #0c63e4; }
+  .status-warning { background: #fff3cd; color: #856404; }
+  .status-danger { background: #f8d7da; color: #721c24; }
+  .timeline-item {
+    border-left: 3px solid #e9ecef;
+    padding-left: 1rem;
+    margin-bottom: 1rem;
+    position: relative;
+  }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -6px;
+    top: 0.5rem;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #198754;
+  }
+  .timeline-item:last-child {
+    border-left: none;
+  }
+</style>
+
+<div class="container-fluid">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <!-- Header -->
+      <div class="text-center mb-5">
+        <h1 class="display-5 fw-bold text-success mb-3">
+          <i class="bi bi-qr-code-scan me-3"></i>Patient Quick Scan Here
+        </h1>
+        <p class="lead text-muted">Scan your QR code or enter your email to access your medical records</p>
+      </div>
+
+      <!-- QR Scanner Card -->
+      <div class="qr-scanner-card mb-4">
+        <div class="qr-icon">
+          <i class="bi bi-qr-code-scan"></i>
+        </div>
+        <h3 class="fw-bold mb-3">Quick Access Portal</h3>
+        <p class="text-muted mb-4">Use your phone camera to scan the QR code or manually enter your email below</p>
+        
+        <form id="qrLoginForm" method="post" class="row g-3 justify-content-center">
+          {% csrf_token %}
+          <div class="col-md-8">
+            <div class="input-group input-group-lg">
+              <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+              <input type="email" name="email" class="form-control form-control-lg" 
+                     placeholder="Enter your email address" required autofocus>
+              <button class="btn btn-success btn-lg" type="submit">
+                <i class="bi bi-search me-2"></i>Load My Records
+              </button>
+            </div>
+            <div class="form-text mt-2">
+              <i class="bi bi-info-circle me-1"></i>
+              Your email is linked to your patient records for secure access
+            </div>
+          </div>
+        </form>
+
+        {% if error %}
+          <div class="alert alert-danger mt-3" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Patient Information Display (Initially Hidden) -->
+      <div id="patientInfoCard" class="patient-info-card">
+        <div class="row">
+          <div class="col-md-4">
+            <div class="text-center mb-3">
+              <div id="patientQR" class="mb-3"></div>
+              <h4 id="patientName" class="fw-bold"></h4>
+              <p class="text-muted mb-0">Patient ID: <span id="patientCode" class="fw-semibold"></span></p>
+            </div>
+          </div>
+          <div class="col-md-8">
+            <div class="row g-3">
+              <div class="col-sm-6">
+                <div class="card border-0 bg-light">
+                  <div class="card-body text-center">
+                    <i class="bi bi-person text-success fs-4 mb-2"></i>
+                    <div class="fw-semibold">Age</div>
+                    <div id="patientAge" class="text-muted"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="col-sm-6">
+                <div class="card border-0 bg-light">
+                  <div class="card-body text-center">
+                    <i class="bi bi-envelope text-success fs-4 mb-2"></i>
+                    <div class="fw-semibold">Email</div>
+                    <div id="patientEmail" class="text-muted small"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Medical Information Tabs -->
+        <div class="mt-4">
+          <ul class="nav nav-tabs" id="medicalTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">
+                <i class="bi bi-house me-2"></i>Overview
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab">
+                <i class="bi bi-clock-history me-2"></i>Medical History
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="prescriptions-tab" data-bs-toggle="tab" data-bs-target="#prescriptions" type="button" role="tab">
+                <i class="bi bi-capsule me-2"></i>Prescriptions
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="lab-results-tab" data-bs-toggle="tab" data-bs-target="#lab-results" type="button" role="tab">
+                <i class="bi bi-droplet me-2"></i>Lab Results
+              </button>
+            </li>
+          </ul>
+          
+          <div class="tab-content mt-3" id="medicalTabsContent">
+            <!-- Overview Tab -->
+            <div class="tab-pane fade show active" id="overview" role="tabpanel">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <div class="card border-0 bg-light">
+                    <div class="card-body">
+                      <h6 class="fw-semibold mb-3"><i class="bi bi-heart-pulse me-2 text-success"></i>Latest Consultation</h6>
+                      <div id="latestConsultation">
+                        <p class="text-muted mb-2">No recent consultations</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="card border-0 bg-light">
+                    <div class="card-body">
+                      <h6 class="fw-semibold mb-3"><i class="bi bi-capsule me-2 text-success"></i>Recent Prescriptions</h6>
+                      <div id="recentPrescriptions">
+                        <p class="text-muted mb-2">No recent prescriptions</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Medical History Tab -->
+            <div class="tab-pane fade" id="history" role="tabpanel">
+              <div id="medicalHistory">
+                <p class="text-muted">Loading medical history...</p>
+              </div>
+            </div>
+
+            <!-- Prescriptions Tab -->
+            <div class="tab-pane fade" id="prescriptions" role="tabpanel">
+              <div id="prescriptionsList">
+                <p class="text-muted">Loading prescriptions...</p>
+              </div>
+            </div>
+
+            <!-- Lab Results Tab -->
+            <div class="tab-pane fade" id="lab-results" role="tabpanel">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <div class="card border-0">
+                    <div class="card-body">
+                      <h6 class="fw-semibold mb-3">Urinalysis</h6>
+                      <div class="d-flex justify-content-between">
+                        <span>pH Level:</span>
+                        <span class="status-badge status-normal">7.2 ✅</span>
+                      </div>
+                      <div class="d-flex justify-content-between">
+                        <span>Protein:</span>
+                        <span class="status-badge status-normal">Normal ✅</span>
+                      </div>
+                      <div class="d-flex justify-content-between">
+                        <span>Glucose:</span>
+                        <span class="status-badge status-normal">Normal ✅</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="card border-0">
+                    <div class="card-body">
+                      <h6 class="fw-semibold mb-3">Blood Tests</h6>
+                      <div class="d-flex justify-content-between">
+                        <span>FBS:</span>
+                        <span class="status-badge status-normal">85 mg/dL ✅</span>
+                      </div>
+                      <div class="d-flex justify-content-between">
+                        <span>Cholesterol:</span>
+                        <span class="status-badge status-warning">180 mg/dL ⚠️</span>
+                      </div>
+                      <div class="d-flex justify-content-between">
+                        <span>Blood Type:</span>
+                        <span class="status-badge status-normal">O+ ✅</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="text-center mt-4">
+          <button class="btn btn-success btn-lg me-3" onclick="loginAsPatient()">
+            <i class="bi bi-box-arrow-in-right me-2"></i>Access Full Dashboard
+          </button>
+          <button class="btn btn-outline-secondary" onclick="resetScanner()">
+            <i class="bi bi-arrow-clockwise me-2"></i>Scan Another Patient
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentPatientData = null;
+
+// Handle form submission
+document.getElementById('qrLoginForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const email = this.querySelector('input[name="email"]').value.trim();
+  if (!email) return;
+  
+  loadPatientData(email);
+});
+
+// Load patient data via API
+async function loadPatientData(email) {
+  try {
+    const formData = new FormData();
+    formData.append('email', email);
+    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+    
+    const response = await fetch('/patients/api/qr-scan/', {
+      method: 'POST',
+      body: formData
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      currentPatientData = data;
+      displayPatientInfo(data);
+    } else {
+      showError(data.error || 'Patient not found');
+    }
+  } catch (error) {
+    showError('Error loading patient data. Please try again.');
+    console.error('Error:', error);
+  }
+}
+
+// Display patient information
+function displayPatientInfo(data) {
+  const patient = data.patient;
+  
+  // Update patient info
+  document.getElementById('patientName').textContent = patient.full_name;
+  document.getElementById('patientCode').textContent = patient.patient_code;
+  document.getElementById('patientAge').textContent = patient.age + ' years';
+  document.getElementById('patientEmail').textContent = patient.email;
+  
+  // Show QR code if available
+  const qrContainer = document.getElementById('patientQR');
+  if (patient.qr_code_url) {
+    qrContainer.innerHTML = `<img src="${patient.qr_code_url}" class="img-fluid" style="max-width: 150px;" alt="Patient QR Code">`;
+  } else {
+    qrContainer.innerHTML = '<div class="text-muted"><i class="bi bi-qr-code fs-1"></i><br>QR Code not available</div>';
+  }
+  
+  // Update latest consultation
+  const consultationDiv = document.getElementById('latestConsultation');
+  if (data.latest_doctor) {
+    const doctor = data.latest_doctor;
+    consultationDiv.innerHTML = `
+      <p class="mb-1"><strong>Diagnosis:</strong> ${doctor.diagnosis || 'Not specified'}</p>
+      <p class="mb-1"><strong>Prescription:</strong> ${doctor.prescription_notes || 'None'}</p>
+      <small class="text-muted">${new Date(doctor.timestamp).toLocaleDateString()}</small>
+    `;
+  } else {
+    consultationDiv.innerHTML = '<p class="text-muted mb-2">No recent consultations</p>';
+  }
+  
+  // Update recent prescriptions
+  const prescriptionsDiv = document.getElementById('recentPrescriptions');
+  if (data.latest_pharmacy) {
+    const pharmacy = data.latest_pharmacy;
+    prescriptionsDiv.innerHTML = `
+      <p class="mb-1"><strong>Medicines:</strong> ${pharmacy.medicines || 'None'}</p>
+      <small class="text-muted">${new Date(pharmacy.timestamp).toLocaleDateString()}</small>
+    `;
+  } else {
+    prescriptionsDiv.innerHTML = '<p class="text-muted mb-2">No recent prescriptions</p>';
+  }
+  
+  // Update medical history
+  const historyDiv = document.getElementById('medicalHistory');
+  if (data.visits && data.visits.length > 0) {
+    historyDiv.innerHTML = data.visits.map(visit => `
+      <div class="timeline-item">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <h6 class="mb-1">${visit.service}</h6>
+            <p class="mb-1 text-muted">${visit.notes || 'No notes'}</p>
+            ${visit.diagnosis ? `<p class="mb-1"><strong>Diagnosis:</strong> ${visit.diagnosis}</p>` : ''}
+            ${visit.prescription_notes ? `<p class="mb-1"><strong>Prescription:</strong> ${visit.prescription_notes}</p>` : ''}
+          </div>
+          <small class="text-muted">${new Date(visit.timestamp).toLocaleDateString()}</small>
+        </div>
+      </div>
+    `).join('');
+  } else {
+    historyDiv.innerHTML = '<p class="text-muted">No medical history available</p>';
+  }
+  
+  // Update prescriptions list
+  const prescriptionsListDiv = document.getElementById('prescriptionsList');
+  const doctorVisits = data.visits.filter(v => v.service === 'Doctor Consultation');
+  if (doctorVisits.length > 0) {
+    prescriptionsListDiv.innerHTML = doctorVisits.map(visit => `
+      <div class="card border-0 bg-light mb-3">
+        <div class="card-body">
+          <h6 class="fw-semibold">${new Date(visit.timestamp).toLocaleDateString()}</h6>
+          <p class="mb-1"><strong>Diagnosis:</strong> ${visit.diagnosis || 'Not specified'}</p>
+          <p class="mb-0"><strong>Prescription:</strong> ${visit.prescription_notes || 'None'}</p>
+        </div>
+      </div>
+    `).join('');
+  } else {
+    prescriptionsListDiv.innerHTML = '<p class="text-muted">No prescriptions available</p>';
+  }
+  
+  // Show the patient info card
+  document.getElementById('patientInfoCard').classList.add('show');
+  
+  // Scroll to patient info
+  document.getElementById('patientInfoCard').scrollIntoView({ behavior: 'smooth' });
+}
+
+// Login as patient
+function loginAsPatient() {
+  if (currentPatientData && currentPatientData.patient.email) {
+    // Submit the form with the patient's email
+    const form = document.getElementById('qrLoginForm');
+    form.querySelector('input[name="email"]').value = currentPatientData.patient.email;
+    form.submit();
+  }
+}
+
+// Reset scanner
+function resetScanner() {
+  document.getElementById('patientInfoCard').classList.remove('show');
+  document.getElementById('qrLoginForm').reset();
+  currentPatientData = null;
+  document.querySelector('input[name="email"]').focus();
+}
+
+// Show error message
+function showError(message) {
+  const errorDiv = document.createElement('div');
+  errorDiv.className = 'alert alert-danger mt-3';
+  errorDiv.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${message}`;
+  
+  // Remove existing error messages
+  const existingErrors = document.querySelectorAll('.alert-danger');
+  existingErrors.forEach(el => el.remove());
+  
+  // Add new error message
+  document.querySelector('.qr-scanner-card').appendChild(errorDiv);
+  
+  // Auto-remove after 5 seconds
+  setTimeout(() => {
+    if (errorDiv.parentNode) {
+      errorDiv.remove();
+    }
+  }, 5000);
+}
+
+// Focus on email input when page loads
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelector('input[name="email"]').focus();
+});
+</script>
+{% endblock %}

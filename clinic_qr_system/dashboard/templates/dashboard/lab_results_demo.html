@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0">Laboratory Test Results</h3>
+  <a class="btn btn-outline-secondary" href="/dashboard/lab/"><i class="bi bi-arrow-left"></i> Back to Lab</a>
+  </div>
+
+<style>
+.lab-card { background:#fff; border:1px solid #e9ecef; border-radius: .75rem; box-shadow: 0 .5rem 1rem rgba(0,0,0,.06); margin-bottom:1rem; }
+.lab-card .lab-card-header { padding: .9rem 1rem; border-bottom:1px solid #eef2f5; font-weight:600; }
+.lab-card .lab-card-body { padding: 1rem; }
+.lab-form .form-label { font-weight: 600; }
+.lab-form .form-control { border-radius: .5rem; border-color:#dee2e6; padding:.5rem .75rem; }
+.lab-interpret { border-radius:.5rem; padding:.75rem 1rem; font-weight:600; }
+.lab-interpret.normal { background:#e9f7ef; color:#198754; border:1px solid #cfead9; }
+.lab-interpret.abnormal { background:#fde8e8; color:#c1121f; border:1px solid #f5c2c7; }
+</style>
+
+<div class="row g-3 lab-form">
+  <div class="col-lg-6">
+    <div class="lab-card">
+      <div class="lab-card-header">1. Urinalysis (Urine Test)</div>
+      <div class="lab-card-body">
+        <div class="mb-2"><label class="form-label">Color</label><input class="form-control" value="Yellow"></div>
+        <div class="mb-2"><label class="form-label">Appearance</label><input class="form-control" value="Clear"></div>
+        <div class="mb-2"><label class="form-label">pH</label><input class="form-control" value="6.0"></div>
+        <div class="mb-2"><label class="form-label">Specific Gravity</label><input class="form-control" value="1.020"></div>
+        <div class="mb-2"><label class="form-label">Protein</label><input class="form-control" value="Negative"></div>
+        <div class="mb-2"><label class="form-label">Glucose</label><input class="form-control" value="Negative"></div>
+        <div class="mb-2"><label class="form-label">Blood</label><input class="form-control" value="Negative"></div>
+        <div class="mb-3"><label class="form-label">Leukocytes</label><input class="form-control" value="Negative"></div>
+        <div class="lab-interpret normal">✅ Interpretation: Normal urine findings</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="lab-card">
+      <div class="lab-card-header">2. Fecalysis (Stool Examination)</div>
+      <div class="lab-card-body">
+        <div class="mb-2"><label class="form-label">Color</label><input class="form-control" value="Brown"></div>
+        <div class="mb-2"><label class="form-label">Consistency</label><input class="form-control" value="Formed"></div>
+        <div class="mb-2"><label class="form-label">Microscopy</label><input class="form-control" value="No ova or parasites seen"></div>
+        <div class="mb-2"><label class="form-label">Occult Blood</label><input class="form-control" value="Negative"></div>
+        <div class="mb-3"><label class="form-label">Bacteria</label><input class="form-control" value="Normal flora"></div>
+        <div class="lab-interpret normal">✅ Interpretation: Normal stool findings, no infection</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="lab-card">
+      <div class="lab-card-header">3. Fasting Blood Sugar (FBS)</div>
+      <div class="lab-card-body">
+        <div class="mb-2"><label class="form-label">Result</label><input class="form-control" value="92 mg/dL"></div>
+        <div class="mb-3"><label class="form-label">Normal Range</label><input class="form-control" value="70–100 mg/dL"></div>
+        <div class="lab-interpret normal">✅ Interpretation: Normal fasting glucose</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="lab-card">
+      <div class="lab-card-header">4. Pregnancy Test (Urine or Blood hCG)</div>
+      <div class="lab-card-body">
+        <div class="mb-2"><label class="form-label">Urine hCG</label><input class="form-control" value="Positive"></div>
+        <div class="mb-3"><label class="form-label">Serum hCG</label><input class="form-control" value="1,500 mIU/mL (Normal: &lt;5 mIU/mL)"></div>
+        <div class="lab-interpret abnormal">✅ Interpretation: Patient is pregnant</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="lab-card">
+      <div class="lab-card-header">5. Lipid Profile Test</div>
+      <div class="lab-card-body">
+        <div class="mb-2"><label class="form-label">Total Cholesterol</label><input class="form-control" value="185 mg/dL"></div>
+        <div class="mb-2"><label class="form-label">LDL (Bad Cholesterol)</label><input class="form-control" value="95 mg/dL"></div>
+        <div class="mb-2"><label class="form-label">HDL (Good Cholesterol)</label><input class="form-control" value="55 mg/dL"></div>
+        <div class="mb-3"><label class="form-label">Triglycerides</label><input class="form-control" value="120 mg/dL"></div>
+        <div class="lab-interpret normal">✅ Interpretation: Healthy lipid profile</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="lab-card">
+      <div class="lab-card-header">6. Rapid Diagnostic Test (e.g., Dengue)</div>
+      <div class="lab-card-body">
+        <div class="mb-2"><label class="form-label">Dengue NS1 Antigen</label><input class="form-control" value="Negative"></div>
+        <div class="mb-2"><label class="form-label">Dengue IgM</label><input class="form-control" value="Negative"></div>
+        <div class="mb-3"><label class="form-label">Dengue IgG</label><input class="form-control" value="Negative"></div>
+        <div class="lab-interpret normal">✅ Interpretation: No current or past dengue infection detected</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="lab-card">
+      <div class="lab-card-header">7. Blood Typing (ABO and Rh)</div>
+      <div class="lab-card-body">
+        <div class="mb-2"><label class="form-label">ABO Group</label><input class="form-control" value="B"></div>
+        <div class="mb-3"><label class="form-label">Rh Factor</label><input class="form-control" value="Positive"></div>
+        <div class="lab-interpret normal">✅ Interpretation: Blood type is B+</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+

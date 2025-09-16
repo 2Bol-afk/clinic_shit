@@ -6,6 +6,18 @@
     <div class="card shadow-sm">
       <div class="card-header d-flex align-items-center"><i class="bi bi-qr-code-scan text-success me-2"></i>Scan QR / Enter Patient Code</div>
       <div class="card-body">
+        {% if is_lab %}
+          <div class="alert alert-info">This page is for Reception scanning. Please use your dashboard.</div>
+        {% elif is_doctor and not allow_doctor_scan %}
+          <div class="alert alert-info">This page is for Reception scanning. Please use your dashboard.</div>
+        {% else %}
+        {% if is_reception %}
+        <div class="d-flex justify-content-end mb-3">
+          <button class="btn btn-outline-success" type="button" data-bs-toggle="modal" data-bs-target="#createPatientModal">
+            <i class="bi bi-person-plus me-1"></i>Create Patient
+          </button>
+        </div>
+        {% endif %}
         <form method="post" class="row g-3">
           {% csrf_token %}
           <div class="col-12">
@@ -15,7 +27,12 @@
               <input type="text" class="form-control" name="patient_code" placeholder="Scan or type code" required value="{{ prefill_code|default:'' }}">
             </div>
           </div>
-          <div class="col-12" {% if is_reception %}style="display:none"{% endif %}>
+          {% if is_reception %}
+            <input type="hidden" id="serviceFixed" name="service" value="reception">
+          {% elif is_doctor and allow_doctor_scan %}
+            <input type="hidden" id="serviceFixed" name="service" value="doctor">
+          {% else %}
+          <div class="col-12">
             <label class="form-label">Service Station</label>
             <select class="form-select" name="service" required id="serviceSelect">
               <option value="reception">Reception/Triage</option>
@@ -25,20 +42,33 @@
               <option value="vaccination">Vaccination/Immunization</option>
             </select>
           </div>
-          <input type="hidden" name="service" value="reception" {% if not is_reception %}disabled{% endif %}>
+          {% endif %}
           <div id="serviceFields" class="col-12">
             <div data-svc="reception" class="svc d-none">
               <div {% if is_reception %}style="display:none"{% endif %}>
                 <label class="form-label">Queue Number</label>
                 <input type="number" min="1" name="queue_number" class="form-control">
               </div>
-              <label class="form-label mt-2">Department</label>
-              <select class="form-select" name="department">
-                <option value="General Medicine">General Medicine</option>
-                <option value="Pediatrics">Pediatrics</option>
-                <option value="OB-GYN">OB-GYN</option>
-                <option value="Others">Others</option>
-              </select>
+              <div class="mt-2">
+                <label class="form-label">Visit Type</label>
+                <select class="form-select" id="receptionVisitType" name="reception_visit_type">
+                  <option value="consultation" selected>Consultation</option>
+                  <option value="laboratory">Laboratory</option>
+                  <option value="vaccination">Vaccination</option>
+                </select>
+              </div>
+              <div class="mt-2" id="receptionDeptWrap">
+                <label class="form-label">Department</label>
+                <select class="form-select" name="department">
+                  <option value="Pediatrics">Pediatrics (Children’s Health)</option>
+                  <option value="OB-GYN">Obstetrics and Gynecology (OB-GYN)</option>
+                  <option value="Cardiology">Cardiology (Heart Care)</option>
+                  <option value="Radiology">Radiology</option>
+                  <option value="Surgery">Surgery</option>
+                  <option value="Dermatology">Dermatology (Skin Care)</option>
+                  <option value="ENT">ENT (Ear, Nose, Throat)</option>
+                </select>
+              </div>
             </div>
             <div data-svc="doctor" class="svc d-none">
               <label class="form-label">Symptoms</label>
@@ -91,6 +121,7 @@
         {% if error %}
           <div class="alert alert-danger mt-3">{{ error }}</div>
         {% endif %}
+        {% endif %}
       </div>
     </div>
   </div>
@@ -98,22 +129,70 @@
 <script>
 (function(){
   const sel = document.getElementById('serviceSelect');
+  const fixed = document.getElementById('serviceFixed');
   const blocks = document.querySelectorAll('#serviceFields .svc');
   function sync(){
     blocks.forEach(b=>b.classList.add('d-none'));
-    const value = sel ? sel.value : 'reception';
+    const value = fixed ? fixed.value : (sel ? sel.value : 'reception');
     const active = document.querySelector('#serviceFields .svc[data-svc="'+value+'"]');
     if(active) active.classList.remove('d-none');
   }
   if(sel){ sel.addEventListener('change', sync); }
-  {% if is_reception %}
-    if(sel){ sel.value = 'reception'; }
-  {% elif is_doctor %}
-    if(sel){ sel.value = 'doctor'; }
-  {% endif %}
   sync();
+  // Reception: show department only for Consultation
+  const visitType = document.getElementById('receptionVisitType');
+  const deptWrap = document.getElementById('receptionDeptWrap');
+  function syncDept(){ if(!visitType||!deptWrap) return; deptWrap.style.display = (visitType.value === 'consultation') ? '' : 'none'; }
+  if(visitType){ visitType.addEventListener('change', syncDept); syncDept(); }
 })();
 </script>
+{% if is_reception %}
+<!-- Create Patient Modal -->
+<div class="modal fade" id="createPatientModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-person-plus me-2 text-success"></i>Create Patient & Generate QR</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" class="row g-2">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create_patient">
+        <div class="modal-body">
+          <div class="container-fluid">
+            <div class="row g-2">
+              <div class="col-md-6">
+                <label class="form-label">Full Name</label>
+                <input type="text" class="form-control" name="full_name" required>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Age</label>
+                <input type="number" min="0" class="form-control" name="age" required>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Contact</label>
+                <input type="text" class="form-control" name="contact" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Email</label>
+                <input type="email" class="form-control" name="email" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Address</label>
+                <input type="text" class="form-control" name="address" required>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-success" type="submit"><i class="bi bi-check2-circle me-1"></i>Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  </div>
+{% endif %}
 {% endblock %}
 
 

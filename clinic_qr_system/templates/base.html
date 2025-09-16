@@ -28,11 +28,18 @@
           <ul class="navbar-nav me-auto mb-2 mb-lg-0">
             {% if request.user.is_authenticated %}
               <li class="nav-item">
-                <a class="nav-link" href="{% if request.user.is_superuser %}/dashboard/{% elif request.user.groups.all.0.name == 'Reception' %}/dashboard/reception/{% elif request.user.groups.all.0.name == 'Doctor' %}/dashboard/doctor/{% elif request.user.groups.all.0.name == 'Laboratory' %}/dashboard/lab/{% elif request.user.groups.all.0.name == 'Pharmacy' %}/dashboard/pharmacy/{% elif request.user.groups.all.0.name == 'Vaccination' %}/dashboard/vaccination/{% else %}/dashboard/{% endif %}"><i class="bi bi-house-heart-fill me-1"></i>Home</a>
+                <a class="nav-link" href="{% if request.user.is_superuser %}/dashboard/{% elif request.user.groups.all.0.name == 'Reception' %}/dashboard/reception/{% elif request.user.groups.all.0.name == 'Doctor' %}/dashboard/doctor/{% elif request.user.groups.all.0.name == 'Laboratory' %}/dashboard/lab/{% elif request.user.groups.all.0.name == 'Pharmacy' %}/dashboard/pharmacy/{% elif request.user.groups.all.0.name == 'Vaccination' %}/dashboard/vaccination/{% elif request.user.groups.all.0.name == 'Patient' %}/patients/portal/{% else %}/dashboard/{% endif %}"><i class="bi bi-house-heart-fill me-1"></i>Home</a>
               </li>
+              {% if request.user.groups.all.0.name != 'Laboratory' and request.user.groups.all.0.name != 'Doctor' and request.user.groups.all.0.name != 'Patient' %}
               <li class="nav-item">
                 <a class="nav-link" href="/visits/scan/"><i class="bi bi-qr-code-scan me-1"></i>Scan QR</a>
               </li>
+              {% endif %}
+              {% if request.user.is_authenticated and request.user.groups.all.0.name != 'Patient' %}
+              <li class="nav-item">
+                <a class="nav-link" href="/dashboard/reports/"><i class="bi bi-graph-up-arrow me-1"></i>Reports</a>
+              </li>
+              {% endif %}
             {% endif %}
           </ul>
           <ul class="navbar-nav ms-auto">
@@ -61,6 +68,88 @@
       {% endif %}
       {% block content %}{% endblock %}
     </main>
+    <!-- Global QR Scanner Modal -->
+    <div class="modal fade" id="qrScannerModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="bi bi-qr-code-scan me-2 text-success"></i>Scan QR</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div id="qr-reader" style="width:100%"></div>
+            <div class="text-center text-muted small mt-2">If camera access fails, use the email fallback below.</div>
+            <div class="input-group mt-3">
+              <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+              <input type="email" class="form-control" id="qrEmailFallback" placeholder="Enter Gmail manually">
+              <button class="btn btn-success" type="button" id="qrEmailGo"><i class="bi bi-search me-1"></i>Go</button>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script>
+    // Reusable QR scanner handling
+    (function(){
+      let qrModal, html5Qr, currentIntent = 'staff';
+      function handleEmail(email){
+        const e = (email||'').trim();
+        if(!e) return;
+        // Staff intent: load patient profile view; Patient intent: go to QR login flow
+        if(currentIntent === 'patient'){
+          window.location.href = '/patients/qr-login/?email=' + encodeURIComponent(e);
+        } else {
+          // Fetch patient by email then redirect to detail (GET to avoid CSRF)
+          fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(e))
+            .then(r=>r.json())
+            .then(data=>{
+              if(data && data.patient && data.patient.id){
+                window.location.href = '/patients/' + data.patient.id + '/';
+              } else {
+                alert((data && data.error) || 'Patient not found');
+              }
+            })
+            .catch(()=>alert('Error fetching patient.'));
+        }
+      }
+      function onScanSuccess(decodedText){
+        try{ if(qrModal) qrModal.hide(); }catch(_){}
+        if(html5Qr){ try{ html5Qr.stop(); }catch(_){}}
+        handleEmail(decodedText);
+      }
+      function onScanFailure(_){ /* ignore continuous failures */ }
+      function startScanner(){
+        const el = document.getElementById('qr-reader');
+        if(!el) return;
+        if(html5Qr){ try{ html5Qr.stop(); }catch(_){}}
+        html5Qr = new Html5Qrcode('qr-reader');
+        Html5Qrcode.getCameras().then(cams=>{
+          const camId = (cams && cams.length) ? cams[0].id : undefined;
+          html5Qr.start(camId, { fps: 10, qrbox: 250 }, onScanSuccess, onScanFailure);
+        }).catch(()=>{
+          // Camera not available; user can use fallback email input
+        });
+      }
+      document.addEventListener('click', function(e){
+        const btn = e.target.closest('.qr-scan-btn');
+        if(!btn) return;
+        e.preventDefault();
+        currentIntent = btn.getAttribute('data-intent') || 'staff';
+        qrModal = new bootstrap.Modal(document.getElementById('qrScannerModal'));
+        qrModal.show();
+        setTimeout(startScanner, 150);
+      });
+      document.getElementById('qrEmailGo')?.addEventListener('click', function(){
+        const v = document.getElementById('qrEmailFallback').value;
+        if(qrModal) qrModal.hide();
+        handleEmail(v);
+      });
+    })();
+    </script>
   </body>
 </html>

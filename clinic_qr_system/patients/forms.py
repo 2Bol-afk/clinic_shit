@@ -25,10 +25,13 @@ class PatientSignupForm(forms.ModelForm):
 
 
 DEPARTMENT_CHOICES = [
-    ('General Medicine', 'General Medicine'),
-    ('Pediatrics', 'Pediatrics'),
-    ('OB-GYN', 'OB-GYN'),
-    ('Others', 'Others'),
+    ('Pediatrics', 'Pediatrics (Children’s Health)'),
+    ('OB-GYN', 'Obstetrics and Gynecology (OB-GYN)'),
+    ('Cardiology', 'Cardiology (Heart Care)'),
+    ('Radiology', 'Radiology'),
+    ('Surgery', 'Surgery'),
+    ('Dermatology', 'Dermatology (Skin Care)'),
+    ('ENT', 'ENT (Ear, Nose, Throat)'),
 ]
 
 class DoctorForm(forms.Form):

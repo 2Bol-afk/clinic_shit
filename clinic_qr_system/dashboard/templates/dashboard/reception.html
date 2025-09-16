@@ -1,33 +1,76 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <h4 class="mb-0 d-flex align-items-center"><i class="bi bi-door-open-fill text-success me-2"></i>Reception Dashboard ({{ today }})</h4>
-  <a href="/visits/scan/" class="btn btn-success"><i class="bi bi-qr-code-scan me-1"></i>Scan QR / Log Arrival</a>
+  <h4 class="mb-0 d-flex align-items-center"><i class="bi bi-door-open-fill text-success me-2"></i>Reception · {{ today }}</h4>
+  <div class="d-flex gap-2">
+    <a href="#" class="btn btn-lg btn-outline-success qr-scan-btn" data-intent="staff">📷 Register QR</a>
+    <a href="/visits/scan/" class="btn btn-success"><i class="bi bi-qr-code-scan me-1"></i>Scan / Log Arrival</a>
+  </div>
 </div>
 <div class="card shadow-sm">
   <div class="card-body p-0">
-    <table class="table table-striped mb-0">
-      <thead><tr><th>Time</th><th>Patient</th><th>Queue #</th><th>Department</th><th>Notes</th><th>Staff</th></tr></thead>
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Time</th>
+          <th>Patient</th>
+          <th>Visit Type</th>
+          <th>Queue</th>
+          <th>Department</th>
+          <th>Notes</th>
+          <th style="width:130px">Actions</th>
+        </tr>
+      </thead>
       <tbody>
       {% for v in visits %}
         <tr>
           <td>{{ v.timestamp|date:'H:i' }}</td>
           <td><a href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a></td>
           <td>
-            {% if v.queue_number %}
-              {{ v.queue_number }}
-            {% elif v.claimed_by %}
-              <span class="badge text-bg-success">Done</span>
+            {% if v.department %}
+              <span class="badge rounded-pill text-bg-primary">Consultation</span>
+            {% elif v.notes and 'vaccination' in v.notes|lower %}
+              <span class="badge rounded-pill text-bg-warning">Vaccination</span>
+            {% elif v.notes and 'laboratory' in v.notes|lower %}
+              <span class="badge rounded-pill text-bg-info">Laboratory</span>
             {% else %}
-              -
+              <span class="badge rounded-pill text-bg-secondary">Other</span>
             {% endif %}
           </td>
-          <td>{{ v.department|default:'-' }}</td>
-          <td>{{ v.notes }}</td>
-          <td>{{ v.created_by }}</td>
+          <td>
+            {% if v.patient.id in completed_doctor_patients %}
+              <span class="badge text-bg-primary">Done</span>
+            {% elif v.claimed_by %}
+              <span class="badge text-bg-success">Claimed</span>
+            {% elif v.queue_number %}
+              {% if v.department %}
+                <span class="badge text-bg-secondary">C-{{ v.queue_number }}</span>
+              {% elif v.notes and 'laboratory' in v.notes|lower %}
+                <span class="badge text-bg-secondary">L-{{ v.queue_number }}</span>
+              {% elif v.notes and 'vaccination' in v.notes|lower %}
+                <span class="badge text-bg-secondary">V-{{ v.queue_number }}</span>
+              {% else %}
+                <span class="badge text-bg-secondary">#{{ v.queue_number }}</span>
+              {% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>{{ v.department|default:'—' }}</td>
+          <td>
+            {% with clean=v.notes|default:''|cut:'[Visit: Laboratory]'|cut:'[Visit: Vaccination]' %}
+              {{ clean|default:'—' }}
+            {% endwith %}
+          </td>
+          <td>
+            {% if request.user.is_superuser or request.user.groups.all.0.name == 'Reception' %}
+              <a class="btn btn-sm btn-outline-secondary" href="/dashboard/reception/{{ v.id }}/edit/">Edit</a>
+              <a class="btn btn-sm btn-outline-danger" href="/dashboard/reception/{{ v.id }}/delete/">Delete</a>
+            {% endif %}
+          </td>
         </tr>
       {% empty %}
-        <tr><td colspan="6" class="text-center">No arrivals yet.</td></tr>
+        <tr><td colspan="7" class="text-center text-muted py-4">No arrivals yet.</td></tr>
       {% endfor %}
       </tbody>
     </table>

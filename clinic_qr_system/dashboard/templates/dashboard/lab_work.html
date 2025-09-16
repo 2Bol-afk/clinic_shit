@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0">Lab Work · {{ v.patient.full_name }}</h3>
+  <a class="btn btn-outline-secondary" href="/dashboard/lab/"><i class="bi bi-arrow-left"></i> Back</a>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <div class="mb-2 text-muted small">Logged: {{ v.timestamp|date:'Y-m-d H:i' }}{% if v.queue_number %} · Queue: {{ v.queue_number }}{% endif %}</div>
+    <div class="mb-3"><strong>Requested Tests:</strong> {{ v.lab_tests|default:'-' }}</div>
+    <form method="post" class="row g-3">
+      {% csrf_token %}
+      <div class="col-12">
+        <label class="form-label">Test Template</label>
+        <select id="templateSelect" class="form-select w-auto" {% if v.lab_test_type %}disabled{% endif %}>
+          <option value="">Select a template…</option>
+          <option value="urinalysis" {% if v.lab_test_type == 'urinalysis' %}selected{% endif %}>Urinalysis</option>
+          <option value="fecalysis" {% if v.lab_test_type == 'fecalysis' %}selected{% endif %}>Fecalysis</option>
+          <option value="fbs" {% if v.lab_test_type == 'fbs' %}selected{% endif %}>Fasting Blood Sugar (FBS)</option>
+          <option value="pregnancy" {% if v.lab_test_type == 'pregnancy' %}selected{% endif %}>Pregnancy Test (hCG)</option>
+          <option value="lipid" {% if v.lab_test_type == 'lipid' %}selected{% endif %}>Lipid Profile</option>
+          <option value="rdt" {% if v.lab_test_type == 'rdt' %}selected{% endif %}>Rapid Diagnostic Test (RDT)</option>
+          <option value="blood_typing" {% if v.lab_test_type == 'blood_typing' %}selected{% endif %}>Blood Typing (ABO/Rh)</option>
+        </select>
+      </div>
+      <div class="col-md-6 result-field" data-index="1">
+        <label class="form-label" id="label_r1">Result 1</label>
+        <input class="form-control" name="result_1" value="{{ prefill.result_1 }}">
+      </div>
+      <div class="col-md-6 result-field" data-index="2">
+        <label class="form-label" id="label_r2">Result 2</label>
+        <input class="form-control" name="result_2" value="{{ prefill.result_2 }}">
+      </div>
+      <div class="col-md-6 result-field" data-index="3">
+        <label class="form-label" id="label_r3">Result 3</label>
+        <input class="form-control" name="result_3" value="{{ prefill.result_3 }}">
+      </div>
+      <div class="col-md-6 result-field" data-index="4">
+        <label class="form-label" id="label_r4">Result 4</label>
+        <input class="form-control" name="result_4" value="{{ prefill.result_4 }}">
+      </div>
+      <div class="col-md-6 result-field" data-index="5">
+        <label class="form-label" id="label_r5">Result 5</label>
+        <input class="form-control" name="result_5" value="{{ prefill.result_5 }}">
+      </div>
+      <div class="col-12">
+        <label class="form-label">Interpretation</label>
+        <input class="form-control" name="interpretation" value="{{ prefill.interpretation }}">
+      </div>
+      <div class="col-12 d-flex gap-2">
+        <button class="btn btn-success" name="complete" value="1" type="submit"><i class="bi bi-check2-circle me-1"></i>Save & Mark Done</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Templates removed per request -->
+
+<script>
+(function(){
+  const lines = {
+    urinalysis: [
+      'Color: Yellow',
+      'Appearance: Clear',
+      'pH: 6.0',
+      'Specific Gravity: 1.020',
+      'Protein: Negative'
+    ],
+    fecalysis: [
+      'Color: Brown',
+      'Consistency: Formed',
+      'Microscopy: No ova or parasites seen',
+      'Occult Blood: Negative',
+      'Bacteria: Normal flora'
+    ],
+    fbs: [
+      'Result: 92 mg/dL (Normal range: 70–100 mg/dL)'
+    ],
+    pregnancy: [
+      'Urine hCG: Positive',
+      'Serum hCG: 1,500 mIU/mL (Normal: <5 mIU/mL in non-pregnant)'
+    ],
+    lipid: [
+      'Total Cholesterol: 185 mg/dL',
+      'LDL (Bad Cholesterol): 95 mg/dL',
+      'HDL (Good Cholesterol): 55 mg/dL',
+      'Triglycerides: 120 mg/dL'
+    ],
+    rdt: [
+      'Dengue NS1 Antigen: Negative',
+      'Dengue IgM: Negative',
+      'Dengue IgG: Negative'
+    ],
+    blood_typing: [
+      'ABO Group: B',
+      'Rh Factor: Positive'
+    ]
+  };
+  const labelSets = {
+    urinalysis: ['Color','Appearance','pH','Specific Gravity','Protein'],
+    fecalysis: ['Color','Consistency','Microscopy','Occult Blood','Bacteria'],
+    fbs: ['Result','','','',''],
+    pregnancy: ['Urine hCG','Serum hCG','','',''],
+    lipid: ['Total Cholesterol','LDL (Bad Cholesterol)','HDL (Good Cholesterol)','Triglycerides',''],
+    rdt: ['Dengue NS1 Antigen','Dengue IgM','Dengue IgG','',''],
+    blood_typing: ['ABO Group','Rh Factor','','','']
+  };
+  const interps = {
+    urinalysis: 'Normal urine findings',
+    fecalysis: 'Normal stool findings, no infection',
+    fbs: 'Normal fasting glucose',
+    pregnancy: 'Patient is pregnant',
+    lipid: 'Healthy lipid profile',
+    rdt: 'No current or past dengue infection detected',
+    blood_typing: 'Blood type is B+'
+  };
+  function applyTemplate(key){
+    if(!key) return;
+    const l = lines[key] || [];
+    const labels = labelSets[key] || [];
+    const r1 = document.querySelector('input[name="result_1"]');
+    const r2 = document.querySelector('input[name="result_2"]');
+    const r3 = document.querySelector('input[name="result_3"]');
+    const r4 = document.querySelector('input[name="result_4"]');
+    const r5 = document.querySelector('input[name="result_5"]');
+    const intr = document.querySelector('input[name="interpretation"]');
+    const arr = [r1,r2,r3,r4,r5];
+    for(let i=0;i<arr.length;i++){ if(arr[i]) arr[i].value = ''; }
+    if(intr) intr.value = '';
+    // Update labels
+    const ls = [document.getElementById('label_r1'),document.getElementById('label_r2'),document.getElementById('label_r3'),document.getElementById('label_r4'),document.getElementById('label_r5')];
+    const wrappers = document.querySelectorAll('.result-field');
+    for(let i=0;i<ls.length;i++){
+      const hasLabel = !!(labels[i] && labels[i].trim());
+      if(ls[i]) ls[i].textContent = hasLabel ? labels[i] : `Result ${i+1}`;
+      if(wrappers[i]) wrappers[i].style.display = hasLabel ? '' : 'none';
+    }
+  }
+  const sel = document.getElementById('templateSelect');
+  if(sel){ sel.addEventListener('change', ()=> applyTemplate(sel.value)); }
+  // Auto-apply if visit carries a saved test type
+  const preset = '{{ v.lab_test_type|default:"" }}';
+  if(preset){ applyTemplate(preset); }
+})();
+</script>
+{% endblock %}
+
+

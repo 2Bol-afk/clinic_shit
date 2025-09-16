@@ -11,10 +11,13 @@ class Visit(models.Model):
         VACCINATION = 'vaccination', 'Vaccination/Immunization'
 
     class Department(models.TextChoices):
-        GENERAL = 'General Medicine', 'General Medicine'
-        PEDIATRICS = 'Pediatrics', 'Pediatrics'
-        OBGYN = 'OB-GYN', 'OB-GYN'
-        OTHERS = 'Others', 'Others'
+        PEDIATRICS = 'Pediatrics', 'Pediatrics (Children’s Health)'
+        OBGYN = 'OB-GYN', 'Obstetrics and Gynecology (OB-GYN)'
+        CARDIOLOGY = 'Cardiology', 'Cardiology (Heart Care)'
+        RADIOLOGY = 'Radiology', 'Radiology'
+        SURGERY = 'Surgery', 'Surgery'
+        DERMATOLOGY = 'Dermatology', 'Dermatology (Skin Care)'
+        ENT = 'ENT', 'ENT (Ear, Nose, Throat)'
 
     patient = models.ForeignKey('patients.Patient', on_delete=models.CASCADE, related_name='visits')
     service = models.CharField(max_length=20, choices=Service.choices)
@@ -24,6 +27,9 @@ class Visit(models.Model):
     department = models.CharField(max_length=32, choices=Department.choices, blank=True)
     claimed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='claimed_reception_visits')
     claimed_at = models.DateTimeField(null=True, blank=True)
+    doctor_arrived = models.BooleanField(default=False)
+    # Doctor consultation state machine for today's flow
+    doctor_status = models.CharField(max_length=16, blank=True, default='')  # '', ready_to_consult, not_done, finished
     # Doctor
     symptoms = models.TextField(blank=True)
     diagnosis = models.TextField(blank=True)
@@ -32,6 +38,11 @@ class Visit(models.Model):
     doctor_done_at = models.DateTimeField(null=True, blank=True)
     # Lab
     lab_tests = models.TextField(blank=True)
+    lab_test_type = models.CharField(max_length=50, blank=True)
+    lab_claimed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='claimed_lab_visits')
+    lab_claimed_at = models.DateTimeField(null=True, blank=True)
+    lab_arrived = models.BooleanField(default=False)
+    lab_results = models.TextField(blank=True)
     lab_completed = models.BooleanField(default=False)
     lab_completed_at = models.DateTimeField(null=True, blank=True)
     # Pharmacy

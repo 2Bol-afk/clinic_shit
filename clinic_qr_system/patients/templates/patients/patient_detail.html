@@ -2,33 +2,117 @@
 
 {% block content %}
 <div class="row g-3">
-  <div class="col-md-4">
-    <div class="card">
+  <div class="col-lg-4">
+    <div class="card shadow-sm">
       <div class="card-body">
-        <h5>{{ patient.full_name }}</h5>
-        <div>Email: {{ patient.email }}</div>
-        <div>Code: <strong>{{ patient.patient_code }}</strong></div>
-        <div>Age: {{ patient.age }}</div>
-        <div>Contact: {{ patient.contact }}</div>
-        <div>Address: {{ patient.address }}</div>
+        <h5 class="mb-1">{{ patient.full_name }}</h5>
+        <div class="small text-muted">ID: {{ patient.id }} · Code: <strong>{{ patient.patient_code }}</strong></div>
+        <div class="mt-2">Age: {{ patient.age }}</div>
+        <div>Gender: —</div>
+        <div class="mt-2">Allergies: <span class="{% if patient.allergies %}text-danger{% else %}text-muted{% endif %}">{{ patient.allergies|default:'None reported' }}</span></div>
+        <div>Chronic Conditions: —</div>
         {% if patient.qr_code %}
-          <img src="{{ patient.qr_code.url }}" class="img-fluid mt-2" alt="QR">
+          <img src="{{ patient.qr_code.url }}" class="img-fluid mt-3 rounded" alt="QR">
+        {% endif %}
+      </div>
+    </div>
+    <div class="card shadow-sm mt-3">
+      <div class="card-header"><i class="bi bi-clipboard2-pulse me-1"></i>Active Consultation</div>
+      <div class="card-body small">
+        {% if latest_doctor %}
+          <div><strong>Doctor Notes:</strong> {{ latest_doctor.symptoms|default:'—' }}</div>
+          <div><strong>Diagnosis:</strong> {{ latest_doctor.diagnosis|default:'—' }}</div>
+          <div class="mt-2"><strong>Prescription:</strong><br>{{ latest_doctor.prescription_notes|linebreaksbr|default:'—' }}</div>
+        {% else %}
+          <div class="text-muted">No active consultation.</div>
         {% endif %}
       </div>
     </div>
   </div>
-  <div class="col-md-8">
-    <div class="card">
-      <div class="card-header">Visit History</div>
-      <div class="card-body">
-        <ul class="list-group">
+  <div class="col-lg-8">
+    <div class="card shadow-sm mb-3">
+      <div class="card-header"><i class="bi bi-journal-medical me-1"></i>Medical History</div>
+      <div class="card-body p-0">
+        <table class="table table-striped align-middle mb-0">
+          <thead class="table-light"><tr><th>Date</th><th>Service</th><th>Details</th></tr></thead>
+          <tbody>
+            {% for v in doctor_visits %}
+              <tr>
+                <td>{{ v.timestamp|date:'Y-m-d H:i' }}</td>
+                <td>Doctor</td>
+                <td>
+                  <div>Dx: {{ v.diagnosis|default:'—' }}</div>
+                  {% if v.prescription_notes %}<div class="small text-muted">Rx: {{ v.prescription_notes }}</div>{% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="3" class="text-center text-muted">No doctor consultations.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+      <div class="card-header"><i class="bi bi-activity me-1"></i>Laboratory Results</div>
+      <div class="card-body p-0">
+        <table class="table table-striped align-middle mb-0">
+          <thead class="table-light"><tr><th>Date</th><th>Tests</th><th>Results</th></tr></thead>
+          <tbody>
+            {% for v in lab_visits %}
+              <tr>
+                <td>{{ v.timestamp|date:'Y-m-d H:i' }}</td>
+                <td>{{ v.lab_tests|default:'—' }}</td>
+                <td class="small">{{ v.lab_results|linebreaksbr|default:'—' }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="3" class="text-center text-muted">No lab results.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+          <div class="card-header"><i class="bi bi-capsule-pill me-1"></i>Prescriptions & Medications</div>
+          <div class="card-body small">
+            {% if active_prescriptions %}
+              <ul class="list-group list-group-flush">
+                {% for v in active_prescriptions %}
+                <li class="list-group-item">
+                  <div class="fw-semibold">{{ v.timestamp|date:'Y-m-d H:i' }}</div>
+                  <div>{{ v.prescription_notes|linebreaksbr }}</div>
+                </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <div class="text-muted">No active prescriptions.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+          <div class="card-header"><i class="bi bi-calendar-event me-1"></i>Appointments & Follow-Ups</div>
+          <div class="card-body small">
+            <div class="text-muted">No upcoming appointments.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm mt-3">
+      <div class="card-header"><i class="bi bi-clock-history me-1"></i>Timeline / Activity Log</div>
+      <div class="card-body p-0">
+        <ul class="list-group list-group-flush">
           {% for v in visits %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-              <span>{{ v.timestamp|date:'Y-m-d H:i' }} — {{ v.get_service_display }}<br><small>{{ v.notes }}</small></span>
-              <span class="badge bg-secondary">{{ v.created_by }}</span>
+            <li class="list-group-item">
+              {{ v.timestamp|date:'Y-m-d H:i' }} — {{ v.get_service_display }} — {{ v.notes|default:'—' }}
             </li>
           {% empty %}
-            <li class="list-group-item">No visits yet.</li>
+            <li class="list-group-item">No activity recorded.</li>
           {% endfor %}
         </ul>
       </div>
