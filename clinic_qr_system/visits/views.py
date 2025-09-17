@@ -125,17 +125,17 @@ def scan(request):
                 service = 'doctor'
         except Exception:
             pass
-        # If Reception chose Laboratory service from the dropdown, coerce into reception flow
+        # If Reception chose Laboratory or Vaccination service from the dropdown, coerce into reception flow
         try:
             is_reception_user = request.user.is_superuser or request.user.groups.filter(name='Reception').exists()
         except Exception:
             is_reception_user = False
-        if is_reception_user and service == 'lab':
-            # Convert to reception with visit_type=laboratory to allow receptionist to log lab tickets
+        if is_reception_user and service in ('lab', 'vaccination'):
+            # Convert to reception with proper visit_type so receptionist can log tickets
             service = 'reception'
             try:
                 mutable_post = request.POST.copy()
-                mutable_post['reception_visit_type'] = 'laboratory'
+                mutable_post['reception_visit_type'] = 'laboratory' if (request.POST.get('service') == 'lab') else 'vaccination'
                 request.POST = mutable_post
             except Exception:
                 pass
@@ -221,6 +221,9 @@ def scan(request):
                         if visit_type == 'laboratory':
                             svc = ServiceType.objects.filter(name__iexact='Laboratory').first()
                             kwargs['service_type'] = svc
+                        elif visit_type == 'vaccination':
+                            svc = ServiceType.objects.filter(name__iexact='Vaccination').first()
+                            kwargs['service_type'] = svc
                         # Always set to queued for new reception tickets
                         kwargs['status'] = Visit.Status.QUEUED
                 elif service == 'doctor':
@@ -249,11 +252,8 @@ def scan(request):
                     kwargs['medicines'] = request.POST.get('medicines', '')
                     kwargs['dispensed'] = request.POST.get('dispensed') == 'on'
                 elif service == 'vaccination':
-                    kwargs['vaccine_type'] = request.POST.get('vaccine_type', '')
-                    kwargs['vaccine_dose'] = request.POST.get('vaccine_dose', '')
-                    vdate = request.POST.get('vaccination_date')
-                    if vdate:
-                        kwargs['vaccination_date'] = vdate
+                    # Vaccination fields removed - will be handled in vaccination dashboard
+                    pass
                 visit = Visit.objects.create(**kwargs)
                 # If a direct lab visit is created, ensure a LabResult row exists in queue
                 if service == 'lab':
@@ -295,11 +295,11 @@ def scan(request):
                         description=f"Medicines: {visit.medicines}",
                         patient=patient,
                     )
-                elif service == 'vaccination' and visit.vaccine_type:
+                elif service == 'vaccination':
                     ActivityLog.objects.create(
                         actor=user,
                         verb='Vaccination',
-                        description=f"{visit.vaccine_type} {visit.vaccine_dose}",
+                        description="Vaccination visit logged",
                         patient=patient,
                     )
             # Success messages
@@ -308,7 +308,7 @@ def scan(request):
                 messages.success(request, f'Patient successfully queued for {dept_label}.')
             else:
                 messages.success(request, 'Visit logged successfully.')
-            return redirect('/visits/scan/')
+            return redirect('/dashboard/reception/')
         except Patient.DoesNotExist:
             context['error'] = 'Patient not found'
     # Default for allow_doctor_scan when not GET or no code

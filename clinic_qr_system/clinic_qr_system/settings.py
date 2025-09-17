@@ -137,6 +137,32 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+# Email configuration
+# In production/online, configure SMTP via environment variables.
+# When DEBUG is True, fall back to console backend for safety.
+
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'true').lower() in ('1','true','yes')
+EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'false').lower() in ('1','true','yes')
+
+# Prefer TLS over SSL if both are present
+if EMAIL_USE_TLS and EMAIL_USE_SSL:
+    EMAIL_USE_SSL = False
+
+# Default from email is the sending account in production; fallback locally
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER or os.getenv('DEFAULT_FROM_EMAIL', 'noreply@example.com')
+SERVER_EMAIL = os.getenv('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
+
+# Backend selection:
+# - If explicitly provided via env, use it.
+# - Else: use SMTP in production (DEBUG=False and creds provided), console in DEBUG.
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND') or (
+    'django.core.mail.backends.smtp.EmailBackend' if (not DEBUG and EMAIL_HOST_USER and EMAIL_HOST_PASSWORD) else 'django.core.mail.backends.console.EmailBackend'
+)
+
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 MEDIA_URL = 'media/'
@@ -150,8 +176,8 @@ CRISPY_TEMPLATE_PACK = 'bootstrap5'
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend')
 EMAIL_HOST = os.getenv('EMAIL_HOST', '')
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587')) if os.getenv('EMAIL_PORT') else None
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'roelsolera904@gmail.com')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', 'iagk epmp secr frhx ')
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'true').lower() == 'true'
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@clinic.local')
 

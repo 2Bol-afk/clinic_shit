@@ -203,25 +203,27 @@
                              window.location.pathname.includes('/dashboard/reception');
           
           if(isReception) {
-            // For reception, check if we're already on scan page
-            if (window.location.pathname === '/visits/scan/') {
-              // Already on scan page, just populate the patient code field
-              const patientCodeInput = document.getElementById('patientCodeInput');
-              if (patientCodeInput) {
-                // Extract patient code from email (you might need to fetch this from API)
-                fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(e))
-                  .then(r=>r.json())
-                  .then(data=>{
-                    if(data && data.patient && data.patient.patient_code){
-                      patientCodeInput.value = data.patient.patient_code;
-                    }
-                  })
-                  .catch(()=>{});
-              }
-            } else {
-              // Not on scan page, redirect to scan page with patient email
-              window.location.href = '/visits/scan/?patient_email=' + encodeURIComponent(e);
-            }
+            // For reception, do NOT proceed if email is not in database
+            fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(e))
+              .then(r=>r.json())
+              .then(data=>{
+                if(!(data && data.success && data.patient)){
+                  showQRScannerError('Patient not found. Please register the patient first.');
+                  return;
+                }
+                // If on scan page, prefill code; otherwise redirect with email
+                if (window.location.pathname === '/visits/scan/') {
+                  const patientCodeInput = document.getElementById('patientCodeInput');
+                  if (patientCodeInput && data.patient.patient_code) {
+                    patientCodeInput.value = data.patient.patient_code;
+                  }
+                } else {
+                  window.location.href = '/visits/scan/?patient_email=' + encodeURIComponent(e);
+                }
+              })
+              .catch(()=>{
+                showQRScannerError('Error validating patient. Please try again.');
+              });
           } else {
             // For other staff, fetch patient by email then redirect to detail
             fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(e))

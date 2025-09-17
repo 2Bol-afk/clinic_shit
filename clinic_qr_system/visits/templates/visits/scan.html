@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block content %}
 <div class="row">
@@ -17,12 +18,10 @@
             <label class="form-label">Patient Code</label>
             <div class="input-group">
               <input type="text" class="form-control" name="patient_code" placeholder="Enter patient code" required value="{{ prefill_code|default:'' }}" id="patientCodeInput">
-              <button type="button" class="btn btn-outline-success qr-scan-btn" data-intent="staff">
-                <i class="bi bi-qr-code-scan me-1"></i>Scan QR
-              </button>
             </div>
+            <div id="qrInlineMsg" class="mt-2"></div>
             <div class="form-text">
-              <i class="bi bi-info-circle me-1"></i>Enter patient code manually or scan their QR code
+              <i class="bi bi-info-circle me-1"></i>Enter patient code manually
             </div>
           </div>
           {% if is_doctor and allow_doctor_scan %}
@@ -80,12 +79,7 @@
               </div>
             </div>
             <div data-svc="vaccination" class="svc d-none">
-              <label class="form-label">Vaccine Type</label>
-              <input type="text" name="vaccine_type" class="form-control">
-              <label class="form-label mt-2">Dose</label>
-              <input type="text" name="vaccine_dose" class="form-control" placeholder="e.g., 1st, 2nd, Booster">
-              <label class="form-label mt-2">Vaccination Date</label>
-              <input type="date" name="vaccination_date" class="form-control">
+              <!-- Vaccination fields removed - will be handled in vaccination dashboard -->
             </div>
           </div>
           
@@ -122,6 +116,7 @@
   
 })();
 </script>
+<script src="{% static 'js/qr-scan.js' %}"></script>
 {% endblock %}
 
 

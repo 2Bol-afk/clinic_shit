@@ -24,6 +24,23 @@
         <li class="list-group-item">No unclaimed tickets.</li>
       {% endfor %}
     </ul>
+    <h6>Not Done</h6>
+    <ul class="list-group mb-3" data-container="not_done">
+      {% for r in not_done %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <div>
+            <a class="fw-semibold" href="/patients/{{ r.visit.patient.id }}/">{{ r.visit.patient.full_name }}</a>
+            <div class="small">Type: {{ r.lab_type }}</div>
+            <div class="small text-muted">Updated: {{ r.updated_at|date:'Y-m-d H:i' }}</div>
+          </div>
+          <div class="d-flex gap-2">
+            <a class="btn btn-primary btn-sm" href="/dashboard/lab/result/{{ r.visit.id }}/"><i class="bi bi-pencil-square me-1"></i>Reopen</a>
+          </div>
+        </li>
+      {% empty %}
+        <li class="list-group-item">No not-done items.</li>
+      {% endfor %}
+    </ul>
     <h6>Claimed · Waiting to Arrive (verify QR on arrival)</h6>
     <ul class="list-group" data-container="claimed">
       {% for v in pending_claimed %}
@@ -54,28 +71,67 @@
         </div>
         <form method="post" action="/dashboard/lab/receive/">
           {% csrf_token %}
-          <div class="modal-body">
-            <input type="hidden" name="reception_visit_id" id="verifyVisitId">
-            <input type="hidden" name="verify_code" id="verifyCodeHidden">
-            <div class="mb-2"><strong>Scanned Code:</strong> <span id="modalScanned">—</span></div>
-            <div class="ratio ratio-4x3 border rounded bg-dark overflow-hidden mb-2"><video id="modalVideo" autoplay muted playsinline style="width:100%; height:100%; object-fit:cover;"></video></div>
-            <div class="small text-muted" id="modalStatus">Starting camera…</div>
-            <div class="mt-2">
-              <label class="form-label">Or verify by patient email</label>
-              <div class="input-group">
-                <input type="email" class="form-control" name="patient_email" id="modalPatientEmail" placeholder="name@example.com">
-                <button class="btn btn-outline-primary" id="btnVerifyEmail" type="button">Verify Email</button>
+        <div class="modal-body">
+          <input type="hidden" name="reception_visit_id" id="verifyVisitId">
+          <input type="hidden" name="verify_code" id="verifyCodeHidden">
+          
+          <!-- QR Scanner Section -->
+          <div class="row">
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-header d-flex align-items-center">
+                  <i class="bi bi-camera me-2 text-primary"></i>
+                  <span class="fw-semibold">Scan QR Code</span>
+                </div>
+                <div class="card-body text-center">
+                  <button type="button" class="btn btn-lg btn-outline-primary qr-scan-btn" data-intent="verify">
+                    <i class="bi bi-camera qr-icon"></i>
+                    <span>Scan Patient QR</span>
+                  </button>
+                  <p class="text-muted mt-2 small">Use camera to scan patient's QR code</p>
+                </div>
               </div>
-              <div class="text-danger small mt-1 d-none" id="emailError"></div>
-              <div class="text-success small mt-1 d-none" id="emailOk">Email verified.</div>
             </div>
-            <label class="form-label mt-3">Test Type</label>
-            <select name="lab_test_type" id="modalTestType" class="form-select" disabled required>
-              {% for code,label in lab_types %}
-                <option value="{{ code }}">{{ label }}</option>
-              {% endfor %}
-            </select>
+            
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-header d-flex align-items-center">
+                  <i class="bi bi-envelope me-2 text-secondary"></i>
+                  <span class="fw-semibold">Manual Entry</span>
+                </div>
+                <div class="card-body">
+                  <div class="mb-3">
+                    <label class="form-label">Enter Patient Email</label>
+                    <div class="input-group">
+                      <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                      <input type="email" class="form-control" name="patient_email" id="modalPatientEmail" placeholder="patient@example.com" required>
+                    </div>
+                    <div class="text-danger small mt-1 d-none" id="emailError"></div>
+                    <div class="text-success small mt-1 d-none" id="emailOk">Email verified.</div>
+                  </div>
+                  <button class="btn btn-outline-primary" id="btnVerifyEmail" type="button">
+                    <i class="bi bi-check-circle me-1"></i>Verify Email
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
+          
+          <!-- Status Messages -->
+          <div id="verifyStatus" class="mt-3" style="display: none;">
+            <div class="alert alert-info" role="alert">
+              <i class="bi bi-info-circle me-2"></i>
+              <span id="verifyStatusMessage">Processing...</span>
+            </div>
+          </div>
+          
+          <label class="form-label mt-3">Test Type</label>
+          <select name="lab_test_type" id="modalTestType" class="form-select" disabled required>
+            {% for code,label in lab_types %}
+              <option value="{{ code }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
             <button class="btn btn-success" id="modalSubmitBtn" type="submit" disabled>Verify & Receive</button>
@@ -85,38 +141,17 @@
     </div>
   </div>
   <div class="col-md-6">
-    <h6>Ready for Lab Processing</h6>
-    <ul class="list-group mb-3" data-container="ready">
-      {% for v in ready %}
-        <li class="list-group-item d-flex justify-content-between align-items-center" data-card>
-          <div>
-            <a class="fw-semibold" href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a>
-            <div class="small text-muted">Queue: {{ v.queue_number|default:'—' }}</div>
-          </div>
-          <div class="d-flex gap-2">
-            <a class="btn btn-primary btn-sm" href="/dashboard/lab/work/{{ v.id }}/"><i class="bi bi-pencil-square me-1"></i>Open Work</a>
-          </div>
-        </li>
-      {% empty %}
-        <li class="list-group-item">No ready items.</li>
-      {% endfor %}
-    </ul>
     <h6>In Progress</h6>
     <ul class="list-group mb-3" data-container="in_process">
-      {% for v in in_progress %}
+      {% for r in in_process %}
         <li class="list-group-item d-flex justify-content-between align-items-center">
           <div>
-            <a class="fw-semibold" href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a>
-            <div class="small">Tests: {{ v.lab_tests|default:'-' }}</div>
-            <div class="small text-muted">Logged: {{ v.timestamp|date:'Y-m-d H:i' }}{% if v.queue_number %} · Queue: {{ v.queue_number }}{% endif %}</div>
+            <a class="fw-semibold" href="/patients/{{ r.visit.patient.id }}/">{{ r.visit.patient.full_name }}</a>
+            <div class="small">Type: {{ r.lab_type }}</div>
+            <div class="small text-muted">Logged: {{ r.visit.timestamp|date:'Y-m-d H:i' }}{% if r.visit.queue_number %} · Queue: {{ r.visit.queue_number }}{% endif %}</div>
           </div>
           <div class="d-flex gap-2">
-            <a class="btn btn-primary btn-sm" href="/dashboard/lab/work/{{ v.id }}/"><i class="bi bi-pencil-square me-1"></i>Open Work</a>
-            <form method="post" action="/dashboard/lab/{{ v.id }}/done/">
-              {% csrf_token %}
-              <input type="hidden" name="notes" value="Completed">
-              <button class="btn btn-outline-success btn-sm" type="submit"><i class="bi bi-check2-circle me-1"></i>Mark Done</button>
-            </form>
+            <a class="btn btn-primary btn-sm" href="/dashboard/lab/result/{{ r.visit.id }}/"><i class="bi bi-pencil-square me-1"></i>Open Work</a>
           </div>
         </li>
       {% empty %}
@@ -298,11 +333,11 @@
     </script>
     <h6>Recently Completed</h6>
     <ul class="list-group">
-      {% for v in completed %}
+      {% for r in completed %}
         <li class="list-group-item">
-          <a href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a>
-          <div class="small">Tests: {{ v.lab_tests|default:'-' }}</div>
-          <div class="small text-muted">Done: {{ v.lab_completed_at|date:'Y-m-d H:i'|default:v.timestamp|date:'Y-m-d H:i' }}</div>
+          <a href="/patients/{{ r.visit.patient.id }}/">{{ r.visit.patient.full_name }}</a>
+          <div class="small">Type: {{ r.lab_type }}</div>
+          <div class="small text-muted">Updated: {{ r.updated_at|date:'Y-m-d H:i' }}</div>
         </li>
       {% empty %}
         <li class="list-group-item">No completed labs yet.</li>

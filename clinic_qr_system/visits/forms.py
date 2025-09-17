@@ -1,5 +1,5 @@
 from django import forms
-from .models import LabResult, Laboratory
+from .models import LabResult, Laboratory, VaccinationType
 
 
 LAB_FIELDS = {
@@ -83,4 +83,112 @@ class LabResultForm(forms.Form):
                 data[name] = val
         return data
 
+
+
+VACC_FIELDS: dict[str, list[tuple[str, str]]] = {
+    VaccinationType.COVID19: [
+        ('brand', 'Vaccine Brand'),
+        ('dose_number', 'Dose Number'),
+        ('batch', 'Batch/Lot Number'),
+        ('expiry', 'Expiry Date'),
+        ('site', 'Site of Injection'),
+        ('date_admin', 'Date of Administration'),
+        ('admin_by', 'Administered By'),
+        ('remarks', 'Remarks'),
+    ],
+    VaccinationType.INFLUENZA: [
+        ('brand', 'Vaccine Brand'),
+        ('strain', 'Yearly Strain/Type'),
+        ('batch', 'Batch/Lot Number'),
+        ('expiry', 'Expiry Date'),
+        ('site', 'Site of Injection'),
+        ('date_admin', 'Date of Administration'),
+        ('admin_by', 'Administered By'),
+        ('remarks', 'Remarks'),
+    ],
+    VaccinationType.HEPATITIS_B: [
+        ('dose_number', 'Dose Number'),
+        ('batch', 'Batch/Lot Number'),
+        ('expiry', 'Expiry Date'),
+        ('site', 'Site of Injection'),
+        ('date_admin', 'Date of Administration'),
+        ('admin_by', 'Administered By'),
+        ('remarks', 'Remarks'),
+    ],
+    VaccinationType.TETANUS: [
+        ('vaccine_type', 'Vaccine Type'),
+        ('dose_number', 'Dose Number'),
+        ('batch', 'Batch/Lot Number'),
+        ('expiry', 'Expiry Date'),
+        ('site', 'Site of Injection'),
+        ('date_admin', 'Date of Administration'),
+        ('admin_by', 'Administered By'),
+        ('remarks', 'Remarks'),
+    ],
+    VaccinationType.MMR: [
+        ('dose_number', 'Dose Number'),
+        ('batch', 'Batch/Lot Number'),
+        ('expiry', 'Expiry Date'),
+        ('site', 'Site of Injection'),
+        ('date_admin', 'Date of Administration'),
+        ('admin_by', 'Administered By'),
+        ('remarks', 'Remarks'),
+    ],
+    VaccinationType.POLIO: [
+        ('vaccine_type', 'Vaccine Type (OPV/IPV)'),
+        ('dose_number', 'Dose Number'),
+        ('batch', 'Batch/Lot Number'),
+        ('expiry', 'Expiry Date'),
+        ('site', 'Site of Injection (if injectable)'),
+        ('date_admin', 'Date of Administration'),
+        ('admin_by', 'Administered By'),
+        ('remarks', 'Remarks'),
+    ],
+    VaccinationType.VARICELLA: [
+        ('dose_number', 'Dose Number'),
+        ('batch', 'Batch/Lot Number'),
+        ('expiry', 'Expiry Date'),
+        ('site', 'Site of Injection'),
+        ('date_admin', 'Date of Administration'),
+        ('admin_by', 'Administered By'),
+        ('remarks', 'Remarks'),
+    ],
+    VaccinationType.HPV: [
+        ('brand', 'Vaccine Brand'),
+        ('dose_number', 'Dose Number'),
+        ('batch', 'Batch/Lot Number'),
+        ('expiry', 'Expiry Date'),
+        ('site', 'Site of Injection'),
+        ('date_admin', 'Date of Administration'),
+        ('admin_by', 'Administered By'),
+        ('remarks', 'Remarks'),
+    ],
+}
+
+
+class VaccinationForm(forms.Form):
+    vaccine_type = forms.ChoiceField(choices=VaccinationType.choices, required=True, label='Vaccine Type')
+
+    def __init__(self, *args, **kwargs):
+        self.instance = kwargs.pop('instance', None)
+        initial = kwargs.get('initial') or {}
+        vt_value = initial.get('vaccine_type') or (getattr(self.instance, 'vaccine_type', None))
+        super().__init__(*args, **kwargs)
+        if vt_value:
+            self.fields['vaccine_type'].initial = vt_value
+        vt = vt_value or VaccinationType.COVID19
+        for name, label in VACC_FIELDS.get(vt, []):
+            self.fields[name] = forms.CharField(label=label, required=False)
+            if self.instance and isinstance(getattr(self.instance, 'details', {}), dict):
+                self.fields[name].initial = getattr(self.instance, 'details', {}).get(name, '')
+
+    def to_details_json(self) -> dict:
+        data = {}
+        for name, field in self.fields.items():
+            if name == 'vaccine_type':
+                continue
+            val = self.cleaned_data.get(name)
+            if val:
+                data[name] = val
+        return data
 

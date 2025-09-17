@@ -114,6 +114,40 @@ class LabResult(models.Model):
     def __str__(self) -> str:
         return f"{self.visit_id} · {self.lab_type} · {self.status}"
 
+
+class VaccinationType(models.TextChoices):
+    COVID19 = 'COVID-19 Vaccine', 'COVID-19 Vaccine'
+    INFLUENZA = 'Influenza (Flu) Vaccine', 'Influenza (Flu) Vaccine'
+    HEPATITIS_B = 'Hepatitis B Vaccine', 'Hepatitis B Vaccine'
+    TETANUS = 'Tetanus Vaccine', 'Tetanus Vaccine'
+    MMR = 'Measles, Mumps, Rubella (MMR) Vaccine', 'Measles, Mumps, Rubella (MMR) Vaccine'
+    POLIO = 'Polio Vaccine', 'Polio Vaccine'
+    VARICELLA = 'Varicella (Chickenpox) Vaccine', 'Varicella (Chickenpox) Vaccine'
+    HPV = 'Human Papillomavirus (HPV) Vaccine', 'Human Papillomavirus (HPV) Vaccine'
+
+
+class VaccinationRecord(models.Model):
+    visit = models.ForeignKey('visits.Visit', on_delete=models.CASCADE, related_name='vaccination_records')
+    patient = models.ForeignKey('patients.Patient', on_delete=models.CASCADE, related_name='vaccination_records')
+    vaccine_type = models.CharField(max_length=64, choices=VaccinationType.choices)
+    status = models.CharField(max_length=32, choices=[
+        ('queue', 'Queue'),
+        ('claimed', 'Claimed'),
+        ('in_process', 'In Process'),
+        ('done', 'Done'),
+        ('not_done', 'Not Done'),
+    ], default='queue')
+    details = models.JSONField(default=dict, blank=True)
+    administered_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self) -> str:
+        return f"{self.visit_id} · {self.vaccine_type} · {self.status}"
+
 class Diagnosis(models.Model):
     visit = models.ForeignKey('visits.Visit', on_delete=models.CASCADE, related_name='diagnoses')
     text = models.CharField(max_length=255)

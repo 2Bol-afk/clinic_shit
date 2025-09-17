@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0 d-flex align-items-center"><i class="bi bi-person-plus text-success me-2"></i>Walk-in Registration</h4>
+  <a class="btn btn-outline-secondary" href="/dashboard/reception/"><i class="bi bi-arrow-left"></i> Back</a>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <form method="post" class="row g-3">
+      {% csrf_token %}
+      <div class="col-md-6">
+        <label class="form-label">Full Name</label>
+        {{ form.full_name }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Age</label>
+        {{ form.age }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Contact</label>
+        {{ form.contact }}
+      </div>
+      <div class="col-12">
+        <label class="form-label">Address</label>
+        {{ form.address }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Email</label>
+        {{ form.email }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Visit Type</label>
+        {{ form.reception_visit_type }}
+      </div>
+      <div class="col-md-6" id="deptWrap">
+        <label class="form-label">Department</label>
+        {{ form.department }}
+      </div>
+      <div class="col-12">
+        <button class="btn btn-success" type="submit"><i class="bi bi-check2-circle me-1"></i>Register & Queue</button>
+        <a href="/dashboard/reception/" class="btn btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+(function(){
+  const typeSel = document.querySelector('select[name="reception_visit_type"]');
+  const dept = document.getElementById('deptWrap');
+  function sync(){ const isConsult = typeSel && typeSel.value === 'consultation'; if(dept) dept.style.display = isConsult ? '' : 'none'; }
+  if(typeSel){ typeSel.addEventListener('change', sync); sync(); }
+})();
+</script>
+{% endblock %}
+

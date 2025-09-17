@@ -4,6 +4,7 @@
   <h4 class="mb-0 d-flex align-items-center"><i class="bi bi-door-open-fill text-success me-2"></i>Reception · {{ today }}</h4>
   <div class="d-flex gap-2">
     <a href="#" class="btn btn-lg btn-outline-success qr-scan-btn" data-intent="staff"><i class="bi bi-camera me-2"></i>Scan/Log Arrival</a>
+    <a href="/dashboard/reception/walkin/" class="btn btn-lg btn-outline-success"><i class="bi bi-person-plus me-2"></i>Walk-in Registration</a>
   </div>
 </div>
 <div class="card shadow-sm">
@@ -36,11 +37,12 @@
             {% endif %}
           </td>
           <td>
-            {% if v.status == 'done' %}
+            {# Prefer unified status; fallback to doctor_status for old rows #}
+            {% if v.status == 'done' or v.doctor_status == 'finished' %}
               <span class="badge text-bg-primary">Done</span>
-            {% elif v.status == 'in_process' %}
+            {% elif v.status == 'in_process' or v.doctor_status == 'in_consultation' %}
               <span class="badge text-bg-info">In Process</span>
-            {% elif v.status == 'claimed' %}
+            {% elif v.status == 'claimed' or v.doctor_status == 'ready_to_consult' %}
               <span class="badge text-bg-success">Claimed</span>
             {% elif v.queue_number %}
               {% if v.department %}
@@ -59,7 +61,6 @@
           <td>{{ v.department|default:'—' }}</td>
           <td>
             {% if request.user.is_superuser or request.user.groups.all.0.name == 'Reception' %}
-              <a class="btn btn-sm btn-outline-secondary" href="/dashboard/reception/{{ v.id }}/edit/">Edit</a>
               <a class="btn btn-sm btn-outline-danger" href="/dashboard/reception/{{ v.id }}/delete/">Delete</a>
             {% endif %}
           </td>

@@ -4,16 +4,23 @@ from django.utils import timezone
 from django.db import models, transaction
 from django.db.models import Q
 from patients.models import Patient, Doctor
-from visits.models import Visit, ServiceType, LabResult, Laboratory
-from visits.forms import LabResultForm
+from visits.models import Visit, ServiceType, LabResult, Laboratory, VaccinationRecord, VaccinationType
+from visits.forms import LabResultForm, VaccinationForm
 from django.contrib.auth.models import Group, User
 from .models import ActivityLog
 from patients.forms import DoctorForm
+from django import forms
 from django.contrib import messages
+from django.core.mail import EmailMessage
+from django.conf import settings
+from io import BytesIO
+from django.core.files.base import ContentFile
+import qrcode
 from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 from django.http import JsonResponse
+import re
 import csv
 try:
     from openpyxl import Workbook
@@ -135,6 +142,175 @@ def reception_dashboard(request):
     )
 
 
+class WalkInForm(forms.Form):
+    full_name = forms.CharField(max_length=255)
+    age = forms.IntegerField(min_value=0)
+    address = forms.CharField(widget=forms.Textarea)
+    contact = forms.CharField(max_length=50)
+    email = forms.EmailField()
+    reception_visit_type = forms.ChoiceField(choices=[('consultation','Consultation'),('laboratory','Laboratory'),('vaccination','Vaccination')])
+    department = forms.ChoiceField(choices=Visit.Department.choices, required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            css = 'form-select' if isinstance(field.widget, forms.Select) else 'form-control'
+            existing = field.widget.attrs.get('class', '')
+            field.widget.attrs['class'] = (existing + ' ' + css).strip()
+
+
+@login_required
+@user_passes_test(is_reception)
+def reception_walkin(request):
+    if request.method == 'POST':
+        form = WalkInForm(request.POST)
+        if form.is_valid():
+            data = form.cleaned_data
+            # Reuse existing patient by email if exists
+            existing = Patient.objects.filter(email__iexact=data['email']).first()
+            patient = existing
+            if not existing:
+                # Create patient with generated patient_code and minimal fields
+                import uuid
+                patient_code = uuid.uuid4().hex[:10].upper()
+                patient = Patient.objects.create(
+                    full_name=data['full_name'],
+                    age=data['age'],
+                    address=data['address'],
+                    contact=data['contact'],
+                    email=data['email'],
+                    patient_code=patient_code,
+                )
+                # Generate QR with email + patient id
+                try:
+                    qr_payload = f"email:{patient.email};id:{patient.id}"
+                    qr_img = qrcode.make(qr_payload)
+                    buffer = BytesIO()
+                    qr_img.save(buffer, format='PNG')
+                    file_name = f"qr_{patient.patient_code}.png"
+                    patient.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=False)
+                    patient.save(update_fields=['qr_code'])
+                except Exception:
+                    buffer = None
+                    file_name = None
+                # Create portal user with temp password and force change
+                try:
+                    temp_password = uuid.uuid4().hex[:12]
+                    username = f"p_{patient.patient_code.lower()}"
+                    user = User.objects.create_user(username=username, email=patient.email, password=temp_password)
+                    patient.user = user
+                    patient.must_change_password = True
+                    patient.save(update_fields=['user','must_change_password'])
+                    group, _ = Group.objects.get_or_create(name='Patient')
+                    user.groups.add(group)
+                except Exception:
+                    temp_password = None
+            else:
+                # Ensure existing patient has a QR; generate if missing
+                buffer = None
+                file_name = None
+                if not existing.qr_code:
+                    try:
+                        qr_payload = f"email:{existing.email};id:{existing.id}"
+                        qr_img = qrcode.make(qr_payload)
+                        buffer = BytesIO()
+                        qr_img.save(buffer, format='PNG')
+                        file_name = f"qr_{existing.patient_code}.png"
+                        existing.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=False)
+                        existing.save(update_fields=['qr_code'])
+                    except Exception:
+                        buffer = None
+                        file_name = None
+                # If existing patient has no portal user, create temp credentials
+                temp_password = None
+                if not existing.user:
+                    try:
+                        import uuid as _uuid
+                        temp_password = _uuid.uuid4().hex[:12]
+                        username = f"p_{existing.patient_code.lower()}"
+                        user = User.objects.create_user(username=username, email=existing.email, password=temp_password)
+                        existing.user = user
+                        existing.must_change_password = True
+                        existing.save(update_fields=['user','must_change_password'])
+                        group, _ = Group.objects.get_or_create(name='Patient')
+                        user.groups.add(group)
+                    except Exception:
+                        temp_password = None
+            # Create reception visit
+            visit_type = data['reception_visit_type']
+            kwargs = {
+                'patient': patient,
+                'service': 'reception',
+                'created_by': request.user,
+                'status': Visit.Status.QUEUED,
+                'department': '',
+            }
+            today = timezone.localdate()
+            if visit_type == 'consultation':
+                dept = data.get('department') or ''
+                kwargs['department'] = dept
+                last = (Visit.objects
+                        .filter(service='reception', timestamp__date=today, department=dept)
+                        .order_by('-queue_number')
+                        .first())
+                next_q = (last.queue_number + 1) if last and last.queue_number else 1
+                kwargs['queue_number'] = next_q
+            else:
+                tag = 'Laboratory' if visit_type == 'laboratory' else 'Vaccination'
+                last = (Visit.objects
+                        .filter(service='reception', timestamp__date=today, department='')
+                        .filter(notes__icontains=f'[visit: {tag.lower()}]')
+                        .order_by('-queue_number')
+                        .first())
+                next_q = (last.queue_number + 1) if last and last.queue_number else 1
+                kwargs['queue_number'] = next_q
+                prefix = '[Visit: Laboratory]' if visit_type == 'laboratory' else '[Visit: Vaccination]'
+                kwargs['notes'] = prefix
+                # Set service_type as hint
+                svc_name = 'Laboratory' if visit_type == 'laboratory' else 'Vaccination'
+                svc = ServiceType.objects.filter(name__iexact=svc_name).first()
+                if svc:
+                    kwargs['service_type'] = svc
+            Visit.objects.create(**kwargs)
+            # Email confirmation with QR attachment (best-effort)
+            try:
+                if patient.email:
+                    body_parts = [
+                        f"Dear {patient.full_name},\n",
+                        "\nThank you for registering with Clinic QR System.\n",
+                        f"Your Patient Code is: {patient.patient_code}\n",
+                    ]
+                    if 'temp_password' in locals() and temp_password:
+                        body_parts.append(f"Temporary Password: {temp_password}\n")
+                        body_parts.append("\nPlease log in using the temporary password and change it on your first login.\n")
+                    body_parts.append("\nPlease keep this email for future reference.\n")
+                    body_parts.append("You can use the attached QR code for faster check-in at the reception.\n\n")
+                    body_parts.append("Regards,\nClinic QR System")
+                    body = ''.join(body_parts)
+                    email = EmailMessage(
+                        subject='Your Patient QR Code and Registration Details',
+                        body=body,
+                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None) or None,
+                        to=[patient.email],
+                    )
+                    if (patient.qr_code and hasattr(patient.qr_code, 'path')):
+                        try:
+                            with open(patient.qr_code.path, 'rb') as f:
+                                email.attach(f"qr_{patient.patient_code}.png", f.read(), 'image/png')
+                        except Exception:
+                            pass
+                    elif buffer:
+                        email.attach(file_name or 'qr.png', (buffer.getvalue() if buffer else b''), 'image/png')
+                    email.send(fail_silently=True)
+            except Exception:
+                pass
+            messages.success(request, 'Walk-in patient registered and queued.')
+            return redirect('dashboard_reception')
+    else:
+        form = WalkInForm()
+    return render(request, 'dashboard/reception_walkin.html', {'form': form})
+
+
 @login_required
 @user_passes_test(is_reception)
 def reception_edit(request, pk: int):
@@ -242,10 +418,17 @@ def lab_dashboard(request):
     if not request.user.is_superuser:
         claimed_filter &= Q(lab_claimed_by=request.user)
     claimed_waiting = base_reception_lab.filter(claimed_filter).order_by('queue_number', 'timestamp')
-    # Categorize lab workflow states using LabResult status for today
+    # Categorize lab workflow states using ONLY the latest LabResult per visit for today
+    from django.db.models import OuterRef, Subquery, F
+    latest_ts_sq = (LabResult.objects
+                    .filter(visit=OuterRef('visit'))
+                    .order_by('-updated_at')
+                    .values('updated_at')[:1])
     lab_results_today = (LabResult.objects
                          .select_related('visit__patient')
-                         .filter(visit__timestamp__date=today))
+                         .filter(visit__timestamp__date=today)
+                         .annotate(latest_updated_at=Subquery(latest_ts_sq))
+                         .filter(updated_at=F('latest_updated_at')))
     ready = lab_results_today.filter(status='queue').order_by('visit__queue_number', 'visit__timestamp')
     in_process = lab_results_today.filter(status='in_process').order_by('-updated_at')
     not_done = lab_results_today.filter(status='not_done').order_by('-updated_at')
@@ -369,6 +552,10 @@ def lab_receive(request):
             new_visit.status = Visit.Status.IN_PROCESS
             new_visit.assigned_to = request.user
             new_visit.save(update_fields=['status', 'assigned_to'])
+            # Mirror doctor: mark linked reception ticket In Process for visibility
+            if rec_id:
+                src.status = Visit.Status.IN_PROCESS
+                src.save(update_fields=['status'])
         ActivityLog.objects.create(
             actor=request.user,
             verb='Lab Receive',
@@ -402,7 +589,39 @@ def lab_mark_done(request, pk: int):
         lab_visit.lab_completed = True
         lab_visit.lab_completed_at = timezone.now()
         lab_visit.notes = request.POST.get('notes', lab_visit.notes)
-        lab_visit.save(update_fields=['lab_results', 'lab_completed', 'lab_completed_at', 'notes'])
+        lab_visit.status = Visit.Status.DONE
+        lab_visit.save(update_fields=['lab_results', 'lab_completed', 'lab_completed_at', 'notes', 'status'])
+        # Also mark associated LabResult as done
+        lr = LabResult.objects.filter(visit=lab_visit).order_by('-updated_at').first()
+        if lr and lr.status != 'done':
+            lr.status = 'done'
+            lr.save(update_fields=['status'])
+        # Reflect completion on the specific reception ticket that spawned this lab visit
+        rec = None
+        try:
+            m = re.search(r"From\s+reception\s+#(\d+)", lab_visit.notes or '', flags=re.IGNORECASE)
+            if m:
+                rec_id = int(m.group(1))
+                rec = Visit.objects.filter(pk=rec_id, service='reception').first()
+        except Exception:
+            rec = None
+        if not rec:
+            # Fallback: latest today's reception for this patient
+            today = timezone.localdate()
+            rec = (Visit.objects
+                   .filter(service='reception', patient=lab_visit.patient, timestamp__date=today)
+                   .order_by('-timestamp')
+                   .first())
+        if rec:
+            rec.status = Visit.Status.DONE
+            rec.save(update_fields=['status'])
+        # Additionally, mark any same-day reception LAB tickets as done for this patient
+        today = timezone.localdate()
+        (Visit.objects
+         .filter(service='reception', patient=lab_visit.patient, timestamp__date=today)
+         .filter(Q(notes__icontains='[visit: laboratory]') | Q(service_type__name__iexact='Laboratory'))
+         .exclude(status=Visit.Status.DONE)
+         .update(status=Visit.Status.DONE))
         ActivityLog.objects.create(
             actor=request.user,
             verb='Lab Completed',
@@ -468,15 +687,50 @@ def lab_work(request, pk: int):
                 current = lab_visit.notes or ''
                 if tag.lower() not in current.lower():
                     lab_visit.notes = (current + (' ' if current else '') + tag).strip()
-        lab_visit.save()
+        # Keep LabResult status in sync with this workflow
+        lr = LabResult.objects.filter(visit=lab_visit).order_by('-updated_at').first()
+        if not lr:
+            lr = LabResult.objects.create(
+                visit=lab_visit,
+                lab_type=(lab_visit.lab_test_type or Laboratory.HEMATOLOGY),
+            )
+        # Default to in-process when saving without completion/not-done
+        action = 'save'
         if request.POST.get('complete') == '1':
+            action = 'done'
+        elif mark_not_done:
+            action = 'not_done'
+        # Persist visit + labresult statuses
+        if action == 'done':
+            lab_visit.status = Visit.Status.DONE
+            lab_visit.save()
+            lr.status = 'done'
+            lr.save(update_fields=['status'])
+            # Reflect completion on today's matching reception ticket
+            today = timezone.localdate()
+            rec = (Visit.objects
+                   .filter(service='reception', patient=lab_visit.patient, timestamp__date=today)
+                   .order_by('-timestamp')
+                   .first())
+            if rec:
+                rec.status = Visit.Status.DONE
+                rec.save(update_fields=['status'])
             messages.success(request, 'Marked as Done.')
             return redirect('dashboard_lab')
-        if mark_not_done:
+        elif action == 'not_done':
+            lab_visit.status = Visit.Status.IN_PROCESS
+            lab_visit.save()
+            lr.status = 'not_done'
+            lr.save(update_fields=['status'])
             messages.success(request, 'Marked as Not Done.')
             return redirect('dashboard_lab')
-        messages.success(request, 'Lab work saved.')
-        return redirect('lab_work', pk=lab_visit.id)
+        else:
+            lab_visit.status = Visit.Status.IN_PROCESS
+            lab_visit.save()
+            lr.status = 'in_process'
+            lr.save(update_fields=['status'])
+            messages.success(request, 'Lab work saved.')
+            return redirect('lab_work', pk=lab_visit.id)
     # Prefill discrete inputs from stored text (best-effort)
     prefill = {'result_1':'','result_2':'','result_3':'','result_4':'','result_5':'','interpretation':''}
     if lab_visit.lab_results:
@@ -515,6 +769,30 @@ def lab_result_work(request, pk: int):
                 lab_visit.lab_completed = True
                 lab_visit.lab_completed_at = timezone.now()
                 lab_visit.save(update_fields=['status','lab_completed','lab_completed_at'])
+                # Reflect completion on the specific reception ticket that spawned this lab visit
+                rec = None
+                try:
+                    m = re.search(r"From\s+reception\s+#(\d+)", lab_visit.notes or '', flags=re.IGNORECASE)
+                    if m:
+                        rec_id = int(m.group(1))
+                        rec = Visit.objects.filter(pk=rec_id, service='reception').first()
+                except Exception:
+                    rec = None
+                if not rec:
+                    today = timezone.localdate()
+                    rec = (Visit.objects
+                           .filter(service='reception', patient=lab_visit.patient, timestamp__date=today)
+                           .order_by('-timestamp')
+                           .first())
+                if rec:
+                    rec.status = Visit.Status.DONE
+                    rec.save(update_fields=['status'])
+                # Additionally, mark any same-day reception LAB tickets as done for this patient
+                (Visit.objects
+                 .filter(service='reception', patient=lab_visit.patient, timestamp__date=timezone.localdate())
+                 .filter(Q(notes__icontains='[visit: laboratory]') | Q(service_type__name__iexact='Laboratory'))
+                 .exclude(status=Visit.Status.DONE)
+                 .update(status=Visit.Status.DONE))
             elif action == 'not_done':
                 lr.status = 'not_done'
             else:
@@ -559,11 +837,232 @@ def pharmacy_dashboard(request):
 
 @login_required
 def vaccination_dashboard(request):
+    # Vaccination dashboard mirrors Lab flow
     today = timezone.localdate()
-    vaccinations = (Visit.objects
+    # Reception tickets tagged for vaccination
+    base_reception_vacc = (Visit.objects
+                           .filter(service='reception', timestamp__date=today)
+                           .filter(Q(service_type__name__iexact='Vaccination') | Q(notes__icontains='[visit: vaccination]')))
+    # Unclaimed queue
+    unclaimed = (base_reception_vacc
+                 .filter(Q(status=Visit.Status.QUEUED) | Q(status__isnull=True) | Q(status=''))
+                 .filter(assigned_to__isnull=True)
+                 .order_by('queue_number', 'timestamp'))
+    # Claimed waiting to arrive (claimed but not received yet)
+    # Exclude only reception tickets that were already RECEIVED into vaccination today
+    received_from_reception_ids: set[int] = set()
+    _vacc_visits = (Visit.objects
                     .filter(service='vaccination', timestamp__date=today)
-                    .order_by('-timestamp'))
-    return render(request, 'dashboard/vaccination.html', {'vaccinations': vaccinations, 'today': today})
+                    .values('id', 'notes'))
+    for _v in _vacc_visits:
+        try:
+            m = re.search(r"From\s+reception\s+#(\d+)", _v.get('notes') or '', flags=re.IGNORECASE)
+            if m:
+                received_from_reception_ids.add(int(m.group(1)))
+        except Exception:
+            pass
+    claimed_filter = Q(status=Visit.Status.CLAIMED)
+    if not request.user.is_superuser:
+        claimed_filter &= Q(assigned_to=request.user)
+    claimed_waiting = (base_reception_vacc
+                       .filter(claimed_filter)
+                       .exclude(id__in=list(received_from_reception_ids))
+                       .order_by('queue_number', 'timestamp'))
+    
+    # Debug: Print some info about the filtering
+    print(f"DEBUG - Today: {today}")
+    print(f"DEBUG - Base reception vacc count: {base_reception_vacc.count()}")
+    print(f"DEBUG - Received from reception IDs: {sorted(received_from_reception_ids)}")
+    print(f"DEBUG - Claimed waiting count: {claimed_waiting.count()}")
+    print(f"DEBUG - User: {request.user}, Is superuser: {request.user.is_superuser}")
+    for v in claimed_waiting:
+        print(f"DEBUG - Claimed waiting: {v.patient.full_name}, Status: {v.status}, Assigned to: {v.assigned_to}")
+    # Latest vaccination records for today per visit
+    from django.db.models import OuterRef, Subquery, F
+    latest_ts_sq = (VaccinationRecord.objects
+                    .filter(visit=OuterRef('visit'))
+                    .order_by('-updated_at')
+                    .values('updated_at')[:1])
+    vacc_records_today = (VaccinationRecord.objects
+                          .select_related('visit__patient')
+                          .filter(visit__timestamp__date=today)
+                          .annotate(latest_updated_at=Subquery(latest_ts_sq))
+                          .filter(updated_at=F('latest_updated_at')))
+    ready = vacc_records_today.filter(status='queue').order_by('visit__queue_number', 'visit__timestamp')
+    in_process = vacc_records_today.filter(status='in_process').order_by('-updated_at')
+    not_done = vacc_records_today.filter(status='not_done').order_by('-updated_at')
+    completed = vacc_records_today.filter(status='done').order_by('-updated_at')[:20]
+    vaccine_type_labels = dict(VaccinationType.choices)
+    return render(request, 'dashboard/vaccination.html', {
+        'pending_unclaimed': unclaimed,
+        'pending_claimed': claimed_waiting,
+        'ready': ready,
+        'in_process': in_process,
+        'not_done': not_done,
+        'completed': completed,
+        'vaccine_types': VaccinationType.choices,
+        'vaccine_type_labels': vaccine_type_labels,
+        'today': today,
+    })
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser or u.groups.filter(name='Vaccination').exists())
+@require_POST
+def vaccination_claim(request):
+    rec_id = request.POST.get('reception_visit_id')
+    visit = get_object_or_404(Visit, pk=rec_id, service='reception')
+    # Only one claim per ticket; allow re-claim to the same user
+    if visit.assigned_to and visit.assigned_to != request.user:
+        messages.error(request, 'This ticket is already claimed by another staff.')
+        return redirect('dashboard_vaccination')
+    visit.assigned_to = request.user
+    visit.claimed_at = timezone.now()
+    visit.status = Visit.Status.CLAIMED
+    visit.save(update_fields=['assigned_to', 'claimed_at', 'status'])
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({'success': True, 'status': 'Claimed', 'patient_id': visit.patient_id})
+    messages.success(request, 'Ticket claimed. Verify QR on arrival, then receive to start.')
+    return redirect('dashboard_vaccination')
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser or u.groups.filter(name='Vaccination').exists())
+@require_POST
+def vaccination_receive(request):
+    rec_id = request.POST.get('reception_visit_id')
+    src = get_object_or_404(Visit, pk=rec_id, service='reception')
+    with transaction.atomic():
+        if not src.assigned_to:
+            messages.error(request, 'Please claim this ticket first, then verify QR on arrival.')
+            return redirect('dashboard_vaccination')
+        verify_code = (request.POST.get('verify_code') or '').strip()
+        patient_email = (request.POST.get('patient_email') or '').strip()
+        if not verify_code and not patient_email:
+            messages.error(request, 'Please verify patient on arrival (scan QR or enter email).')
+            return redirect('dashboard_vaccination')
+        if patient_email:
+            try:
+                p = Patient.objects.get(email=patient_email)
+            except Patient.DoesNotExist:
+                messages.error(request, 'Patient not found for the provided email.')
+                return redirect('dashboard_vaccination')
+            if src.patient_id != p.id:
+                messages.error(request, 'Provided email does not match the expected patient for this ticket.')
+                return redirect('dashboard_vaccination')
+        elif verify_code:
+            if getattr(src.patient, 'patient_code', '').strip().upper() != verify_code.strip().upper():
+                messages.error(request, 'QR/Patient code does not match the expected patient for this ticket.')
+                return redirect('dashboard_vaccination')
+        # Mark arrival on the reception record
+        src.status = Visit.Status.IN_PROCESS
+        src.save(update_fields=['status'])
+        # Create vaccination visit and seed VaccinationRecord in queue or in_process depending on selection
+        vtype = (request.POST.get('vaccine_type') or '').strip() or VaccinationType.COVID19
+        new_visit = Visit.objects.create(
+            patient=src.patient,
+            service='vaccination',
+            notes=f"Received for vaccination. From reception #{src.id}.",
+            queue_number=src.queue_number,
+            created_by=request.user,
+            assigned_to=request.user,
+        )
+        vr_status = 'in_process' if vtype else 'queue'
+        VaccinationRecord.objects.create(
+            visit=new_visit,
+            patient=src.patient,
+            vaccine_type=vtype,
+            status=vr_status,
+            details={},
+            administered_by=request.user,
+        )
+        # Move Visit into in-process immediately when a type is set
+        if vtype:
+            new_visit.status = Visit.Status.IN_PROCESS
+            new_visit.save(update_fields=['status'])
+        ActivityLog.objects.create(
+            actor=request.user,
+            verb='Vaccination Receive',
+            description=f"Vaccine type: {vtype}",
+            patient=src.patient,
+        )
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({'success': True, 'message': 'Patient moved to In Process.' if vtype else 'Patient moved to Ready.', 'status': vr_status, 'patient_id': new_visit.patient_id, 'vacc_visit_id': new_visit.id})
+    messages.success(request, 'Patient moved to In Process.')
+    return redirect('dashboard_vaccination')
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser or u.groups.filter(name='Vaccination').exists())
+@require_POST
+def vaccination_verify_email(request):
+    try:
+        rec_id = int(request.POST.get('reception_visit_id') or '0')
+    except Exception:
+        rec_id = 0
+    email = (request.POST.get('patient_email') or '').strip()
+    if not rec_id or not email:
+        return JsonResponse({'success': False, 'message': 'Missing visit or email.'}, status=400)
+    visit = Visit.objects.filter(pk=rec_id, service='reception').select_related('patient').first()
+    if not visit:
+        return JsonResponse({'success': False, 'message': 'Reception visit not found.'}, status=404)
+    if not visit.patient or visit.patient.email.strip().lower() != email.strip().lower():
+        return JsonResponse({'success': False, 'message': 'Email does not match this patient.'}, status=400)
+    return JsonResponse({'success': True})
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser or u.groups.filter(name='Vaccination').exists())
+def vaccination_work(request, pk: int):
+    vacc_visit = get_object_or_404(Visit, pk=pk, service='vaccination')
+    vr = VaccinationRecord.objects.filter(visit=vacc_visit).order_by('-updated_at').first()
+    if not vr:
+        vr = VaccinationRecord.objects.create(visit=vacc_visit, patient=vacc_visit.patient, vaccine_type=VaccinationType.COVID19)
+    if request.method == 'POST':
+        form = VaccinationForm(request.POST, instance=vr, initial={'vaccine_type': vr.vaccine_type})
+        if form.is_valid():
+            vr.vaccine_type = form.cleaned_data['vaccine_type']
+            vr.details = form.to_details_json()
+            action = request.POST.get('action')
+            if action == 'done':
+                vr.status = 'done'
+                vacc_visit.status = Visit.Status.DONE
+                vacc_visit.vaccination_date = timezone.localdate()
+                vacc_visit.save(update_fields=['status','vaccination_date'])
+                # Reflect completion on the specific reception ticket that spawned this vaccination visit
+                rec = None
+                try:
+                    m = re.search(r"From\s+reception\s+#(\d+)", vacc_visit.notes or '', flags=re.IGNORECASE)
+                    if m:
+                        rec_id = int(m.group(1))
+                        rec = Visit.objects.filter(pk=rec_id, service='reception').first()
+                except Exception:
+                    rec = None
+                if not rec:
+                    # Fallback: latest today's reception vaccination ticket for this patient
+                    rec = (Visit.objects
+                           .filter(service='reception', patient=vacc_visit.patient, timestamp__date=timezone.localdate())
+                           .filter(Q(service_type__name__iexact='Vaccination') | Q(notes__icontains='[visit: vaccination]'))
+                           .order_by('-timestamp')
+                           .first())
+                if rec:
+                    rec.status = Visit.Status.DONE
+                    rec.save(update_fields=['status'])
+            elif action == 'not_done':
+                vr.status = 'not_done'
+                vacc_visit.status = Visit.Status.IN_PROCESS
+                vacc_visit.save(update_fields=['status'])
+            else:
+                vr.status = 'in_process'
+                vacc_visit.status = Visit.Status.IN_PROCESS
+                vacc_visit.save(update_fields=['status'])
+            vr.administered_by = request.user
+            vr.save()
+            messages.success(request, 'Vaccination record saved.')
+            return redirect('dashboard_vaccination')
+    else:
+        form = VaccinationForm(instance=vr, initial={'vaccine_type': vr.vaccine_type})
+    return render(request, 'dashboard/vaccination_work.html', {'visit': vacc_visit, 'form': form, 'vacc_record': vr})
 
 
 @login_required
@@ -759,7 +1258,8 @@ def doctor_claim(request):
         visit.claimed_by = request.user
         visit.claimed_at = timezone.now()
         visit.queue_number = None
-        visit.save(update_fields=['claimed_by', 'claimed_at', 'queue_number'])
+        visit.status = Visit.Status.CLAIMED
+        visit.save(update_fields=['claimed_by', 'claimed_at', 'queue_number', 'status'])
         # Renumber: shift down others in same department and day with higher queue numbers
         if claimed_q:
             others = (Visit.objects
@@ -819,7 +1319,9 @@ def doctor_verify_arrival(request):
     # Update status
     visit.doctor_arrived = True
     visit.doctor_status = 'ready_to_consult'
-    visit.save(update_fields=['doctor_arrived', 'doctor_status'])
+    # Reflect unified status as claimed (ready to consult)
+    visit.status = Visit.Status.CLAIMED
+    visit.save(update_fields=['doctor_arrived', 'doctor_status', 'status'])
     
     # Check if this is an AJAX request
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -902,7 +1404,7 @@ def doctor_finish_inprogress(request, rid: int):
     v = get_object_or_404(Visit, pk=rid, service='doctor', doctor_user=request.user, doctor_done=False)
     v.doctor_done = True
     v.doctor_done_at = timezone.now()
-    v.status = Visit.Status.FINISHED
+    v.status = Visit.Status.DONE
     v.save(update_fields=['doctor_done', 'doctor_done_at', 'status'])
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return JsonResponse({'success': True, 'status': 'Finished', 'patient_id': v.patient_id})
@@ -915,7 +1417,8 @@ def doctor_finish_inprogress(request, rid: int):
            .first())
     if rec:
         rec.doctor_status = 'finished'
-        rec.save(update_fields=['doctor_status'])
+        rec.status = Visit.Status.DONE
+        rec.save(update_fields=['doctor_status', 'status'])
     return redirect('dashboard_doctor')
 
 

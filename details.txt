@@ -1,0 +1,18 @@
+Admin
+username: admin
+password: licht
+Reception
+username: reception
+password: licht
+Doctor
+username: doctor
+password: licht
+Laboratory
+username: lab
+password: licht
+Pharmacy
+username: pharmacy
+password: licht
+Vaccination
+username: vaccination
+password: licht
