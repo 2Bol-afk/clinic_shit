@@ -4,32 +4,28 @@
 <div class="row">
   <div class="col-md-8">
     <div class="card shadow-sm">
-      <div class="card-header d-flex align-items-center"><i class="bi bi-qr-code-scan text-success me-2"></i>Scan QR / Enter Patient Code</div>
+      <div class="card-header d-flex align-items-center"><i class="bi bi-qr-code-scan text-success me-2"></i>Scan QR / Log Arrival</div>
       <div class="card-body">
         {% if is_lab %}
           <div class="alert alert-info">This page is for Reception scanning. Please use your dashboard.</div>
         {% elif is_doctor and not allow_doctor_scan %}
           <div class="alert alert-info">This page is for Reception scanning. Please use your dashboard.</div>
         {% else %}
-        {% if is_reception %}
-        <div class="d-flex justify-content-end mb-3">
-          <button class="btn btn-outline-success" type="button" data-bs-toggle="modal" data-bs-target="#createPatientModal">
-            <i class="bi bi-person-plus me-1"></i>Create Patient
-          </button>
-        </div>
-        {% endif %}
         <form method="post" class="row g-3">
           {% csrf_token %}
           <div class="col-12">
             <label class="form-label">Patient Code</label>
             <div class="input-group">
-              <span class="input-group-text"><i class="bi bi-upc-scan"></i></span>
-              <input type="text" class="form-control" name="patient_code" placeholder="Scan or type code" required value="{{ prefill_code|default:'' }}">
+              <input type="text" class="form-control" name="patient_code" placeholder="Enter patient code" required value="{{ prefill_code|default:'' }}" id="patientCodeInput">
+              <button type="button" class="btn btn-outline-success qr-scan-btn" data-intent="staff">
+                <i class="bi bi-qr-code-scan me-1"></i>Scan QR
+              </button>
+            </div>
+            <div class="form-text">
+              <i class="bi bi-info-circle me-1"></i>Enter patient code manually or scan their QR code
             </div>
           </div>
-          {% if is_reception %}
-            <input type="hidden" id="serviceFixed" name="service" value="reception">
-          {% elif is_doctor and allow_doctor_scan %}
+          {% if is_doctor and allow_doctor_scan %}
             <input type="hidden" id="serviceFixed" name="service" value="doctor">
           {% else %}
           <div class="col-12">
@@ -45,7 +41,7 @@
           {% endif %}
           <div id="serviceFields" class="col-12">
             <div data-svc="reception" class="svc d-none">
-              <div {% if is_reception %}style="display:none"{% endif %}>
+              <div class="mt-2">
                 <label class="form-label">Queue Number</label>
                 <input type="number" min="1" name="queue_number" class="form-control">
               </div>
@@ -60,7 +56,7 @@
               <div class="mt-2" id="receptionDeptWrap">
                 <label class="form-label">Department</label>
                 <select class="form-select" name="department">
-                  <option value="Pediatrics">Pediatrics (Children’s Health)</option>
+                  <option value="Pediatrics">Pediatrics (Children's Health)</option>
                   <option value="OB-GYN">Obstetrics and Gynecology (OB-GYN)</option>
                   <option value="Cardiology">Cardiology (Heart Care)</option>
                   <option value="Radiology">Radiology</option>
@@ -139,60 +135,15 @@
   }
   if(sel){ sel.addEventListener('change', sync); }
   sync();
+  
   // Reception: show department only for Consultation
   const visitType = document.getElementById('receptionVisitType');
   const deptWrap = document.getElementById('receptionDeptWrap');
   function syncDept(){ if(!visitType||!deptWrap) return; deptWrap.style.display = (visitType.value === 'consultation') ? '' : 'none'; }
   if(visitType){ visitType.addEventListener('change', syncDept); syncDept(); }
+  
 })();
 </script>
-{% if is_reception %}
-<!-- Create Patient Modal -->
-<div class="modal fade" id="createPatientModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-person-plus me-2 text-success"></i>Create Patient & Generate QR</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <form method="post" class="row g-2">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="create_patient">
-        <div class="modal-body">
-          <div class="container-fluid">
-            <div class="row g-2">
-              <div class="col-md-6">
-                <label class="form-label">Full Name</label>
-                <input type="text" class="form-control" name="full_name" required>
-              </div>
-              <div class="col-md-3">
-                <label class="form-label">Age</label>
-                <input type="number" min="0" class="form-control" name="age" required>
-              </div>
-              <div class="col-md-3">
-                <label class="form-label">Contact</label>
-                <input type="text" class="form-control" name="contact" required>
-              </div>
-              <div class="col-md-6">
-                <label class="form-label">Email</label>
-                <input type="email" class="form-control" name="email" required>
-              </div>
-              <div class="col-md-6">
-                <label class="form-label">Address</label>
-                <input type="text" class="form-control" name="address" required>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button class="btn btn-success" type="submit"><i class="bi bi-check2-circle me-1"></i>Create</button>
-        </div>
-      </form>
-    </div>
-  </div>
-  </div>
-{% endif %}
 {% endblock %}
 
 

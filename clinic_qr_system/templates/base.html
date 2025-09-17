@@ -30,11 +30,7 @@
               <li class="nav-item">
                 <a class="nav-link" href="{% if request.user.is_superuser %}/dashboard/{% elif request.user.groups.all.0.name == 'Reception' %}/dashboard/reception/{% elif request.user.groups.all.0.name == 'Doctor' %}/dashboard/doctor/{% elif request.user.groups.all.0.name == 'Laboratory' %}/dashboard/lab/{% elif request.user.groups.all.0.name == 'Pharmacy' %}/dashboard/pharmacy/{% elif request.user.groups.all.0.name == 'Vaccination' %}/dashboard/vaccination/{% elif request.user.groups.all.0.name == 'Patient' %}/patients/portal/{% else %}/dashboard/{% endif %}"><i class="bi bi-house-heart-fill me-1"></i>Home</a>
               </li>
-              {% if request.user.groups.all.0.name != 'Laboratory' and request.user.groups.all.0.name != 'Doctor' and request.user.groups.all.0.name != 'Patient' %}
-              <li class="nav-item">
-                <a class="nav-link" href="/visits/scan/"><i class="bi bi-qr-code-scan me-1"></i>Scan QR</a>
-              </li>
-              {% endif %}
+              {% comment %} Scan QR nav link hidden {% endcomment %}
               {% if request.user.is_authenticated and request.user.groups.all.0.name != 'Patient' %}
               <li class="nav-item">
                 <a class="nav-link" href="/dashboard/reports/"><i class="bi bi-graph-up-arrow me-1"></i>Reports</a>
@@ -77,7 +73,18 @@
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body">
-            <div id="qr-reader" style="width:100%"></div>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div id="scanner-status" class="text-muted">Starting camera...</div>
+              <button type="button" class="btn btn-outline-primary btn-sm" id="refreshCameraBtn">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh Camera
+              </button>
+            </div>
+            <div id="qr-reader" style="width:100%; min-height: 300px; border: 2px dashed #dee2e6; display: flex; align-items: center; justify-content: center;">
+              <div class="text-center text-muted">
+                <i class="bi bi-camera-video fs-1"></i>
+                <div>Starting camera...</div>
+              </div>
+            </div>
             <div class="text-center text-muted small mt-2">If camera access fails, use the email fallback below.</div>
             <div class="input-group mt-3">
               <span class="input-group-text"><i class="bi bi-envelope"></i></span>
@@ -91,50 +98,625 @@
         </div>
       </div>
     </div>
+    
+    <!-- QR Confirmation Modal -->
+    <div class="modal fade" id="qrConfirmationModal" tabindex="-1" aria-labelledby="qrConfirmationModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header bg-success text-white">
+            <h5 class="modal-title" id="qrConfirmationModalLabel">
+              <i class="bi bi-check-circle me-2"></i>QR Code Detected
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body text-center">
+            <div class="mb-3">
+              <i class="bi bi-person-check text-success" style="font-size: 3rem;"></i>
+            </div>
+            <h6 class="mb-3">Patient Found</h6>
+            <p class="mb-3">
+              <strong>Email:</strong><br>
+              <span id="confirmationEmail" class="text-primary"></span>
+            </p>
+            <p class="text-muted small">Do you want to proceed with this patient?</p>
+          </div>
+          <div class="modal-footer justify-content-center">
+            <button type="button" class="btn btn-outline-secondary me-2" id="qrConfirmCancel">
+              <i class="bi bi-x-circle me-1"></i>Cancel
+            </button>
+            <button type="button" class="btn btn-success" id="qrConfirmProceed">
+              <i class="bi bi-check-circle me-1"></i>Proceed
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script>
     // Reusable QR scanner handling
     (function(){
-      let qrModal, html5Qr, currentIntent = 'staff';
+      let qrModal, html5Qr, currentIntent = 'staff', lastScanTime = 0, isProcessing = false, pendingEmail = null, scannerReady = false;
+      
       function handleEmail(email){
         const e = (email||'').trim();
         if(!e) return;
-        // Staff intent: load patient profile view; Patient intent: go to QR login flow
+        // Patient intent: validate and auto-login patient
         if(currentIntent === 'patient'){
-          window.location.href = '/patients/qr-login/?email=' + encodeURIComponent(e);
-        } else {
-          // Fetch patient by email then redirect to detail (GET to avoid CSRF)
+          // Validate patient exists first
           fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(e))
-            .then(r=>r.json())
-            .then(data=>{
-              if(data && data.patient && data.patient.id){
-                window.location.href = '/patients/' + data.patient.id + '/';
+            .then(r => r.json())
+            .then(data => {
+              if (data.success && data.patient) {
+                // Show success message
+                showQRScannerSuccess('QR scanned successfully! Redirecting to dashboard...');
+                
+                // Auto-submit the QR login form
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/patients/qr-login/';
+                
+                const emailInput = document.createElement('input');
+                emailInput.type = 'hidden';
+                emailInput.name = 'email';
+                emailInput.value = e;
+                
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+                if (csrfToken) {
+                  const csrfInput = document.createElement('input');
+                  csrfInput.type = 'hidden';
+                  csrfInput.name = 'csrfmiddlewaretoken';
+                  csrfInput.value = csrfToken.value;
+                  form.appendChild(csrfInput);
+                }
+                
+                form.appendChild(emailInput);
+                document.body.appendChild(form);
+                form.submit();
               } else {
-                alert((data && data.error) || 'Patient not found');
+                showQRScannerError('Patient not found. Please scan a valid QR or use registered email.');
               }
             })
-            .catch(()=>alert('Error fetching patient.'));
+            .catch(() => {
+              showQRScannerError('Error validating QR code. Please try again.');
+            });
+        } else if(currentIntent === 'verify') {
+          // Verify intent: handle patient verification
+          if (window.handleVerifyQRCallback) {
+            window.handleVerifyQRCallback(e);
+          } else {
+            handleVerifyQR(e);
+          }
+        } else if(currentIntent === 'patient') {
+          // Patient intent: handle patient QR scan for login
+          if (window.handlePatientQRCallback) {
+            window.handlePatientQRCallback(e);
+          } else {
+            // Fallback: use the same logic as manual email input
+            handleEmailForPatient(e);
+          }
+        } else {
+          // Staff intent: redirect based on role
+          // Check if user is reception staff
+          const isReception = document.body.getAttribute('data-user-role') === 'reception' || 
+                             window.location.pathname.includes('/dashboard/reception');
+          
+          if(isReception) {
+            // For reception, check if we're already on scan page
+            if (window.location.pathname === '/visits/scan/') {
+              // Already on scan page, just populate the patient code field
+              const patientCodeInput = document.getElementById('patientCodeInput');
+              if (patientCodeInput) {
+                // Extract patient code from email (you might need to fetch this from API)
+                fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(e))
+                  .then(r=>r.json())
+                  .then(data=>{
+                    if(data && data.patient && data.patient.patient_code){
+                      patientCodeInput.value = data.patient.patient_code;
+                    }
+                  })
+                  .catch(()=>{});
+              }
+            } else {
+              // Not on scan page, redirect to scan page with patient email
+              window.location.href = '/visits/scan/?patient_email=' + encodeURIComponent(e);
+            }
+          } else {
+            // For other staff, fetch patient by email then redirect to detail
+            fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(e))
+              .then(r=>r.json())
+              .then(data=>{
+                if(data && data.patient && data.patient.id){
+                  window.location.href = '/patients/' + data.patient.id + '/';
+                } else {
+                  alert((data && data.error) || 'Patient not found');
+                }
+              })
+              .catch(()=>alert('Error fetching patient.'));
+          }
         }
       }
+      
+      // Global function for handling patient QR scans
+      window.handleEmailForPatient = function(email) {
+        const e = email.trim();
+        if (!e) return;
+        
+        // Validate patient exists first
+        fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(e))
+          .then(r => r.json())
+          .then(data => {
+            if (data.success && data.patient) {
+              // Show success message
+              showQRScannerSuccess('Patient verified! Status updated to Ready to Consult. Processing login...');
+              
+              // Auto-submit the QR login form
+              const form = document.getElementById('qrLoginForm');
+              if (form) {
+                form.querySelector('input[name="email"]').value = e;
+                form.submit();
+              } else {
+                // If no form found, redirect to patient login
+                window.location.href = '/patients/qr-login/?email=' + encodeURIComponent(e);
+              }
+            } else {
+              showQRScannerError('Patient not found. Please scan a valid QR or use registered email.');
+            }
+          })
+          .catch(() => {
+            showQRScannerError('Error validating QR code. Please try again.');
+          });
+      };
+
+      // Global function for handling verification QR scans
+      window.handleVerifyQR = function(email) {
+        const e = email.trim();
+        if(!e) return;
+        
+        // Show loading message
+        showQRScannerSuccess('Validating patient...');
+        
+        // Validate patient exists first
+        fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(e))
+          .then(r => r.json())
+          .then(data => {
+            if (data.success && data.patient) {
+              // Show success message
+              showQRScannerSuccess('Patient found! Processing verification...');
+              
+              // Trigger the verification process
+              // This will be handled by the specific page's verification logic
+              if (window.handleVerifyQRCallback) {
+                window.handleVerifyQRCallback(e);
+              } else {
+                // Fallback: show success and let user proceed manually
+                showQRScannerSuccess('Patient verified: ' + data.patient.full_name);
+              }
+            } else {
+              showQRScannerError('Patient not found. Please scan a valid QR or enter the registered Gmail.');
+            }
+          })
+          .catch(() => {
+            showQRScannerError('Error validating QR code. Please try again.');
+          });
+      };
+      
       function onScanSuccess(decodedText){
-        try{ if(qrModal) qrModal.hide(); }catch(_){}
-        if(html5Qr){ try{ html5Qr.stop(); }catch(_){}}
-        handleEmail(decodedText);
+        console.log('QR Code detected:', decodedText);
+        
+        // Check if scanner is ready
+        if (!scannerReady) {
+          console.log('Ignoring scan - scanner not ready yet');
+          return;
+        }
+        
+        // Validate that we actually have meaningful content
+        if (!decodedText || decodedText.trim().length < 10) {
+          console.log('Ignoring scan - content too short or empty');
+          return;
+        }
+        
+        // Additional validation - must contain email-like content
+        if (!decodedText.includes('@') && !decodedText.includes('email:')) {
+          console.log('Ignoring scan - no email-like content detected');
+          return;
+        }
+        
+        // Prevent multiple rapid scans (debounce)
+        const now = Date.now();
+        if (now - lastScanTime < 2000 || isProcessing) {
+          console.log('Ignoring rapid scan or already processing');
+          return;
+        }
+        lastScanTime = now;
+        isProcessing = true;
+        
+        // Stop scanner immediately to prevent multiple scans
+        if(html5Qr){ 
+          try{ 
+            html5Qr.stop();
+          }catch(_){}
+        }
+        
+        const statusEl = document.getElementById('scanner-status');
+        if (statusEl) statusEl.textContent = 'Processing QR code...';
+        
+        // Parse QR content - handle both email:user@domain.com;id:123 format and plain email
+        let email = decodedText.trim();
+        if (email.includes('email:') && email.includes(';id:')) {
+          // Extract email from format: email:user@domain.com;id:123
+          const emailMatch = email.match(/email:([^;]+)/);
+          if (emailMatch) {
+            email = emailMatch[1].trim();
+          }
+        }
+        
+        // Additional validation - check if it looks like a valid patient QR
+        if (!email || email.length < 5 || !email.includes('@')) {
+          console.log('Invalid QR content detected:', decodedText);
+          showQRScannerError('Unable to read QR, please try again.');
+          // Auto-restart scanner after error
+          setTimeout(() => {
+            restartScannerAfterError();
+          }, 1500);
+          return;
+        }
+        
+        // Validate email format
+        const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        if (!emailPattern.test(email)) {
+          console.log('Invalid email format detected:', email);
+          showQRScannerError('Unable to read QR, please try again.');
+          // Auto-restart scanner after error
+          setTimeout(() => {
+            restartScannerAfterError();
+          }, 1500);
+          return;
+        }
+        
+        console.log('Valid QR code detected, showing confirmation for:', email);
+        
+        // Show success message
+        showQRScannerSuccess('QR scanned successfully! Ready to scan another.');
+        
+        // Show confirmation modal
+        showQRConfirmation(email);
       }
+      
+      function showQRConfirmation(email) {
+        pendingEmail = email;
+        document.getElementById('confirmationEmail').textContent = email;
+        const confirmationModal = new bootstrap.Modal(document.getElementById('qrConfirmationModal'));
+        confirmationModal.show();
+      }
+      
       function onScanFailure(_){ /* ignore continuous failures */ }
-      function startScanner(){
+      let availableCameras = [];
+      
+      function startScanner(camId = null){
         const el = document.getElementById('qr-reader');
         if(!el) return;
-        if(html5Qr){ try{ html5Qr.stop(); }catch(_){}}
-        html5Qr = new Html5Qrcode('qr-reader');
-        Html5Qrcode.getCameras().then(cams=>{
-          const camId = (cams && cams.length) ? cams[0].id : undefined;
-          html5Qr.start(camId, { fps: 10, qrbox: 250 }, onScanSuccess, onScanFailure);
-        }).catch(()=>{
-          // Camera not available; user can use fallback email input
+        
+        // Complete cleanup before starting
+        if(html5Qr){ 
+          try{ 
+            html5Qr.stop().then(() => {
+              html5Qr.clear();
+            }).catch(() => {});
+          }catch(_){}
+          html5Qr = null;
+        }
+        
+        // Reset all flags
+        isProcessing = false;
+        lastScanTime = 0;
+        scannerReady = false;
+        
+        // Create fresh scanner instance with unique ID to prevent caching
+        const uniqueId = 'qr-reader-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        el.id = uniqueId;
+        html5Qr = new Html5Qrcode(uniqueId);
+        
+        // Clear the placeholder content
+        el.innerHTML = '';
+        
+        const targetCamId = camId || (availableCameras.length > 0 ? availableCameras[0].id : undefined);
+        
+        if (!targetCamId) {
+          // Show error modal instead of alert
+          showQRScannerError('No camera selected. Please select a camera or use the email input below.');
+          return;
+        }
+        
+        console.log('Starting scanner with camera:', targetCamId);
+        
+        // Start with better configuration for DroidCam - less sensitive to reduce false positives
+        html5Qr.start(targetCamId, { 
+          fps: 2, 
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0,
+          supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+        }, onScanSuccess, onScanFailure).then(() => {
+          console.log('Camera started successfully');
+          const statusEl = document.getElementById('scanner-status');
+          if (statusEl) statusEl.textContent = 'Point camera at QR code to scan';
+          
+          // Add a small delay before allowing scans to prevent immediate false detection
+          setTimeout(() => {
+            scannerReady = true;
+            console.log('Scanner is now ready for QR detection');
+          }, 1500);
+        }).catch(err => {
+          console.log('Failed to start camera:', err);
+          const statusEl = document.getElementById('scanner-status');
+          if (statusEl) statusEl.textContent = 'Camera failed to start';
+          // Show error modal instead of alert
+          showQRScannerError('Unable to scan QR, please try again or enter your Gmail manually.');
         });
       }
+      
+      function stopScanner() {
+        if(html5Qr){ 
+          try{ 
+            html5Qr.stop().then(() => {
+              html5Qr.clear();
+              console.log('Camera stopped and cleared');
+            }).catch(err => {
+              console.log('Error stopping camera:', err);
+              // Force clear even if stop fails
+              if(html5Qr) {
+                html5Qr.clear();
+              }
+            });
+          }catch(_){}
+          html5Qr = null;
+        }
+        // Reset all flags
+        isProcessing = false;
+        lastScanTime = 0;
+        scannerReady = false;
+      }
+      
+      // Show QR scanner error modal
+      function showQRScannerError(message) {
+        // Check if we're on the patient QR login page and use its modal
+        if (typeof showError === 'function') {
+          showError(message);
+        } else {
+          // Fallback: create a simple error modal
+          const errorModal = document.createElement('div');
+          errorModal.className = 'modal fade';
+          errorModal.id = 'qrErrorModal';
+          errorModal.innerHTML = `
+            <div class="modal-dialog modal-dialog-centered">
+              <div class="modal-content">
+                <div class="modal-header border-0">
+                  <h5 class="modal-title text-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>Error
+                  </h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center py-4">
+                  <div class="mb-3">
+                    <i class="bi bi-exclamation-circle text-danger" style="font-size: 3rem;"></i>
+                  </div>
+                  <p class="mb-0">${message}</p>
+                </div>
+                <div class="modal-footer border-0 justify-content-center">
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">OK</button>
+                </div>
+              </div>
+            </div>
+          `;
+          
+          // Add to body if not already there
+          if (!document.getElementById('qrErrorModal')) {
+            document.body.appendChild(errorModal);
+          }
+          
+          // Show the modal
+          const modal = new bootstrap.Modal(errorModal);
+          modal.show();
+          
+          // Remove modal from DOM after it's hidden
+          errorModal.addEventListener('hidden.bs.modal', function() {
+            errorModal.remove();
+          });
+        }
+      }
+      
+      // Show QR scanner success message
+      function showQRScannerSuccess(message) {
+        const statusEl = document.getElementById('scanner-status');
+        if (statusEl) {
+          statusEl.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>${message}</span>`;
+          // Auto-hide success message after 3 seconds
+          setTimeout(() => {
+            if (statusEl) {
+              statusEl.innerHTML = 'Point camera at QR code to scan';
+            }
+          }, 3000);
+        }
+      }
+      
+      // Restart scanner after error
+      function restartScannerAfterError() {
+        console.log('Restarting scanner after error...');
+        isProcessing = false;
+        lastScanTime = 0;
+        
+        // Complete reset
+        resetScannerCompletely();
+        
+        // Wait and restart
+        setTimeout(() => {
+          Html5Qrcode.getCameras().then(cams => {
+            availableCameras = cams || [];
+            if (availableCameras.length > 0) {
+              startScanner(availableCameras[0].id);
+            } else {
+              startScanner();
+            }
+          }).catch(err => {
+            console.log('Camera detection failed on restart:', err);
+            startScanner();
+          });
+        }, 500);
+      }
+      
+      // Function to completely reset scanner and clear all cache
+      function resetScannerCompletely() {
+        console.log('Completely resetting scanner...');
+        
+        // Stop and clear scanner
+        if(html5Qr){ 
+          try{ 
+            html5Qr.stop().then(() => {
+              html5Qr.clear();
+            }).catch(() => {});
+          }catch(_){}
+          html5Qr = null;
+        }
+        
+        // Reset ALL variables and flags
+        isProcessing = false;
+        lastScanTime = 0;
+        pendingEmail = null;
+        availableCameras = [];
+        scannerReady = false;
+        
+        // Clear any cached data
+        if (typeof(Storage) !== "undefined") {
+          localStorage.removeItem('qr_scanner_cache');
+          sessionStorage.removeItem('qr_scanner_cache');
+          localStorage.removeItem('lastScannedQR');
+          localStorage.removeItem('qr_scanner_data');
+          sessionStorage.clear();
+        }
+        
+        // Clear any existing confirmation modals
+        const existingConfirmation = bootstrap.Modal.getInstance(document.getElementById('qrConfirmationModal'));
+        if (existingConfirmation) {
+          existingConfirmation.hide();
+        }
+        
+        // Force clear the scanner element
+        const scannerEl = document.getElementById('qr-reader');
+        if (scannerEl) {
+          scannerEl.innerHTML = '<div class="text-center text-muted"><i class="bi bi-camera-video fs-1"></i><div>Starting camera...</div></div>';
+        }
+        
+        // Update status
+        const statusEl = document.getElementById('scanner-status');
+        if (statusEl) statusEl.textContent = 'Starting camera...';
+      }
+      
+      // Function to refresh camera
+      function refreshCamera() {
+        console.log('Refreshing camera...');
+        
+        // Show refreshing status
+        const statusEl = document.getElementById('scanner-status');
+        if (statusEl) statusEl.textContent = 'Refreshing camera...';
+        
+        // Complete reset
+        resetScannerCompletely();
+        
+        // Wait a moment for complete cleanup
+        setTimeout(() => {
+          Html5Qrcode.getCameras().then(cams => {
+            console.log('Available cameras:', cams);
+            availableCameras = cams || [];
+            
+            // Update status
+            if (statusEl) statusEl.textContent = 'Starting camera...';
+            
+            // Auto-start with first available camera
+            if (availableCameras.length > 0) {
+              startScanner(availableCameras[0].id);
+            } else {
+              startScanner(); // Try auto-detect
+            }
+          }).catch(err => {
+            console.log('Camera detection failed:', err);
+            availableCameras = [];
+            if (statusEl) statusEl.textContent = 'Camera detection failed';
+            startScanner(); // Try auto-detect anyway
+          });
+        }, 500);
+      }
+      
+      // Auto-start camera when modal opens
+      document.getElementById('qrScannerModal')?.addEventListener('shown.bs.modal', function() {
+        resetScannerCompletely();
+        
+        // Wait longer for complete cleanup and to prevent auto-detection
+        setTimeout(() => {
+          Html5Qrcode.getCameras().then(cams => {
+            console.log('Available cameras:', cams);
+            availableCameras = cams || [];
+            
+            // Update status to show we're ready
+            const statusEl = document.getElementById('scanner-status');
+            if (statusEl) statusEl.textContent = 'Camera ready - point at QR code to scan';
+            
+            // Auto-start with first available camera
+            if (availableCameras.length > 0) {
+              startScanner(availableCameras[0].id);
+            } else {
+              startScanner(); // Try auto-detect
+            }
+          }).catch(err => {
+            console.log('Camera detection failed:', err);
+            availableCameras = [];
+            startScanner(); // Try auto-detect anyway
+          });
+        }, 1000); // Increased delay to 1 second
+      });
+      
+      // Clean up when modal is hidden
+      document.getElementById('qrScannerModal')?.addEventListener('hidden.bs.modal', function() {
+        // Complete cleanup when modal closes
+        if(html5Qr){ 
+          try{ 
+            html5Qr.stop().then(() => {
+              html5Qr.clear();
+              // Force clear the scanner element
+              const scannerEl = document.getElementById('qr-reader');
+              if (scannerEl) {
+                scannerEl.innerHTML = '<div class="text-center text-muted"><i class="bi bi-camera-video fs-1"></i><div>Click "Start Camera" to begin scanning</div></div>';
+              }
+            }).catch(() => {
+              // Force clear even if stop fails
+              const scannerEl = document.getElementById('qr-reader');
+              if (scannerEl) {
+                scannerEl.innerHTML = '<div class="text-center text-muted"><i class="bi bi-camera-video fs-1"></i><div>Click "Start Camera" to begin scanning</div></div>';
+              }
+            });
+          }catch(_){
+            // Force clear on any error
+            const scannerEl = document.getElementById('qr-reader');
+            if (scannerEl) {
+              scannerEl.innerHTML = '<div class="text-center text-muted"><i class="bi bi-camera-video fs-1"></i><div>Click "Start Camera" to begin scanning</div></div>';
+            }
+          }
+          html5Qr = null;
+        }
+        
+        // Reset ALL variables
+        isProcessing = false;
+        lastScanTime = 0;
+        pendingEmail = null;
+        availableCameras = [];
+        
+        // Clear any cached data
+        if (typeof(Storage) !== "undefined") {
+          localStorage.removeItem('qr_scanner_cache');
+          sessionStorage.removeItem('qr_scanner_cache');
+        }
+      });
+      
       document.addEventListener('click', function(e){
         const btn = e.target.closest('.qr-scan-btn');
         if(!btn) return;
@@ -142,12 +724,66 @@
         currentIntent = btn.getAttribute('data-intent') || 'staff';
         qrModal = new bootstrap.Modal(document.getElementById('qrScannerModal'));
         qrModal.show();
-        setTimeout(startScanner, 150);
       });
+      
       document.getElementById('qrEmailGo')?.addEventListener('click', function(){
         const v = document.getElementById('qrEmailFallback').value;
         if(qrModal) qrModal.hide();
         handleEmail(v);
+      });
+      
+      // Add refresh camera button event listener
+      document.getElementById('refreshCameraBtn')?.addEventListener('click', function(){
+        refreshCamera();
+      });
+      
+      // Handle QR confirmation modal buttons
+      document.getElementById('qrConfirmProceed')?.addEventListener('click', function(){
+        const confirmationModal = bootstrap.Modal.getInstance(document.getElementById('qrConfirmationModal'));
+        if (confirmationModal) confirmationModal.hide();
+        if (qrModal) qrModal.hide();
+        if (pendingEmail) {
+          handleEmail(pendingEmail);
+          pendingEmail = null;
+        }
+        // Auto-restart scanner after successful processing
+        setTimeout(() => {
+          restartScannerAfterSuccess();
+        }, 500);
+      });
+      
+      // Restart scanner after successful QR processing
+      function restartScannerAfterSuccess() {
+        console.log('Restarting scanner after successful processing...');
+        
+        // Complete reset
+        resetScannerCompletely();
+        
+        // Wait and restart
+        setTimeout(() => {
+          Html5Qrcode.getCameras().then(cams => {
+            availableCameras = cams || [];
+            if (availableCameras.length > 0) {
+              startScanner(availableCameras[0].id);
+            } else {
+              startScanner();
+            }
+          }).catch(err => {
+            console.log('Camera detection failed on restart:', err);
+            startScanner();
+          });
+        }, 1000);
+      }
+      
+      document.getElementById('qrConfirmCancel')?.addEventListener('click', function(){
+        const confirmationModal = bootstrap.Modal.getInstance(document.getElementById('qrConfirmationModal'));
+        if (confirmationModal) confirmationModal.hide();
+        
+        // Restart scanner if user cancels
+        setTimeout(() => {
+          restartScannerAfterSuccess();
+        }, 300);
+        pendingEmail = null;
       });
     })();
     </script>

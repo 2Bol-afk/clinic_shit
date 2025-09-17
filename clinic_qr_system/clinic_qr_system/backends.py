@@ -6,15 +6,21 @@ class EmailOrUsernameModelBackend(ModelBackend):
         UserModel = get_user_model()
         if username is None:
             username = kwargs.get(UserModel.USERNAME_FIELD)
+        
         # Try email first
         try:
-            user = UserModel.objects.get(email__iexact=username)
-        except UserModel.DoesNotExist:
-            # Fallback to username
+            # Use filter().first() to handle multiple users with same email
+            user = UserModel.objects.filter(email__iexact=username).first()
+            if user is None:
+                # Fallback to username
+                user = UserModel.objects.filter(**{UserModel.USERNAME_FIELD: username}).first()
+        except Exception:
+            # If any error occurs, try username fallback
             try:
-                user = UserModel.objects.get(**{UserModel.USERNAME_FIELD: username})
-            except UserModel.DoesNotExist:
+                user = UserModel.objects.filter(**{UserModel.USERNAME_FIELD: username}).first()
+            except Exception:
                 return None
-        if user.check_password(password) and self.user_can_authenticate(user):
+        
+        if user and user.check_password(password) and self.user_can_authenticate(user):
             return user
         return None

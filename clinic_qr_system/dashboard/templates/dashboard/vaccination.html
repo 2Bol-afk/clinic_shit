@@ -1,6 +1,11 @@
 {% extends 'base.html' %}
 {% block content %}
-<h4>Vaccination Dashboard ({{ today }})</h4>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0 d-flex align-items-center"><i class="bi bi-shield-plus text-success me-2"></i>Vaccination Dashboard ({{ today }})</h4>
+  <div class="d-flex gap-2">
+    <a href="#" class="btn btn-lg btn-outline-success qr-scan-btn" data-intent="staff"><i class="bi bi-camera me-2"></i>Scan QR</a>
+  </div>
+</div>
 <table class="table table-striped">
   <thead><tr><th>Time</th><th>Patient</th><th>Vaccine</th><th>Dose</th><th>Date</th></tr></thead>
   <tbody>

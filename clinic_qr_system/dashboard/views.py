@@ -75,8 +75,27 @@ def post_login_redirect(request):
         if p.must_change_password:
             return redirect('patient_password_first')
         return redirect('patient_portal')
-    except Exception:
-        return redirect('dashboard_index')
+    except AttributeError:
+        # User doesn't have a patient profile, check if they're staff
+        if request.user.is_superuser:
+            return redirect('dashboard_index')
+        elif request.user.groups.filter(name='Reception').exists():
+            return redirect('dashboard_reception')
+        elif request.user.groups.filter(name='Doctor').exists():
+            return redirect('dashboard_doctor')
+        elif request.user.groups.filter(name='Laboratory').exists():
+            return redirect('dashboard_lab')
+        elif request.user.groups.filter(name='Pharmacy').exists():
+            return redirect('dashboard_pharmacy')
+        elif request.user.groups.filter(name='Vaccination').exists():
+            return redirect('dashboard_vaccination')
+        else:
+            # Default fallback
+            return redirect('dashboard_reception')
+    except Exception as e:
+        # Log the error for debugging
+        print(f"Post-login redirect error: {e}")
+        return redirect('dashboard_reception')
 
 
 @login_required
@@ -92,6 +111,23 @@ def reception_dashboard(request):
         .filter(service='doctor', doctor_done=True, timestamp__date=today)
         .values_list('patient_id', flat=True)
     )
+    
+    # Handle patient email from QR scan
+    patient_email = request.GET.get('patient_email', '').strip()
+    patient_data = None
+    if patient_email:
+        try:
+            from patients.models import Patient
+            patient = Patient.objects.get(email=patient_email)
+            patient_data = {
+                'id': patient.id,
+                'full_name': patient.full_name,
+                'patient_code': patient.patient_code,
+                'email': patient.email,
+            }
+        except Patient.DoesNotExist:
+            pass
+    
     return render(
         request,
         'dashboard/reception.html',
@@ -99,6 +135,7 @@ def reception_dashboard(request):
             'visits': visits,
             'today': today,
             'completed_doctor_patients': completed_doctor_patients,
+            'patient_data': patient_data,
         },
     )
 
@@ -583,19 +620,61 @@ def doctor_claim(request):
 @require_POST
 def doctor_verify_arrival(request):
     rid = request.POST.get('reception_visit_id')
+    print(f"Doctor verify arrival - Visit ID: {rid}, User: {request.user}")
+    
     visit = get_object_or_404(Visit, pk=rid, service='reception', claimed_by=request.user)
-    verify_code = (request.POST.get('verify_code') or '').strip()
-    if not verify_code:
+    
+    # Support both email-based QR scanning and manual code verification
+    patient_email = request.POST.get('patient_email', '').strip()
+    verify_code = request.POST.get('verify_code', '').strip()
+    
+    print(f"Patient email: {patient_email}, Verify code: {verify_code}")
+    
+    if not patient_email and not verify_code:
         messages.error(request, 'Please verify patient QR on arrival.')
         return redirect('dashboard_doctor')
-    if visit.patient.patient_code.strip().upper() != verify_code.strip().upper():
-        messages.error(request, 'QR/Patient code does not match.')
-        return redirect('dashboard_doctor')
+    
+    # Validate patient if email is provided (QR scan)
+    if patient_email:
+        try:
+            patient = Patient.objects.get(email=patient_email)
+            if visit.patient != patient:
+                error_msg = 'Invalid patient QR. Please scan a registered patient.'
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({'success': False, 'message': error_msg})
+                messages.error(request, error_msg)
+                return redirect('dashboard_doctor')
+        except Patient.DoesNotExist:
+            error_msg = 'Invalid patient QR. Please scan a registered patient.'
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'message': error_msg})
+            messages.error(request, error_msg)
+            return redirect('dashboard_doctor')
+    else:
+        # Manual code verification
+        if visit.patient.patient_code.strip().upper() != verify_code.strip().upper():
+            error_msg = 'QR/Patient code does not match.'
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'message': error_msg})
+            messages.error(request, error_msg)
+            return redirect('dashboard_doctor')
+    
+    # Update status
     visit.doctor_arrived = True
-    # Set explicit status for dashboard state machine
     visit.doctor_status = 'ready_to_consult'
     visit.save(update_fields=['doctor_arrived', 'doctor_status'])
-    messages.success(request, 'Arrival verified. You can start consultation.')
+    
+    # Check if this is an AJAX request
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        print(f"AJAX request - returning success for visit {visit.id}, patient {visit.patient.full_name}")
+        return JsonResponse({
+            'success': True,
+            'message': 'Patient verified! Status updated to Ready to Consult.',
+            'patient_name': visit.patient.full_name,
+            'visit_id': visit.id
+        })
+    
+    messages.success(request, 'Patient verified! Status updated to Ready to Consult.')
     return redirect('dashboard_doctor')
 
 

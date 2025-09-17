@@ -36,25 +36,17 @@ def signup(request):
                 patient: Patient = form.save(commit=False)
                 patient.patient_code = _generate_patient_code()
                 # Generate QR containing Gmail + Patient ID (ID is available after first save below)
-                qr_img = qrcode.make(patient.email)
-                buffer = BytesIO()
-                qr_img.save(buffer, format='PNG')
                 file_name = f"qr_{patient.patient_code}.png"
-                patient.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=False)
-                patient.save()
-                # Regenerate QR to include the newly assigned patient ID
+                patient.save()  # Save first to get patient ID
+                
+                # Generate QR with email and patient ID
                 try:
-                    buffer.seek(0); buffer.truncate(0)
                     qr_payload = f"email:{patient.email};id:{patient.id}"
                     qr_img = qrcode.make(qr_payload)
+                    buffer = BytesIO()
                     qr_img.save(buffer, format='PNG')
                     patient.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=False)
                     patient.save(update_fields=['qr_code'])
-                    # Save temporary copy under MEDIA_ROOT/qr/
-                    tmp_dir = os.path.join(settings.MEDIA_ROOT, 'qr')
-                    os.makedirs(tmp_dir, exist_ok=True)
-                    with open(os.path.join(tmp_dir, file_name), 'wb') as f:
-                        f.write(buffer.getvalue())
                 except Exception:
                     pass
                 # Create user with provided password
@@ -111,25 +103,17 @@ def register(request):
                 patient.patient_code = _generate_patient_code()
 
                 # Generate QR containing Gmail + Patient ID (ID will exist after first save)
-                qr_img = qrcode.make(patient.email)
-                buffer = BytesIO()
-                qr_img.save(buffer, format='PNG')
                 file_name = f"qr_{patient.patient_code}.png"
-                patient.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=False)
-                patient.save()
-                # Regenerate QR with patient ID
+                patient.save()  # Save first to get patient ID
+                
+                # Generate QR with email and patient ID
                 try:
-                    buffer.seek(0); buffer.truncate(0)
                     qr_payload = f"email:{patient.email};id:{patient.id}"
                     qr_img = qrcode.make(qr_payload)
+                    buffer = BytesIO()
                     qr_img.save(buffer, format='PNG')
                     patient.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=False)
                     patient.save(update_fields=['qr_code'])
-                    # Save temporary copy under MEDIA_ROOT/qr/
-                    tmp_dir = os.path.join(settings.MEDIA_ROOT, 'qr')
-                    os.makedirs(tmp_dir, exist_ok=True)
-                    with open(os.path.join(tmp_dir, file_name), 'wb') as f:
-                        f.write(buffer.getvalue())
                 except Exception:
                     pass
 
@@ -347,8 +331,9 @@ def qr_login(request):
         try:
             patient = Patient.objects.get(email=email)
             if patient.user:
-                # Auto-login the patient
-                auth_login(request, patient.user)
+                # Auto-login the patient with the correct backend
+                from clinic_qr_system.backends import EmailOrUsernameModelBackend
+                auth_login(request, patient.user, backend='clinic_qr_system.backends.EmailOrUsernameModelBackend')
                 return redirect('patient_portal')
             else:
                 return render(request, 'patients/qr_login.html', {'error': 'Patient account not properly linked. Please contact support.'})
@@ -369,6 +354,15 @@ def qr_scan_api(request):
     email = email.strip()
     if not email:
         return JsonResponse({'error': 'Email required'}, status=400)
+
+    # Validate email format
+    import re
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        return JsonResponse({
+            'error': 'Invalid email format. Please scan a valid QR code or use a registered email address.',
+            'error_type': 'invalid_format'
+        }, status=400)
 
     try:
         patient = Patient.objects.get(email=email)
@@ -406,4 +400,7 @@ def qr_scan_api(request):
             } if latest_pharmacy else None),
         })
     except Patient.DoesNotExist:
-        return JsonResponse({'error': 'Patient not found'}, status=404)
+        return JsonResponse({
+            'error': 'Patient not found. Please scan a valid QR code or use a registered email address.',
+            'error_type': 'not_found'
+        }, status=404)

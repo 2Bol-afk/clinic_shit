@@ -29,9 +29,6 @@ urlpatterns = [
     path('doctors/consult/<int:rid>/', views.doctor_consult, name='doctor_consult'),
     path('doctors/consult/<int:rid>/finish/', views.doctor_finish_inprogress, name='doctor_finish_inprogress'),
     path('doctors/consult/edit/<int:did>/', views.doctor_consult_edit, name='doctor_consult_edit'),
-    # Reception edit/delete
-    path('reception/<int:pk>/edit/', views.reception_edit, name='reception_edit'),
-    path('reception/<int:pk>/delete/', views.reception_delete, name='reception_delete'),
 ]
 
 

@@ -20,6 +20,8 @@ def scan(request):
     # Prefill code from query param
     if request.method == 'GET':
         code = request.GET.get('code')
+        patient_email = request.GET.get('patient_email')
+        
         if code:
             context['prefill_code'] = code
             # Allow doctors to use this page only when a code is prefilled (from claim)
@@ -28,6 +30,19 @@ def scan(request):
             except Exception:
                 is_doc = False
             context['allow_doctor_scan'] = bool(is_doc and code)
+        elif patient_email:
+            # Handle patient email from QR scan - find patient and get their code
+            try:
+                patient = Patient.objects.get(email=patient_email)
+                context['prefill_code'] = patient.patient_code
+                context['patient_data'] = {
+                    'id': patient.id,
+                    'full_name': patient.full_name,
+                    'patient_code': patient.patient_code,
+                    'email': patient.email,
+                }
+            except Patient.DoesNotExist:
+                context['error'] = f'Patient with email {patient_email} not found'
     # Expose role flags to the template safely
     try:
         context['is_doctor'] = request.user.groups.filter(name='Doctor').exists()

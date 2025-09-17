@@ -2,39 +2,174 @@
 
 {% block content %}
 <style>
-  .qr-scanner-card {
-    background: linear-gradient(135deg, rgba(25,135,84,.08), rgba(25,135,84,.02));
-    border: 2px dashed #198754;
+  .main-container {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    padding: 2rem 0;
+  }
+  
+  .qr-scanner-section {
+    background: white;
     border-radius: 1.5rem;
+    box-shadow: 0 0.5rem 2rem rgba(0,0,0,.1);
     padding: 3rem 2rem;
     text-align: center;
+    margin-bottom: 2rem;
+    border: 1px solid #e9ecef;
+  }
+  
+  .qr-scan-button {
+    background: linear-gradient(135deg, #198754, #157347);
+    border: none;
+    border-radius: 1rem;
+    padding: 1.5rem 3rem;
+    color: white;
+    font-size: 1.1rem;
+    font-weight: 600;
     transition: all 0.3s ease;
+    box-shadow: 0 0.5rem 1rem rgba(25,135,84,.3);
+    display: inline-flex;
+    align-items: center;
+    gap: 1rem;
+    text-decoration: none;
+    cursor: pointer;
   }
-  .qr-scanner-card:hover {
-    border-color: #157347;
-    background: linear-gradient(135deg, rgba(25,135,84,.12), rgba(25,135,84,.04));
+  
+  .qr-scan-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.8rem 1.5rem rgba(25,135,84,.4);
+    color: white;
+    text-decoration: none;
   }
+  
+  .qr-scan-button:active {
+    transform: translateY(0);
+  }
+  
   .qr-icon {
-    font-size: 4rem;
-    color: #198754;
-    margin-bottom: 1rem;
+    font-size: 2rem;
   }
-  .patient-info-card {
+  
+  .divider {
+    margin: 2rem 0;
+    text-align: center;
+    position: relative;
+  }
+  
+  .divider::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: #dee2e6;
+  }
+  
+  .divider span {
+    background: white;
+    padding: 0 1rem;
+    color: #6c757d;
+    font-size: 0.9rem;
+  }
+  
+  .email-input-section {
     background: white;
     border-radius: 1rem;
-    box-shadow: 0 0.5rem 1rem rgba(0,0,0,.1);
+    padding: 2rem;
+    box-shadow: 0 0.25rem 0.5rem rgba(0,0,0,.1);
+    border: 1px solid #e9ecef;
+  }
+  
+  .form-control {
+    border-radius: 0.75rem;
+    border: 2px solid #e9ecef;
+    padding: 1rem 1.25rem;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+  }
+  
+  .form-control:focus {
+    border-color: #198754;
+    box-shadow: 0 0 0 0.2rem rgba(25,135,84,.25);
+  }
+  
+  .btn-primary {
+    background: linear-gradient(135deg, #198754, #157347);
+    border: none;
+    border-radius: 0.75rem;
+    padding: 1rem 2rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+  }
+  
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0.5rem 1rem rgba(25,135,84,.3);
+  }
+  
+  .patient-info-card {
+    background: white;
+    border-radius: 1.5rem;
+    box-shadow: 0 0.5rem 2rem rgba(0,0,0,.1);
     padding: 2rem;
     margin-top: 2rem;
     display: none;
+    border: 1px solid #e9ecef;
   }
+  
   .patient-info-card.show {
     display: block;
-    animation: slideIn 0.3s ease;
+    animation: slideIn 0.5s ease;
   }
+  
   @keyframes slideIn {
-    from { opacity: 0; transform: translateY(20px); }
+    from { opacity: 0; transform: translateY(30px); }
     to { opacity: 1; transform: translateY(0); }
   }
+  
+  .dashboard-section {
+    background: white;
+    border-radius: 1rem;
+    box-shadow: 0 0.25rem 0.5rem rgba(0,0,0,.1);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid #e9ecef;
+    transition: all 0.3s ease;
+  }
+  
+  .dashboard-section:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15);
+  }
+  
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid #f8f9fa;
+  }
+  
+  .section-icon {
+    font-size: 1.5rem;
+    width: 2.5rem;
+    height: 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    background: linear-gradient(135deg, #198754, #157347);
+    color: white;
+  }
+  
+  .section-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #212529;
+    margin: 0;
+  }
+  
   .status-badge {
     display: inline-flex;
     align-items: center;
@@ -44,9 +179,11 @@
     font-weight: 600;
     font-size: 0.9rem;
   }
+  
   .status-normal { background: #d1edff; color: #0c63e4; }
   .status-warning { background: #fff3cd; color: #856404; }
   .status-danger { background: #f8d7da; color: #721c24; }
+  
   .timeline-item {
     border-left: 3px solid #e9ecef;
     padding-left: 1rem;
@@ -68,187 +205,99 @@
   }
 </style>
 
-<div class="container-fluid">
-  <div class="row justify-content-center">
-    <div class="col-lg-8">
-      <!-- Header -->
-      <div class="text-center mb-5">
-        <h1 class="display-5 fw-bold text-success mb-3">
-          <i class="bi bi-qr-code-scan me-3"></i>Patient Quick Scan Here
-        </h1>
-        <p class="lead text-muted">Scan your QR code or enter your email to access your medical records</p>
-      </div>
-
-      <!-- QR Scanner Card -->
-      <div class="qr-scanner-card mb-4">
-        <div class="qr-icon">
-          <i class="bi bi-qr-code-scan"></i>
-        </div>
-        <h3 class="fw-bold mb-3">Quick Access Portal</h3>
-        <p class="text-muted mb-4">Use your phone camera to scan the QR code or manually enter your email below</p>
-        
-        <form id="qrLoginForm" method="post" class="row g-3 justify-content-center">
-          {% csrf_token %}
-          <div class="col-md-8">
-            <div class="input-group input-group-lg">
-              <span class="input-group-text"><i class="bi bi-envelope"></i></span>
-              <input type="email" name="email" class="form-control form-control-lg" 
-                     placeholder="Enter your email address" required autofocus>
-              <button class="btn btn-success btn-lg" type="submit">
-                <i class="bi bi-search me-2"></i>Load My Records
-              </button>
-            </div>
-            <div class="form-text mt-2">
-              <i class="bi bi-info-circle me-1"></i>
-              Your email is linked to your patient records for secure access
-            </div>
-          </div>
-        </form>
-
-        {% if error %}
-          <div class="alert alert-danger mt-3" role="alert">
-            <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
-          </div>
-        {% endif %}
-      </div>
-
-      <!-- Patient Information Display (Initially Hidden) -->
-      <div id="patientInfoCard" class="patient-info-card">
-        <div class="row">
-          <div class="col-md-4">
-            <div class="text-center mb-3">
-              <div id="patientQR" class="mb-3"></div>
-              <h4 id="patientName" class="fw-bold"></h4>
-              <p class="text-muted mb-0">Patient ID: <span id="patientCode" class="fw-semibold"></span></p>
-            </div>
-          </div>
-          <div class="col-md-8">
-            <div class="row g-3">
-              <div class="col-sm-6">
-                <div class="card border-0 bg-light">
-                  <div class="card-body text-center">
-                    <i class="bi bi-person text-success fs-4 mb-2"></i>
-                    <div class="fw-semibold">Age</div>
-                    <div id="patientAge" class="text-muted"></div>
-                  </div>
-                </div>
-              </div>
-              <div class="col-sm-6">
-                <div class="card border-0 bg-light">
-                  <div class="card-body text-center">
-                    <i class="bi bi-envelope text-success fs-4 mb-2"></i>
-                    <div class="fw-semibold">Email</div>
-                    <div id="patientEmail" class="text-muted small"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+<div class="main-container">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-lg-8">
+        <!-- Header -->
+        <div class="text-center mb-5">
+          <h1 class="display-5 fw-bold text-dark mb-3">
+            <i class="bi bi-qr-code-scan me-3 text-success"></i>Patient Quick Scan
+          </h1>
+          <p class="lead text-muted">Scan your QR code or enter your email to access your medical records</p>
         </div>
 
-        <!-- Medical Information Tabs -->
-        <div class="mt-4">
-          <ul class="nav nav-tabs" id="medicalTabs" role="tablist">
-            <li class="nav-item" role="presentation">
-              <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">
-                <i class="bi bi-house me-2"></i>Overview
-              </button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab">
-                <i class="bi bi-clock-history me-2"></i>Medical History
-              </button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" id="prescriptions-tab" data-bs-toggle="tab" data-bs-target="#prescriptions" type="button" role="tab">
-                <i class="bi bi-capsule me-2"></i>Prescriptions
-              </button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" id="lab-results-tab" data-bs-toggle="tab" data-bs-target="#lab-results" type="button" role="tab">
-                <i class="bi bi-droplet me-2"></i>Lab Results
-              </button>
-            </li>
-          </ul>
+        <!-- QR Scanner Section -->
+        <div class="qr-scanner-section">
+          <h2 class="h4 fw-bold text-dark mb-3">Quick Access Portal</h2>
+          <p class="text-muted mb-4">Use your phone camera to scan the QR code for instant access</p>
           
-          <div class="tab-content mt-3" id="medicalTabsContent">
-            <!-- Overview Tab -->
-            <div class="tab-pane fade show active" id="overview" role="tabpanel">
-              <div class="row g-3">
-                <div class="col-md-6">
-                  <div class="card border-0 bg-light">
-                    <div class="card-body">
-                      <h6 class="fw-semibold mb-3"><i class="bi bi-heart-pulse me-2 text-success"></i>Latest Consultation</h6>
-                      <div id="latestConsultation">
-                        <p class="text-muted mb-2">No recent consultations</p>
+          <button type="button" class="qr-scan-button qr-scan-btn" data-intent="patient" data-bs-toggle="modal" data-bs-target="#qrScannerModal">
+            <i class="bi bi-camera qr-icon"></i>
+            <span>Scan QR Code</span>
+          </button>
+        </div>
+        
+        <!-- Divider -->
+        <div class="divider">
+          <span>OR</span>
+        </div>
+        
+        <!-- Email Input Section -->
+        <div class="email-input-section">
+          <h3 class="h5 fw-semibold text-dark mb-3">Enter Email Manually</h3>
+          <form id="qrLoginForm" method="post">
+            {% csrf_token %}
+            <div class="row g-3">
+              <div class="col-md-8">
+                <div class="input-group">
+                  <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                  <input type="email" name="email" class="form-control" 
+                         placeholder="Enter your registered Gmail address" required autofocus>
+                </div>
+                <div class="form-text mt-2">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Your email is linked to your patient records for secure access
+                </div>
+              </div>
+              <div class="col-md-4">
+                <button class="btn btn-primary w-100" type="submit">
+                  <i class="bi bi-search me-2"></i>Load Dashboard
+                </button>
+              </div>
+            </div>
+          </form>
+
+          {% if error %}
+            <div class="alert alert-danger mt-3" role="alert">
+              <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
+            </div>
+          {% endif %}
+        </div>
+
+        <!-- Patient Information Display (Initially Hidden) -->
+        <div id="patientInfoCard" class="patient-info-card">
+          <!-- Patient Profile Section -->
+          <div class="dashboard-section">
+            <div class="section-header">
+              <div class="section-icon">
+                <i class="bi bi-person-circle"></i>
+              </div>
+              <h3 class="section-title">Patient Profile</h3>
+            </div>
+            <div class="row">
+              <div class="col-md-4 text-center">
+                <div id="patientQR" class="mb-3"></div>
+                <h4 id="patientName" class="fw-bold text-success mb-2"></h4>
+                <p class="text-muted mb-0">Patient ID: <span id="patientCode" class="fw-bold text-primary"></span></p>
+              </div>
+              <div class="col-md-8">
+                <div class="row g-3">
+                  <div class="col-sm-6">
+                    <div class="d-flex align-items-center">
+                      <i class="bi bi-calendar3 me-2 text-muted"></i>
+                      <div>
+                        <small class="text-muted d-block">Age</small>
+                        <span id="patientAge" class="fw-semibold"></span>
                       </div>
                     </div>
                   </div>
-                </div>
-                <div class="col-md-6">
-                  <div class="card border-0 bg-light">
-                    <div class="card-body">
-                      <h6 class="fw-semibold mb-3"><i class="bi bi-capsule me-2 text-success"></i>Recent Prescriptions</h6>
-                      <div id="recentPrescriptions">
-                        <p class="text-muted mb-2">No recent prescriptions</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Medical History Tab -->
-            <div class="tab-pane fade" id="history" role="tabpanel">
-              <div id="medicalHistory">
-                <p class="text-muted">Loading medical history...</p>
-              </div>
-            </div>
-
-            <!-- Prescriptions Tab -->
-            <div class="tab-pane fade" id="prescriptions" role="tabpanel">
-              <div id="prescriptionsList">
-                <p class="text-muted">Loading prescriptions...</p>
-              </div>
-            </div>
-
-            <!-- Lab Results Tab -->
-            <div class="tab-pane fade" id="lab-results" role="tabpanel">
-              <div class="row g-3">
-                <div class="col-md-6">
-                  <div class="card border-0">
-                    <div class="card-body">
-                      <h6 class="fw-semibold mb-3">Urinalysis</h6>
-                      <div class="d-flex justify-content-between">
-                        <span>pH Level:</span>
-                        <span class="status-badge status-normal">7.2 ✅</span>
-                      </div>
-                      <div class="d-flex justify-content-between">
-                        <span>Protein:</span>
-                        <span class="status-badge status-normal">Normal ✅</span>
-                      </div>
-                      <div class="d-flex justify-content-between">
-                        <span>Glucose:</span>
-                        <span class="status-badge status-normal">Normal ✅</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div class="col-md-6">
-                  <div class="card border-0">
-                    <div class="card-body">
-                      <h6 class="fw-semibold mb-3">Blood Tests</h6>
-                      <div class="d-flex justify-content-between">
-                        <span>FBS:</span>
-                        <span class="status-badge status-normal">85 mg/dL ✅</span>
-                      </div>
-                      <div class="d-flex justify-content-between">
-                        <span>Cholesterol:</span>
-                        <span class="status-badge status-warning">180 mg/dL ⚠️</span>
-                      </div>
-                      <div class="d-flex justify-content-between">
-                        <span>Blood Type:</span>
-                        <span class="status-badge status-normal">O+ ✅</span>
+                  <div class="col-sm-6">
+                    <div class="d-flex align-items-center">
+                      <i class="bi bi-envelope me-2 text-muted"></i>
+                      <div>
+                        <small class="text-muted d-block">Email</small>
+                        <span id="patientEmail" class="fw-semibold"></span>
                       </div>
                     </div>
                   </div>
@@ -256,7 +305,102 @@
               </div>
             </div>
           </div>
-        </div>
+
+          <!-- Active Consultation Section -->
+          <div class="dashboard-section">
+            <div class="section-header">
+              <div class="section-icon">
+                <i class="bi bi-clipboard-pulse"></i>
+              </div>
+              <h3 class="section-title">Active Consultation</h3>
+            </div>
+            <div id="activeConsultation">
+              <div class="text-center text-muted py-4">
+                <i class="bi bi-clipboard-x fs-1 mb-3"></i>
+                <p class="mb-0">No active consultation</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Medical History Section -->
+          <div class="dashboard-section">
+            <div class="section-header">
+              <div class="section-icon">
+                <i class="bi bi-clock-history"></i>
+              </div>
+              <h3 class="section-title">Medical History</h3>
+            </div>
+            <div id="medicalHistory">
+              <div class="text-center text-muted py-4">
+                <i class="bi bi-journal-x fs-1 mb-3"></i>
+                <p class="mb-0">No medical history available</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Lab Results Section -->
+          <div class="dashboard-section">
+            <div class="section-header">
+              <div class="section-icon">
+                <i class="bi bi-droplet"></i>
+              </div>
+              <h3 class="section-title">Laboratory Results</h3>
+            </div>
+            <div id="labResults">
+              <div class="text-center text-muted py-4">
+                <i class="bi bi-flask fs-1 mb-3"></i>
+                <p class="mb-0">No lab results available</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Prescriptions Section -->
+          <div class="dashboard-section">
+            <div class="section-header">
+              <div class="section-icon">
+                <i class="bi bi-capsule"></i>
+              </div>
+              <h3 class="section-title">Prescriptions & Medications</h3>
+            </div>
+            <div id="prescriptions">
+              <div class="text-center text-muted py-4">
+                <i class="bi bi-capsule fs-1 mb-3"></i>
+                <p class="mb-0">No active prescriptions</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Appointments Section -->
+          <div class="dashboard-section">
+            <div class="section-header">
+              <div class="section-icon">
+                <i class="bi bi-calendar-check"></i>
+              </div>
+              <h3 class="section-title">Appointments & Follow-Ups</h3>
+            </div>
+            <div id="appointments">
+              <div class="text-center text-muted py-4">
+                <i class="bi bi-calendar-x fs-1 mb-3"></i>
+                <p class="mb-0">No upcoming appointments</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Timeline Section -->
+          <div class="dashboard-section">
+            <div class="section-header">
+              <div class="section-icon">
+                <i class="bi bi-graph-up"></i>
+              </div>
+              <h3 class="section-title">Activity Timeline</h3>
+            </div>
+            <div id="timeline">
+              <div class="text-center text-muted py-4">
+                <i class="bi bi-clock-history fs-1 mb-3"></i>
+                <p class="mb-0">No activity recorded</p>
+              </div>
+            </div>
+          </div>
 
         <!-- Action Buttons -->
         <div class="text-center mt-4">
@@ -272,6 +416,52 @@
   </div>
 </div>
 
+<!-- Error Modal -->
+<div class="modal fade" id="errorModal" tabindex="-1" aria-labelledby="errorModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0">
+        <h5 class="modal-title text-danger" id="errorModalLabel">
+          <i class="bi bi-exclamation-triangle me-2"></i>Error
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-center py-4">
+        <div class="mb-3">
+          <i class="bi bi-exclamation-circle text-danger" style="font-size: 3rem;"></i>
+        </div>
+        <p id="errorModalMessage" class="mb-0"></p>
+      </div>
+      <div class="modal-footer border-0 justify-content-center">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Success Modal -->
+<div class="modal fade" id="successModal" tabindex="-1" aria-labelledby="successModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0">
+        <h5 class="modal-title text-success" id="successModalLabel">
+          <i class="bi bi-check-circle me-2"></i>Success
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-center py-4">
+        <div class="mb-3">
+          <i class="bi bi-check-circle text-success" style="font-size: 3rem;"></i>
+        </div>
+        <p id="successModalMessage" class="mb-0"></p>
+      </div>
+      <div class="modal-footer border-0 justify-content-center">
+        <button type="button" class="btn btn-success" data-bs-dismiss="modal">Continue</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 let currentPatientData = null;
 
@@ -281,11 +471,52 @@ document.getElementById('qrLoginForm').addEventListener('submit', function(e) {
   const email = this.querySelector('input[name="email"]').value.trim();
   if (!email) return;
   
-  loadPatientData(email);
+  // Use the same validation and auto-login flow as QR scan
+  handleEmailForPatient(email);
 });
+
+// Function to handle email validation and auto-login for patients
+function handleEmailForPatient(email) {
+  const e = email.trim();
+  if (!e) return;
+  
+  // Validate patient exists first
+  fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(e))
+    .then(r => r.json())
+    .then(data => {
+      if (data.success && data.patient) {
+        // Show success message
+        showSuccessMessage('Patient verified! Status updated to Ready to Consult. Redirecting to dashboard...', data.patient.full_name, data.patient.email);
+        
+        // Auto-submit the QR login form
+        const form = document.getElementById('qrLoginForm');
+        form.submit();
+      } else {
+        showError('Patient not found. Please scan a valid QR or use registered email.');
+      }
+    })
+    .catch(() => {
+      showError('Error validating email. Please try again.');
+    });
+}
+
+// Global callback for patient QR scans
+window.handlePatientQRCallback = function(email) {
+  handleEmailForPatient(email);
+};
 
 // Load patient data via API
 async function loadPatientData(email) {
+  // Clear any existing errors first
+  clearErrors();
+  
+  // Basic email format validation
+  const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  if (!emailPattern.test(email)) {
+    showError('Invalid email format. Please scan a valid QR code or use a registered email address.');
+    return;
+  }
+  
   try {
     const formData = new FormData();
     formData.append('email', email);
@@ -301,8 +532,16 @@ async function loadPatientData(email) {
     if (data.success) {
       currentPatientData = data;
       displayPatientInfo(data);
+      showSuccessMessage(data.patient.full_name, data.patient.email);
     } else {
-      showError(data.error || 'Patient not found');
+      // Handle different error types
+      if (data.error_type === 'invalid_format') {
+        showError('Invalid email format. Please scan a valid QR code or use a registered email address.');
+      } else if (data.error_type === 'not_found') {
+        showError('Patient not found. Please scan a valid QR code or use a registered email address.');
+      } else {
+        showError(data.error || 'Patient not found. Please scan a valid QR code or use a registered email address.');
+      }
     }
   } catch (error) {
     showError('Error loading patient data. Please try again.');
@@ -314,11 +553,25 @@ async function loadPatientData(email) {
 function displayPatientInfo(data) {
   const patient = data.patient;
   
-  // Update patient info
-  document.getElementById('patientName').textContent = patient.full_name;
+  // Update patient info with highlighting
+  const nameElement = document.getElementById('patientName');
+  const emailElement = document.getElementById('patientEmail');
+  
+  nameElement.innerHTML = `<span class="text-success fw-bold">${patient.full_name}</span>`;
   document.getElementById('patientCode').textContent = patient.patient_code;
   document.getElementById('patientAge').textContent = patient.age + ' years';
-  document.getElementById('patientEmail').textContent = patient.email;
+  emailElement.innerHTML = `<span class="text-primary fw-bold">${patient.email}</span>`;
+  
+  // Add validation badge
+  const validationBadge = document.createElement('div');
+  validationBadge.className = 'alert alert-success mt-2 mb-0';
+  validationBadge.innerHTML = '<i class="bi bi-shield-check me-2"></i><strong>Verified Patient</strong>';
+  
+  // Insert validation badge after patient info
+  const patientInfoCard = document.querySelector('.patient-info-card');
+  if (patientInfoCard && !patientInfoCard.querySelector('.alert-success')) {
+    patientInfoCard.insertBefore(validationBadge, patientInfoCard.firstChild);
+  }
   
   // Show QR code if available
   const qrContainer = document.getElementById('patientQR');
@@ -415,30 +668,57 @@ function resetScanner() {
   document.querySelector('input[name="email"]').focus();
 }
 
-// Show error message
+// Clear all alert messages
+function clearErrors() {
+  // Remove existing error and success messages
+  const existingAlerts = document.querySelectorAll('.alert-danger, .alert-success');
+  existingAlerts.forEach(el => el.remove());
+}
+
+// Show error message using modal
 function showError(message) {
-  const errorDiv = document.createElement('div');
-  errorDiv.className = 'alert alert-danger mt-3';
-  errorDiv.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${message}`;
+  clearErrors();
   
-  // Remove existing error messages
-  const existingErrors = document.querySelectorAll('.alert-danger');
-  existingErrors.forEach(el => el.remove());
+  // Show error modal
+  const errorModal = new bootstrap.Modal(document.getElementById('errorModal'));
+  document.getElementById('errorModalMessage').textContent = message;
+  errorModal.show();
+}
+
+// Show success message using modal
+function showSuccessMessage(message, patientName = '', patientEmail = '') {
+  clearErrors();
   
-  // Add new error message
-  document.querySelector('.qr-scanner-card').appendChild(errorDiv);
-  
-  // Auto-remove after 5 seconds
-  setTimeout(() => {
-    if (errorDiv.parentNode) {
-      errorDiv.remove();
-    }
-  }, 5000);
+  // Show success modal
+  const successModal = new bootstrap.Modal(document.getElementById('successModal'));
+  let modalText = message;
+  if (patientName && patientEmail) {
+    modalText += `\n\nPatient: ${patientName}\nEmail: ${patientEmail}`;
+  }
+  document.getElementById('successModalMessage').textContent = modalText;
+  successModal.show();
+}
+
+// Show QR scanner error
+function showQRScannerError(message) {
+  const errorModal = new bootstrap.Modal(document.getElementById('errorModal'));
+  document.getElementById('errorModalMessage').textContent = message;
+  errorModal.show();
 }
 
 // Focus on email input when page loads
 document.addEventListener('DOMContentLoaded', function() {
-  document.querySelector('input[name="email"]').focus();
+  // Check if email is passed as URL parameter
+  const urlParams = new URLSearchParams(window.location.search);
+  const emailParam = urlParams.get('email');
+  
+  if (emailParam) {
+    // Auto-fill and process the email
+    document.querySelector('input[name="email"]').value = emailParam;
+    handleEmailForPatient(emailParam);
+  } else {
+    document.querySelector('input[name="email"]').focus();
+  }
 });
 </script>
 {% endblock %}
