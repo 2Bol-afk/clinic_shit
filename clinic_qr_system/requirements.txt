@@ -1,24 +1,23 @@
-# Django and core dependencies
-Django==5.1.1
-
-# Image processing and QR code generation
-Pillow==10.4.0
-qrcode[pil]==7.4.2
-
-# Data processing and analysis
-pandas==2.2.2
-openpyxl==3.1.5
-
-# Database support
-psycopg2-binary==2.9.9
-
-# Environment variables
-python-dotenv==1.0.1
-
-# Form handling
-django-crispy-forms==2.3
+asgiref==3.9.1
+charset-normalizer==3.4.3
+colorama==0.4.6
 crispy-bootstrap5==2024.2
-
-# Additional dependencies that might be needed
-# (These are commonly used with Django projects)
-Pillow==10.4.0  # Already listed above, but ensuring it's clear
+Django==5.1.1
+django-crispy-forms==2.3
+et_xmlfile==2.0.0
+numpy==2.3.3
+openpyxl==3.1.5
+pandas==2.2.3
+pillow==10.4.0
+pypng==0.20220715.0
+python-dateutil==2.9.0.post0
+python-dotenv==1.0.1
+pytz==2025.2
+qrcode==7.4.2
+reportlab==4.4.3
+setuptools==80.9.0
+six==1.17.0
+sqlparse==0.5.3
+typing_extensions==4.15.0
+tzdata==2025.2
+wheel==0.45.1
