@@ -1,28 +1,23 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block content %}
 <h4 class="d-flex align-items-center mb-3"><i class="bi bi-flask text-success me-2"></i>Laboratory Dashboard</h4>
-<div class="mb-3">
-  <a href="#" class="btn btn-lg btn-outline-success qr-scan-btn" data-intent="staff"><i class="bi bi-camera me-2"></i>Load QR</a>
-  <small class="text-muted ms-2">Open patient by QR to view results</small>
-  <hr>
-</div>
+ 
 <div class="row g-3">
   <div class="col-md-6">
     <h6>Unclaimed (Reception-tagged for Lab)</h6>
-    <ul class="list-group mb-3">
+    <ul class="list-group mb-3" data-container="queued">
       {% for v in pending_unclaimed %}
-        <li class="list-group-item">
+        <li class="list-group-item" data-card>
           <div class="d-flex justify-content-between align-items-center">
             <div>
               <a href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a>
-              <div class="small text-muted">From Reception · Queue: {{ v.queue_number|default:'—' }} <span class="badge text-bg-success ms-2">Claimed</span></div>
+              <div class="small text-muted">Queue: {{ v.queue_number|default:'—' }}</div>
               <div class="small">At: {{ v.timestamp|date:'Y-m-d H:i' }}</div>
             </div>
-            <form method="post" action="/dashboard/lab/claim/" class="d-flex align-items-center gap-2">
-              {% csrf_token %}
-              <input type="hidden" name="reception_visit_id" value="{{ v.id }}">
-              <button class="btn btn-outline-primary btn-sm" type="submit"><i class="bi bi-person-plus me-1"></i>Claim</button>
-            </form>
+            <div class="d-flex align-items-center gap-2">
+              <button class="btn btn-outline-primary btn-sm" data-action="claim" data-url="/dashboard/lab/claim/" data-id="{{ v.id }}"><i class="bi bi-person-plus me-1"></i>Claim</button>
+            </div>
           </div>
         </li>
       {% empty %}
@@ -30,9 +25,9 @@
       {% endfor %}
     </ul>
     <h6>Claimed · Waiting to Arrive (verify QR on arrival)</h6>
-    <ul class="list-group">
+    <ul class="list-group" data-container="claimed">
       {% for v in pending_claimed %}
-        <li class="list-group-item">
+        <li class="list-group-item" data-card data-patient-code="{{ v.patient.patient_code }}" data-visit-id="{{ v.id }}">
           <div class="d-flex justify-content-between align-items-center">
             <div>
               <a href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a>
@@ -61,30 +56,53 @@
           {% csrf_token %}
           <div class="modal-body">
             <input type="hidden" name="reception_visit_id" id="verifyVisitId">
-            <label class="form-label">Scan/Enter Patient Code</label>
-            <input type="text" class="form-control" name="verify_code" placeholder="Patient code" required>
-            <label class="form-label mt-2">Test Type</label>
-            <select name="lab_test_type" class="form-select" required>
-              <option value="urinalysis">Urinalysis</option>
-              <option value="fecalysis">Fecalysis</option>
-              <option value="fbs">Fasting Blood Sugar (FBS)</option>
-              <option value="pregnancy">Pregnancy Test (hCG)</option>
-              <option value="lipid">Lipid Profile</option>
-              <option value="rdt">Rapid Diagnostic Test (RDT)</option>
-              <option value="blood_typing">Blood Typing (ABO/Rh)</option>
+            <input type="hidden" name="verify_code" id="verifyCodeHidden">
+            <div class="mb-2"><strong>Scanned Code:</strong> <span id="modalScanned">—</span></div>
+            <div class="ratio ratio-4x3 border rounded bg-dark overflow-hidden mb-2"><video id="modalVideo" autoplay muted playsinline style="width:100%; height:100%; object-fit:cover;"></video></div>
+            <div class="small text-muted" id="modalStatus">Starting camera…</div>
+            <div class="mt-2">
+              <label class="form-label">Or verify by patient email</label>
+              <div class="input-group">
+                <input type="email" class="form-control" name="patient_email" id="modalPatientEmail" placeholder="name@example.com">
+                <button class="btn btn-outline-primary" id="btnVerifyEmail" type="button">Verify Email</button>
+              </div>
+              <div class="text-danger small mt-1 d-none" id="emailError"></div>
+              <div class="text-success small mt-1 d-none" id="emailOk">Email verified.</div>
+            </div>
+            <label class="form-label mt-3">Test Type</label>
+            <select name="lab_test_type" id="modalTestType" class="form-select" disabled required>
+              {% for code,label in lab_types %}
+                <option value="{{ code }}">{{ label }}</option>
+              {% endfor %}
             </select>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button class="btn btn-success" type="submit">Verify & Receive</button>
+            <button class="btn btn-success" id="modalSubmitBtn" type="submit" disabled>Verify & Receive</button>
           </div>
         </form>
       </div>
     </div>
   </div>
   <div class="col-md-6">
+    <h6>Ready for Lab Processing</h6>
+    <ul class="list-group mb-3" data-container="ready">
+      {% for v in ready %}
+        <li class="list-group-item d-flex justify-content-between align-items-center" data-card>
+          <div>
+            <a class="fw-semibold" href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a>
+            <div class="small text-muted">Queue: {{ v.queue_number|default:'—' }}</div>
+          </div>
+          <div class="d-flex gap-2">
+            <a class="btn btn-primary btn-sm" href="/dashboard/lab/work/{{ v.id }}/"><i class="bi bi-pencil-square me-1"></i>Open Work</a>
+          </div>
+        </li>
+      {% empty %}
+        <li class="list-group-item">No ready items.</li>
+      {% endfor %}
+    </ul>
     <h6>In Progress</h6>
-    <ul class="list-group mb-3">
+    <ul class="list-group mb-3" data-container="in_process">
       {% for v in in_progress %}
         <li class="list-group-item d-flex justify-content-between align-items-center">
           <div>
@@ -116,6 +134,133 @@
           const id = button.getAttribute('data-visit');
           const input = modal.querySelector('#verifyVisitId');
           if (input) input.value = id || '';
+      // Start scanning
+      const video = modal.querySelector('#modalVideo');
+      const status = modal.querySelector('#modalStatus');
+      const out = modal.querySelector('#modalScanned');
+      const codeHidden = modal.querySelector('#verifyCodeHidden');
+      const typeSel = modal.querySelector('#modalTestType');
+      const submitBtn = modal.querySelector('#modalSubmitBtn');
+      let stream;
+      let detecting = false;
+      async function start(){
+        try{
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          video.srcObject = stream;
+          await video.play();
+          status.textContent = 'Point the camera at the QR code.';
+          if ('BarcodeDetector' in window) {
+            const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+            detecting = true;
+            (async function loop(){
+              while(detecting){
+                try{
+                  const det = await detector.detect(video);
+                  if(det && det.length){
+                    const value = det[0].rawValue || det[0].rawValue;
+                    out.textContent = value || '—';
+                    codeHidden.value = value || '';
+                    typeSel.disabled = !value && !(emailInput && emailInput.value);
+                    submitBtn.disabled = !(value || (emailInput && emailInput.value)) || !typeSel.value;
+                    status.textContent = 'QR captured.';
+                    break;
+                  }
+                }catch(e){}
+                await new Promise(r=>setTimeout(r, 200));
+              }
+            })();
+          } else {
+            status.textContent = '';
+          }
+        }catch(e){
+          status.textContent = 'Unable to access camera: ' + e.message;
+        }
+      }
+      start();
+      // Enable submit when test type chosen or email entered; enable test type select when email present
+      const emailInput = document.getElementById('modalPatientEmail');
+      const emailError = document.getElementById('emailError');
+      const emailOk = document.getElementById('emailOk');
+      let emailVerified = false;
+      function updateSubmitState(){ submitBtn.disabled = !((codeHidden.value || emailVerified) && typeSel.value); }
+      function updateSelectEnabled(){ if(typeSel){ typeSel.disabled = !(codeHidden.value || emailVerified); } }
+      typeSel && typeSel.addEventListener('change', updateSubmitState);
+      if(emailInput){ emailInput.addEventListener('input', function(){ emailVerified = false; emailOk && emailOk.classList.add('d-none'); emailError && emailError.classList.add('d-none'); updateSelectEnabled(); updateSubmitState(); }); }
+      const btnVerifyEmail = document.getElementById('btnVerifyEmail');
+      if(btnVerifyEmail){
+        btnVerifyEmail.addEventListener('click', async function(){
+          emailError && emailError.classList.add('d-none');
+          emailOk && emailOk.classList.add('d-none');
+          const email = (emailInput && emailInput.value || '').trim();
+          const visitId = (document.getElementById('verifyVisitId')||{}).value || '';
+          if(!email){ emailError && (emailError.textContent='Enter an email.', emailError.classList.remove('d-none')); return; }
+          if(!visitId){ emailError && (emailError.textContent='Missing visit.', emailError.classList.remove('d-none')); return; }
+          try{
+            const form = new FormData();
+            form.append('patient_email', email);
+            form.append('reception_visit_id', visitId);
+            const csrf = document.querySelector('input[name="csrfmiddlewaretoken"]');
+            const resp = await fetch('/dashboard/lab/verify-email/', {method:'POST', headers: {'X-CSRFToken': csrf ? csrf.value : ''}, body: form});
+            const data = await resp.json();
+            if(!data.success){ throw new Error(data.message || 'Verification failed'); }
+            emailVerified = true;
+            emailOk && emailOk.classList.remove('d-none');
+            updateSelectEnabled();
+            updateSubmitState();
+          }catch(e){
+            emailVerified = false;
+            emailError && (emailError.textContent = e.message || 'Email does not match this patient.', emailError.classList.remove('d-none'));
+            updateSelectEnabled();
+            updateSubmitState();
+          }
+        });
+      }
+      // Intercept submit for AJAX to keep UI consistent
+      const formEl = modal.querySelector('form');
+      if(formEl){
+        formEl.addEventListener('submit', async function(e){
+          e.preventDefault();
+          const fd = new FormData(formEl);
+          try{
+            const resp = await fetch(formEl.action, { method:'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: fd });
+            const data = await resp.json();
+            if(!data || !data.success){ throw new Error((data && data.message) || 'Failed to receive.'); }
+            // Success: close modal and move card to In Process without full reload
+            const bsModal = bootstrap.Modal.getInstance(modal);
+            if(bsModal) bsModal.hide();
+            const li = document.querySelector(`[data-visit-id="${data.lab_visit_id}"]`) || document.querySelector(`[data-visit-id="${fd.get('reception_visit_id')}"]`);
+            const target = document.querySelector('[data-container="in_process"]');
+            if(li && target){
+              // Replace actions for in-process: Open Work + Done
+              const btnWrap = li.querySelector('.d-flex.align-items-center.gap-2');
+              if(btnWrap){
+                btnWrap.innerHTML = `
+                  <a class="btn btn-primary btn-sm" href="/dashboard/lab/work/${data.lab_visit_id}/"><i class="bi bi-pencil-square me-1"></i>Open Work</a>
+                `;
+              }
+              target.appendChild(li);
+            }
+            // Show a toast-like alert
+            const msg = document.createElement('div');
+            msg.className = 'alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3';
+            msg.style.zIndex = '1060';
+            msg.textContent = data.message || 'Patient moved to In Process.';
+            document.body.appendChild(msg);
+            setTimeout(()=>{ msg.remove(); }, 1500);
+          }catch(err){
+            const errBox = modal.querySelector('#emailError');
+            if(errBox){ errBox.textContent = err.message || 'Error receiving patient.'; errBox.classList.remove('d-none'); }
+          }
+        });
+      }
+      // Initialize states on open
+      updateSelectEnabled();
+      updateSubmitState();
+      // Stop on close
+      modal.addEventListener('hide.bs.modal', function(){
+        detecting = false;
+        if(stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; }
+      }, { once: true });
         });
       }
     })();
@@ -166,10 +311,7 @@
   </div>
 </div>
 <script>
-// Auto-refresh lists every 10 seconds
-(function(){
-  setTimeout(function(){ location.reload(); }, 10000);
-})();
+// Auto-refresh disabled per request
 // Disable Claim/Receive buttons immediately on click to prevent double actions
 (function(){
   document.addEventListener('submit', function(e){
@@ -181,5 +323,87 @@
     }
   });
 })();
+
+// QR scanning inline (uses native BarcodeDetector if available)
+(function(){
+  const btn = null;
+  const wrap = document.getElementById('qr-scan-wrap');
+  const video = document.getElementById('qr-video');
+  const status = document.getElementById('qr-status');
+  const out = document.getElementById('scanned-code');
+  const typeSel = document.getElementById('lab-type-select');
+  const proceed = document.getElementById('proceed-lab');
+  const err = document.getElementById('qr-error');
+  let stream;
+  let detecting = false;
+  async function start(){
+    err && (err.classList.add('d-none'), err.textContent='');
+    wrap.classList.remove('d-none');
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      video.srcObject = stream;
+      await video.play();
+      status.textContent = 'Point the camera at the QR code.';
+      if ('BarcodeDetector' in window) {
+        const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+        detecting = true;
+        (async function loop(){
+          while(detecting){
+            try{
+              const det = await detector.detect(video);
+              if(det && det.length){ onScan(det[0].rawValue || det[0].rawValue); break; }
+            }catch(e){}
+            await new Promise(r=>setTimeout(r, 200));
+          }
+        })();
+      } else {
+        status.textContent = 'Your browser does not support built-in QR scanning.';
+      }
+    }catch(e){
+      status.textContent = '';
+    }
+  }
+  function stop(){
+    detecting = false;
+    if(stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; }
+  }
+  function onScan(value){
+    stop();
+    out.textContent = value || '—';
+    status.textContent = 'QR captured.';
+    typeSel.disabled = false;
+    proceed.disabled = !typeSel.value;
+    // Preselect matching claimed ticket if in the list
+    const items = document.querySelectorAll('[data-visit-id][data-patient-code]');
+    let foundId = null;
+    items.forEach(el=>{ if((el.getAttribute('data-patient-code')||'').trim().toUpperCase() === (value||'').trim().toUpperCase()){ foundId = el.getAttribute('data-visit-id'); }});
+    proceed.dataset.visitId = foundId || '';
+  }
+  // Auto-start scanner immediately
+  start();
+  if(typeSel){ typeSel.addEventListener('change', function(){ proceed.disabled = !this.value || !out.textContent || out.textContent==='—'; }); }
+  if(proceed){
+    proceed.addEventListener('click', function(e){
+      e.preventDefault();
+      err && (err.classList.add('d-none'), err.textContent='');
+      const code = out.textContent || '';
+      const testType = typeSel.value || '';
+      if(!code || !testType){ err && (err.textContent='Scan QR and select a test type.', err.classList.remove('d-none')); return; }
+      const visitId = proceed.dataset.visitId || '';
+      // Submit to lab_receive as verification + receive
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '/dashboard/lab/receive/';
+      const csrf = document.querySelector('input[name="csrfmiddlewaretoken"]');
+      if(csrf){ const t=document.createElement('input'); t.type='hidden'; t.name='csrfmiddlewaretoken'; t.value=csrf.value; form.appendChild(t); }
+      const codeIn = document.createElement('input'); codeIn.type='hidden'; codeIn.name='verify_code'; codeIn.value=code; form.appendChild(codeIn);
+      const typeIn = document.createElement('input'); typeIn.type='hidden'; typeIn.name='lab_test_type'; typeIn.value=testType; form.appendChild(typeIn);
+      if(visitId){ const vid=document.createElement('input'); vid.type='hidden'; vid.name='reception_visit_id'; vid.value=visitId; form.appendChild(vid); }
+      document.body.appendChild(form);
+      form.submit();
+    });
+  }
+})();
 </script>
+<script src="{% static 'js/queue.js' %}"></script>
 {% endblock %}

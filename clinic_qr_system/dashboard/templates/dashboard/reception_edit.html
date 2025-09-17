@@ -32,10 +32,7 @@
             <option value="ENT" {% if visit.department == 'ENT' %}selected{% endif %}>ENT (Ear, Nose, Throat)</option>
           </select>
         </div>
-        <div class="col-12">
-          <label class="form-label">Notes</label>
-          <textarea name="notes" class="form-control" rows="3">{{ visit.notes }}</textarea>
-        </div>
+        
       </div>
       <div class="mt-3 d-flex gap-2">
         <button class="btn btn-success" type="submit"><i class="bi bi-check2-circle me-1"></i>Save</button>

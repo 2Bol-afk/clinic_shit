@@ -22,11 +22,20 @@ class Visit(models.Model):
     patient = models.ForeignKey('patients.Patient', on_delete=models.CASCADE, related_name='visits')
     service = models.CharField(max_length=20, choices=Service.choices)
     notes = models.TextField(blank=True)
+    # Unified workflow status across services (4 states)
+    class Status(models.TextChoices):
+        QUEUED = 'queued', 'Queued'
+        CLAIMED = 'claimed', 'Claimed'
+        IN_PROCESS = 'in_process', 'In Process'
+        DONE = 'done', 'Done'
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.QUEUED)
     # Reception
     queue_number = models.PositiveIntegerField(null=True, blank=True)
     department = models.CharField(max_length=32, choices=Department.choices, blank=True)
     claimed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='claimed_reception_visits')
     claimed_at = models.DateTimeField(null=True, blank=True)
+    # Unified assignee for current handler (doctor or lab)
+    assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_visits')
     doctor_arrived = models.BooleanField(default=False)
     # Doctor consultation state machine for today's flow
     doctor_status = models.CharField(max_length=16, blank=True, default='')  # '', ready_to_consult, not_done, finished
@@ -57,8 +66,76 @@ class Visit(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     doctor_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='doctor_visits')
+    # Specific service/test type, e.g., particular lab department
+    service_type = models.ForeignKey('visits.ServiceType', on_delete=models.SET_NULL, null=True, blank=True, help_text='Specific service type selected')
 
     def __str__(self) -> str:
         return f"{self.patient} - {self.get_service_display()} @ {self.timestamp:%Y-%m-%d %H:%M}"
 
-# Create your models here.
+class ServiceType(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    requires_department = models.BooleanField(default=False, help_text='Whether this service requires department selection')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self) -> str:
+        return self.name
+
+class Laboratory(models.TextChoices):
+    HEMATOLOGY = 'Hematology', 'Hematology (Blood Analysis)'
+    CLINICAL_MICROSCOPY = 'Clinical Microscopy', 'Clinical Microscopy (Urine/Stool Exam)'
+    CLINICAL_CHEMISTRY = 'Clinical Chemistry', 'Clinical Chemistry (Blood Chemistry)'
+    IMMUNOLOGY = 'Immunology and Serology', 'Immunology and Serology (Infectious Disease Tests)'
+    MICROBIOLOGY = 'Microbiology', 'Microbiology (Culture and Sensitivity)'
+    PATHOLOGY = 'Pathology', 'Pathology (Tissue and Biopsy)'
+
+
+class LabResult(models.Model):
+    visit = models.ForeignKey('visits.Visit', on_delete=models.CASCADE, related_name='lab_result_entries')
+    lab_type = models.CharField(max_length=64, choices=Laboratory.choices)
+    status = models.CharField(max_length=32, choices=[
+        ('queue', 'Queue'),
+        ('claimed', 'Claimed'),
+        ('in_process', 'In Process'),
+        ('done', 'Done'),
+        ('not_done', 'Not Done'),
+    ], default='queue')
+    results = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self) -> str:
+        return f"{self.visit_id} · {self.lab_type} · {self.status}"
+
+class Diagnosis(models.Model):
+    visit = models.ForeignKey('visits.Visit', on_delete=models.CASCADE, related_name='diagnoses')
+    text = models.CharField(max_length=255)
+    is_primary = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-is_primary', 'id']
+
+    def __str__(self) -> str:
+        return f"{'Primary' if self.is_primary else 'Secondary'}: {self.text}"
+
+
+class PrescriptionItem(models.Model):
+    visit = models.ForeignKey('visits.Visit', on_delete=models.CASCADE, related_name='prescriptions')
+    medicine = models.CharField(max_length=200)
+    dosage = models.CharField(max_length=120, blank=True)
+    frequency = models.CharField(max_length=120, blank=True)
+    duration = models.CharField(max_length=120, blank=True)
+    instructions = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self) -> str:
+        return self.medicine

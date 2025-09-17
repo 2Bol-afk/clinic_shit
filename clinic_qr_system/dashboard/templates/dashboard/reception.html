@@ -16,7 +16,6 @@
           <th>Visit Type</th>
           <th>Queue</th>
           <th>Department</th>
-          <th>Notes</th>
           <th style="width:130px">Actions</th>
         </tr>
       </thead>
@@ -37,9 +36,11 @@
             {% endif %}
           </td>
           <td>
-            {% if v.patient.id in completed_doctor_patients %}
+            {% if v.status == 'done' %}
               <span class="badge text-bg-primary">Done</span>
-            {% elif v.claimed_by %}
+            {% elif v.status == 'in_process' %}
+              <span class="badge text-bg-info">In Process</span>
+            {% elif v.status == 'claimed' %}
               <span class="badge text-bg-success">Claimed</span>
             {% elif v.queue_number %}
               {% if v.department %}
@@ -57,11 +58,6 @@
           </td>
           <td>{{ v.department|default:'—' }}</td>
           <td>
-            {% with clean=v.notes|default:''|cut:'[Visit: Laboratory]'|cut:'[Visit: Vaccination]' %}
-              {{ clean|default:'—' }}
-            {% endwith %}
-          </td>
-          <td>
             {% if request.user.is_superuser or request.user.groups.all.0.name == 'Reception' %}
               <a class="btn btn-sm btn-outline-secondary" href="/dashboard/reception/{{ v.id }}/edit/">Edit</a>
               <a class="btn btn-sm btn-outline-danger" href="/dashboard/reception/{{ v.id }}/delete/">Delete</a>
@@ -69,7 +65,7 @@
           </td>
         </tr>
       {% empty %}
-        <tr><td colspan="7" class="text-center text-muted py-4">No arrivals yet.</td></tr>
+        <tr><td colspan="6" class="text-center text-muted py-4">No arrivals yet.</td></tr>
       {% endfor %}
       </tbody>
     </table>

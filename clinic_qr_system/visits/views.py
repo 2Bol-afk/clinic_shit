@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from django.db import transaction
 from patients.models import Patient
-from .models import Visit
+from .models import Visit, ServiceType, LabResult, Laboratory
 from django.contrib.auth.models import Group
 from dashboard.models import ActivityLog
 from django.contrib import messages
@@ -43,7 +43,11 @@ def scan(request):
                 }
             except Patient.DoesNotExist:
                 context['error'] = f'Patient with email {patient_email} not found'
-    # Expose role flags to the template safely
+    # Expose department choices and role flags to the template safely
+    try:
+        context['department_choices'] = Visit.Department.choices
+    except Exception:
+        context['department_choices'] = []
     try:
         context['is_doctor'] = request.user.groups.filter(name='Doctor').exists()
     except Exception:
@@ -121,6 +125,20 @@ def scan(request):
                 service = 'doctor'
         except Exception:
             pass
+        # If Reception chose Laboratory service from the dropdown, coerce into reception flow
+        try:
+            is_reception_user = request.user.is_superuser or request.user.groups.filter(name='Reception').exists()
+        except Exception:
+            is_reception_user = False
+        if is_reception_user and service == 'lab':
+            # Convert to reception with visit_type=laboratory to allow receptionist to log lab tickets
+            service = 'reception'
+            try:
+                mutable_post = request.POST.copy()
+                mutable_post['reception_visit_type'] = 'laboratory'
+                request.POST = mutable_post
+            except Exception:
+                pass
         # Group-based gate: allow superusers or users in the matching group
         user = request.user
         user_groups = set(user.groups.values_list('name', flat=True))
@@ -152,8 +170,22 @@ def scan(request):
                     # Department and queue assignment (only for consultation)
                     visit_type = request.POST.get('reception_visit_type')
                     dept = request.POST.get('department') if visit_type == 'consultation' else None
-                    if dept:
+                    if visit_type == 'consultation':
+                        # Validate department selection
+                        if not dept:
+                            context['error'] = 'Please select a department for Doctor Consultation.'
+                            return render(request, 'visits/scan.html', context)
                         kwargs['department'] = dept
+                        # Prevent duplicate active consultation in same department today
+                        today = timezone.localdate()
+                        if Visit.objects.filter(
+                            service='reception',
+                            patient=patient,
+                            timestamp__date=today,
+                            department=dept,
+                        ).exclude(doctor_status='finished').exists():
+                            context['error'] = 'Patient already has an active consultation in this department today.'
+                            return render(request, 'visits/scan.html', context)
                     qn = request.POST.get('queue_number') if visit_type == 'consultation' else None
                     if qn:
                         kwargs['queue_number'] = int(qn)
@@ -185,6 +217,12 @@ def scan(request):
                         current_notes = kwargs.get('notes', '')
                         if prefix.lower() not in current_notes.lower():
                             kwargs['notes'] = (prefix + ' ' + current_notes).strip()
+                        # Set service_type for downstream dashboards
+                        if visit_type == 'laboratory':
+                            svc = ServiceType.objects.filter(name__iexact='Laboratory').first()
+                            kwargs['service_type'] = svc
+                        # Always set to queued for new reception tickets
+                        kwargs['status'] = Visit.Status.QUEUED
                 elif service == 'doctor':
                     # Enforce arrival verification on claimed reception record when available
                     # If doctor is starting from a claimed ticket, ensure doctor_arrived is True
@@ -217,6 +255,16 @@ def scan(request):
                     if vdate:
                         kwargs['vaccination_date'] = vdate
                 visit = Visit.objects.create(**kwargs)
+                # If a direct lab visit is created, ensure a LabResult row exists in queue
+                if service == 'lab':
+                    LabResult.objects.get_or_create(
+                        visit=visit,
+                        defaults={
+                            'lab_type': Laboratory.HEMATOLOGY,
+                            'status': 'queue',
+                            'results': {},
+                        },
+                    )
                 # Activity logging
                 if service == 'doctor':
                     if visit.prescription_notes:
@@ -254,7 +302,12 @@ def scan(request):
                         description=f"{visit.vaccine_type} {visit.vaccine_dose}",
                         patient=patient,
                     )
-            messages.success(request, 'Visit logged successfully.')
+            # Success messages
+            if service == 'reception' and (request.POST.get('reception_visit_type') == 'consultation'):
+                dept_label = dict(Visit.Department.choices).get(request.POST.get('department') or '', 'selected department')
+                messages.success(request, f'Patient successfully queued for {dept_label}.')
+            else:
+                messages.success(request, 'Visit logged successfully.')
             return redirect('/visits/scan/')
         except Patient.DoesNotExist:
             context['error'] = 'Patient not found'

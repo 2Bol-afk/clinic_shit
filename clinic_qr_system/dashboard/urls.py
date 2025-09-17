@@ -5,13 +5,18 @@ from . import views
 urlpatterns = [
     path('', views.index, name='dashboard_index'),
     path('reception/', views.reception_dashboard, name='dashboard_reception'),
+    path('reception/<int:pk>/edit/', views.reception_edit, name='reception_edit'),
+    path('reception/<int:pk>/delete/', views.reception_delete, name='reception_delete'),
     path('doctor/', views.doctor_dashboard, name='dashboard_doctor'),
     path('lab/', views.lab_dashboard, name='dashboard_lab'),
     path('lab/results/demo/', views.lab_results_demo, name='lab_results_demo'),
+    path('lab/verify-email/', views.lab_verify_email, name='lab_verify_email'),
     path('lab/work/<int:pk>/', views.lab_work, name='lab_work'),
+    path('lab/result/<int:pk>/', views.lab_result_work, name='lab_result_work'),
     path('lab/claim/', views.lab_claim, name='lab_claim'),
     path('lab/receive/', views.lab_receive, name='lab_receive'),
     path('lab/<int:pk>/done/', views.lab_mark_done, name='lab_mark_done'),
+    path('lab/<int:pk>/set-department/', views.lab_set_department, name='lab_set_department'),
     path('pharmacy/', views.pharmacy_dashboard, name='dashboard_pharmacy'),
     path('vaccination/', views.vaccination_dashboard, name='dashboard_vaccination'),
     # Lightweight API for pharmacy/doctor UI

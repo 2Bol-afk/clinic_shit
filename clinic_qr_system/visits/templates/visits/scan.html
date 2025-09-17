@@ -31,8 +31,7 @@
           <div class="col-12">
             <label class="form-label">Service Station</label>
             <select class="form-select" name="service" required id="serviceSelect">
-              <option value="reception">Reception/Triage</option>
-              <option value="doctor">Doctor Consultation</option>
+              <option value="reception">Doctor Consultation</option>
               <option value="lab">Laboratory</option>
               <option value="pharmacy">Pharmacy</option>
               <option value="vaccination">Vaccination/Immunization</option>
@@ -41,18 +40,7 @@
           {% endif %}
           <div id="serviceFields" class="col-12">
             <div data-svc="reception" class="svc d-none">
-              <div class="mt-2">
-                <label class="form-label">Queue Number</label>
-                <input type="number" min="1" name="queue_number" class="form-control">
-              </div>
-              <div class="mt-2">
-                <label class="form-label">Visit Type</label>
-                <select class="form-select" id="receptionVisitType" name="reception_visit_type">
-                  <option value="consultation" selected>Consultation</option>
-                  <option value="laboratory">Laboratory</option>
-                  <option value="vaccination">Vaccination</option>
-                </select>
-              </div>
+              <input type="hidden" id="receptionVisitType" name="reception_visit_type" value="consultation">
               <div class="mt-2" id="receptionDeptWrap">
                 <label class="form-label">Department</label>
                 <select class="form-select" name="department">
@@ -66,6 +54,7 @@
                 </select>
               </div>
             </div>
+            {% if is_doctor and allow_doctor_scan %}
             <div data-svc="doctor" class="svc d-none">
               <label class="form-label">Symptoms</label>
               <textarea name="symptoms" class="form-control" rows="2"></textarea>
@@ -78,13 +67,9 @@
                 <label class="form-check-label" for="doctorDone">Mark consultation as Done</label>
               </div>
             </div>
+            {% endif %}
             <div data-svc="lab" class="svc d-none">
-              <label class="form-label">Requested Tests</label>
-              <textarea name="lab_tests" class="form-control" rows="2"></textarea>
-              <div class="form-check mt-2">
-                <input class="form-check-input" type="checkbox" name="lab_completed" id="labCompleted">
-                <label class="form-check-label" for="labCompleted">Completed</label>
-              </div>
+              <!-- Laboratory selection here should not capture request tests or completion at Reception -->
             </div>
             <div data-svc="pharmacy" class="svc d-none">
               <label class="form-label">Medicines Dispensed</label>
@@ -103,10 +88,7 @@
               <input type="date" name="vaccination_date" class="form-control">
             </div>
           </div>
-          <div class="col-12">
-            <label class="form-label">Notes</label>
-            <textarea name="notes" class="form-control" rows="3" placeholder="Optional"></textarea>
-          </div>
+          
           <div class="col-12">
             <button class="btn btn-success" type="submit"><i class="bi bi-check2-circle me-1"></i>Log Visit</button>
           </div>
@@ -136,11 +118,7 @@
   if(sel){ sel.addEventListener('change', sync); }
   sync();
   
-  // Reception: show department only for Consultation
-  const visitType = document.getElementById('receptionVisitType');
-  const deptWrap = document.getElementById('receptionDeptWrap');
-  function syncDept(){ if(!visitType||!deptWrap) return; deptWrap.style.display = (visitType.value === 'consultation') ? '' : 'none'; }
-  if(visitType){ visitType.addEventListener('change', syncDept); syncDept(); }
+  // Department always required for consultation; queue auto-assigned server-side
   
 })();
 </script>

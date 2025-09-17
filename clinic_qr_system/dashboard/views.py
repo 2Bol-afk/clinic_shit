@@ -2,8 +2,10 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.utils import timezone
 from django.db import models, transaction
+from django.db.models import Q
 from patients.models import Patient, Doctor
-from visits.models import Visit
+from visits.models import Visit, ServiceType, LabResult, Laboratory
+from visits.forms import LabResultForm
 from django.contrib.auth.models import Group, User
 from .models import ActivityLog
 from patients.forms import DoctorForm
@@ -105,12 +107,6 @@ def reception_dashboard(request):
               .filter(service='reception', timestamp__date=today)
               .select_related('patient', 'created_by')
               .order_by('-timestamp'))
-    # Patients with completed doctor consultations today
-    completed_doctor_patients = set(
-        Visit.objects
-        .filter(service='doctor', doctor_done=True, timestamp__date=today)
-        .values_list('patient_id', flat=True)
-    )
     
     # Handle patient email from QR scan
     patient_email = request.GET.get('patient_email', '').strip()
@@ -134,8 +130,7 @@ def reception_dashboard(request):
         {
             'visits': visits,
             'today': today,
-            'completed_doctor_patients': completed_doctor_patients,
-            'patient_data': patient_data,
+                'patient_data': patient_data,
         },
     )
 
@@ -229,30 +224,55 @@ def doctor_dashboard(request):
 def lab_dashboard(request):
     # Show pending lab requests - prefer reception-tagged Lab arrivals
     today = timezone.localdate()
-    # Only exclude patients already in an in-progress lab visit today
+    # Only exclude patients already in an active lab workflow (In Process) today
     already_in_lab = (Visit.objects
-                      .filter(service='lab', lab_completed=False, timestamp__date=today)
+                      .filter(service='lab', status=Visit.Status.IN_PROCESS, timestamp__date=today)
                       .values_list('patient_id', flat=True))
-    pending = (Visit.objects
-               .filter(service='reception', timestamp__date=today)
-               .filter(notes__icontains='[visit: laboratory]')
-               .exclude(patient_id__in=already_in_lab)
-               .order_by('queue_number', 'timestamp'))
-    # Split into unclaimed vs claimed (still waiting to arrive)
-    unclaimed = pending.filter(lab_claimed_by__isnull=True)
-    claimed_waiting = pending.filter(lab_claimed_by__isnull=False, lab_arrived=False)
-    # In-progress and completed for lab
-    in_progress = (Visit.objects
-                   .filter(service='lab', lab_completed=False)
-                   .order_by('-timestamp'))
-    completed = (Visit.objects
-                 .filter(service='lab', lab_completed=True)
-                 .order_by('-lab_completed_at', '-timestamp')[:5])
+    # Reception tickets queued for laboratory (service_type = Lab) in queue order
+    base_reception_lab = (Visit.objects
+                          .filter(service='reception', timestamp__date=today)
+                          .filter(Q(service_type__name__iexact='Laboratory') | Q(notes__icontains='[visit: laboratory]')))
+    # Queued tickets not yet claimed (be tolerant of empty/legacy status)
+    unclaimed = (base_reception_lab
+                 .filter(Q(status=Visit.Status.QUEUED) | Q(status__isnull=True) | Q(status=''))
+                 .filter(lab_claimed_by__isnull=True)
+                 .order_by('queue_number', 'timestamp'))
+    # Claimed tickets waiting to arrive for the current lab user (or any if superuser)
+    claimed_filter = Q(status=Visit.Status.CLAIMED, lab_arrived=False)
+    if not request.user.is_superuser:
+        claimed_filter &= Q(lab_claimed_by=request.user)
+    claimed_waiting = base_reception_lab.filter(claimed_filter).order_by('queue_number', 'timestamp')
+    # Categorize lab workflow states using LabResult status for today
+    lab_results_today = (LabResult.objects
+                         .select_related('visit__patient')
+                         .filter(visit__timestamp__date=today))
+    ready = lab_results_today.filter(status='queue').order_by('visit__queue_number', 'visit__timestamp')
+    in_process = lab_results_today.filter(status='in_process').order_by('-updated_at')
+    not_done = lab_results_today.filter(status='not_done').order_by('-updated_at')
+    completed = lab_results_today.filter(status='done').order_by('-updated_at')[:20]
+    # Provide lab department choices from ServiceType model (fallback to defaults)
+    lab_service_types = list(ServiceType.objects.filter(is_active=True).order_by('name'))
+    if not lab_service_types:
+        # Fallback list if no ServiceType rows
+        default = [
+            ('Hematology', 'Hematology (Blood Analysis)'),
+            ('Clinical Microscopy', 'Clinical Microscopy (Urine/Stool Exam)'),
+            ('Clinical Chemistry', 'Clinical Chemistry (Blood Chemistry)'),
+            ('Immunology and Serology', 'Immunology and Serology (Infectious Disease Tests)'),
+            ('Microbiology', 'Microbiology (Culture and Sensitivity)'),
+            ('Pathology', 'Pathology (Tissue and Biopsy)'),
+        ]
+        lab_service_types = [type('Svc', (), {'name': n, 'description': d}) for (n, d) in default]
     return render(request, 'dashboard/lab.html', {
         'pending_unclaimed': unclaimed,
         'pending_claimed': claimed_waiting,
-        'in_progress': in_progress,
+        'ready': ready,
+        'in_process': in_process,
+        'not_done': not_done,
         'completed': completed,
+        'lab_service_types': lab_service_types,
+        'lab_types': Laboratory.choices,
+        'lab_type_labels': dict(Laboratory.choices),
     })
 
 
@@ -268,7 +288,10 @@ def lab_claim(request):
         return redirect('dashboard_lab')
     visit.lab_claimed_by = request.user
     visit.lab_claimed_at = timezone.now()
-    visit.save(update_fields=['lab_claimed_by', 'lab_claimed_at'])
+    visit.status = Visit.Status.CLAIMED
+    visit.save(update_fields=['lab_claimed_by', 'lab_claimed_at', 'status'])
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({'success': True, 'status': 'Claimed', 'patient_id': visit.patient_id})
     messages.success(request, 'Ticket claimed. Verify QR on arrival, then receive to start.')
     return redirect('dashboard_lab')
 
@@ -292,38 +315,79 @@ def lab_receive(request):
             if not src.lab_claimed_by:
                 messages.error(request, 'Please claim this ticket first, then verify QR on arrival.')
                 return redirect('dashboard_lab')
-        # If coming from reception, optionally verify QR code matches patient
+        # If coming from reception, verify identity via QR code or email
         if rec_id:
             verify_code = (request.POST.get('verify_code') or '').strip()
-            if not verify_code:
-                messages.error(request, 'Please verify patient QR on arrival before receiving.')
+            patient_email = (request.POST.get('patient_email') or '').strip()
+            if not verify_code and not patient_email:
+                messages.error(request, 'Please verify patient on arrival (scan QR or enter email).')
                 return redirect('dashboard_lab')
-            if getattr(src.patient, 'patient_code', '').strip().upper() != verify_code.strip().upper():
-                messages.error(request, 'QR/Patient code does not match the expected patient for this ticket.')
-                return redirect('dashboard_lab')
+            if patient_email:
+                try:
+                    p = Patient.objects.get(email=patient_email)
+                except Patient.DoesNotExist:
+                    messages.error(request, 'Patient not found for the provided email.')
+                    return redirect('dashboard_lab')
+                if src.patient_id != p.id:
+                    messages.error(request, 'Provided email does not match the expected patient for this ticket.')
+                    return redirect('dashboard_lab')
+            elif verify_code:
+                if getattr(src.patient, 'patient_code', '').strip().upper() != verify_code.strip().upper():
+                    messages.error(request, 'QR/Patient code does not match the expected patient for this ticket.')
+                    return redirect('dashboard_lab')
             # Mark arrival on the reception record
             if not src.lab_arrived:
                 src.lab_arrived = True
-                src.save(update_fields=['lab_arrived'])
+                src.status = Visit.Status.CLAIMED
+                src.save(update_fields=['lab_arrived', 'status'])
         # Carry over queue number for reception-tagged lab arrivals
         qn = src.queue_number if (src_type == 'reception' and src.queue_number) else None
         test_type = request.POST.get('lab_test_type', '').strip()
-        Visit.objects.create(
+        svc = None
+        if test_type:
+            svc = ServiceType.objects.filter(name=test_type).first()
+        new_visit = Visit.objects.create(
             patient=src.patient,
             service='lab',
             notes=(f"Received for lab. From {src_type} #{src.id}."),
             lab_tests=(src.lab_tests if hasattr(src, 'lab_tests') else '') or (src.prescription_notes if hasattr(src, 'prescription_notes') else ''),
             lab_test_type=test_type,
+            service_type=svc,
             queue_number=qn,
             created_by=request.user,
         )
+        # Seed LabResult for this lab visit and set its workflow state
+        lr_status = 'in_process' if test_type else 'queue'
+        LabResult.objects.create(
+            visit=new_visit,
+            lab_type=(test_type or (svc.name if svc else Laboratory.HEMATOLOGY)),
+            status=lr_status,
+            results={},
+        )
+        # Move Visit into in-process immediately when a test type is set
+        if test_type:
+            new_visit.status = Visit.Status.IN_PROCESS
+            new_visit.assigned_to = request.user
+            new_visit.save(update_fields=['status', 'assigned_to'])
         ActivityLog.objects.create(
             actor=request.user,
             verb='Lab Receive',
             description=f"Received tests: {(src.lab_tests if hasattr(src, 'lab_tests') else '') or (src.prescription_notes if hasattr(src, 'prescription_notes') else '')}",
             patient=src.patient,
         )
-    messages.success(request, 'Patient received in laboratory.')
+    # Support AJAX for dynamic UI updates
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({
+            'success': True,
+            'message': 'Patient moved to In Process.' if test_type else 'Patient moved to Ready for Lab Processing.',
+            'status': lr_status,
+            'patient_id': new_visit.patient_id,
+            'lab_visit_id': new_visit.id,
+        })
+    if test_type:
+        messages.success(request, 'Patient moved to In Process.')
+    else:
+        messages.success(request, 'Patient moved to Ready for Lab Processing.')
     return redirect('dashboard_lab')
 
 
@@ -357,6 +421,25 @@ def lab_results_demo(request):
 
 @login_required
 @user_passes_test(lambda u: u.is_superuser or u.groups.filter(name='Laboratory').exists())
+@require_POST
+def lab_verify_email(request):
+    try:
+        rec_id = int(request.POST.get('reception_visit_id') or '0')
+    except Exception:
+        rec_id = 0
+    email = (request.POST.get('patient_email') or '').strip()
+    if not rec_id or not email:
+        return JsonResponse({'success': False, 'message': 'Missing visit or email.'}, status=400)
+    visit = Visit.objects.filter(pk=rec_id, service='reception').select_related('patient').first()
+    if not visit:
+        return JsonResponse({'success': False, 'message': 'Reception visit not found.'}, status=404)
+    if not visit.patient or visit.patient.email.strip().lower() != email.strip().lower():
+        return JsonResponse({'success': False, 'message': 'Email does not match this patient.'}, status=400)
+    return JsonResponse({'success': True})
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser or u.groups.filter(name='Laboratory').exists())
 def lab_work(request, pk: int):
     lab_visit = get_object_or_404(Visit, pk=pk, service='lab')
     if request.method == 'POST':
@@ -370,13 +453,29 @@ def lab_work(request, pk: int):
         if interp:
             parts.append(f"Interpretation: {interp}")
         lab_visit.lab_results = "\n".join(parts) if parts else ''
+        # Handle mark not done vs complete
+        mark_not_done = request.POST.get('mark_not_done') == '1'
         if request.POST.get('complete') == '1':
             lab_visit.lab_completed = True
             lab_visit.lab_completed_at = timezone.now()
+            # Remove not-done tag if present
+            if lab_visit.notes:
+                lab_visit.notes = lab_visit.notes.replace('[Lab: Not Done]', '').strip()
+        else:
+            lab_visit.lab_completed = False
+            if mark_not_done:
+                tag = '[Lab: Not Done]'
+                current = lab_visit.notes or ''
+                if tag.lower() not in current.lower():
+                    lab_visit.notes = (current + (' ' if current else '') + tag).strip()
         lab_visit.save()
-        messages.success(request, 'Lab work saved.')
         if request.POST.get('complete') == '1':
+            messages.success(request, 'Marked as Done.')
             return redirect('dashboard_lab')
+        if mark_not_done:
+            messages.success(request, 'Marked as Not Done.')
+            return redirect('dashboard_lab')
+        messages.success(request, 'Lab work saved.')
         return redirect('lab_work', pk=lab_visit.id)
     # Prefill discrete inputs from stored text (best-effort)
     prefill = {'result_1':'','result_2':'','result_3':'','result_4':'','result_5':'','interpretation':''}
@@ -393,6 +492,56 @@ def lab_work(request, pk: int):
                 prefill['interpretation'] = ln.split(':',1)[1].strip()
                 break
     return render(request, 'dashboard/lab_work.html', {'v': lab_visit, 'prefill': prefill})
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser or u.groups.filter(name='Laboratory').exists())
+def lab_result_work(request, pk: int):
+    # pk refers to a lab Visit
+    lab_visit = get_object_or_404(Visit, pk=pk, service='lab')
+    # Get or create a LabResult entry tied to this visit
+    lr = LabResult.objects.filter(visit=lab_visit).order_by('-updated_at').first()
+    if not lr:
+        lr = LabResult.objects.create(visit=lab_visit, lab_type=(lab_visit.lab_test_type or Laboratory.HEMATOLOGY))
+    if request.method == 'POST':
+        form = LabResultForm(request.POST, instance=lr, initial={'lab_type': lr.lab_type})
+        if form.is_valid():
+            lr.lab_type = form.cleaned_data['lab_type']
+            lr.results = form.to_results_json()
+            action = request.POST.get('action')
+            if action == 'done':
+                lr.status = 'done'
+                lab_visit.status = Visit.Status.DONE
+                lab_visit.lab_completed = True
+                lab_visit.lab_completed_at = timezone.now()
+                lab_visit.save(update_fields=['status','lab_completed','lab_completed_at'])
+            elif action == 'not_done':
+                lr.status = 'not_done'
+            else:
+                lr.status = 'in_process'
+                lab_visit.status = Visit.Status.IN_PROCESS
+                lab_visit.save(update_fields=['status'])
+            lr.save()
+            messages.success(request, 'Lab result saved.')
+            return redirect('dashboard_lab')
+    else:
+        form = LabResultForm(instance=lr, initial={'lab_type': lr.lab_type})
+    return render(request, 'dashboard/lab_result_work.html', {'visit': lab_visit, 'form': form, 'lab_result': lr})
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser or u.groups.filter(name='Laboratory').exists())
+@require_POST
+def lab_set_department(request, pk: int):
+    # Set the laboratory department (test type) for a lab visit
+    lab_visit = get_object_or_404(Visit, pk=pk, service='lab', lab_completed=False)
+    test_type = (request.POST.get('lab_test_type') or '').strip()
+    lab_visit.lab_test_type = test_type
+    svc = ServiceType.objects.filter(name=test_type).first() if test_type else None
+    lab_visit.service_type = svc
+    lab_visit.save(update_fields=['lab_test_type', 'service_type'])
+    messages.success(request, 'Patient moved to In Process.')
+    return redirect('dashboard_lab')
 
 
 @login_required
@@ -595,6 +744,14 @@ def doctor_claim(request):
     today = timezone.localdate()
     rid = request.POST.get('reception_visit_id')
     visit = get_object_or_404(Visit, pk=rid, service='reception', claimed_by__isnull=True)
+    # Enforce department match between doctor specialization and queued department
+    try:
+        doctor_dept = request.user.doctor_profile.specialization
+    except Doctor.DoesNotExist:
+        doctor_dept = None
+    if not doctor_dept or (visit.department and visit.department != doctor_dept):
+        messages.error(request, 'You can only claim patients queued for your department.')
+        return redirect('dashboard_doctor')
     with transaction.atomic():
         # store department and current queue number for renumbering
         dept = visit.department
@@ -705,6 +862,9 @@ def doctor_consult(request, rid: int):
                 if done:
                     draft.doctor_done = True
                     draft.doctor_done_at = timezone.now()
+                    draft.status = Visit.Status.DONE
+                else:
+                    draft.status = Visit.Status.IN_PROCESS
                 draft.save()
             else:
                 draft = Visit.objects.create(
@@ -716,11 +876,14 @@ def doctor_consult(request, rid: int):
                     doctor_user=request.user,
                     doctor_done=done,
                     doctor_done_at=timezone.now() if done else None,
+                    status=Visit.Status.DONE if done else Visit.Status.IN_PROCESS,
                     created_by=request.user,
                 )
         # Update the reception ticket status according to action
-        rec.doctor_status = 'finished' if done else 'not_done'
-        rec.save(update_fields=['doctor_status'])
+        rec.doctor_status = 'finished' if done else 'in_consultation'
+        # Also reflect unified status on the reception ticket
+        rec.status = Visit.Status.DONE if done else Visit.Status.IN_PROCESS
+        rec.save(update_fields=['doctor_status', 'status'])
         messages.success(request, 'Consultation {}.'.format('completed' if done else 'saved as not done'))
         return redirect('dashboard_doctor')
     # If there is an existing not-done consultation for this patient today, load to edit
@@ -739,7 +902,10 @@ def doctor_finish_inprogress(request, rid: int):
     v = get_object_or_404(Visit, pk=rid, service='doctor', doctor_user=request.user, doctor_done=False)
     v.doctor_done = True
     v.doctor_done_at = timezone.now()
-    v.save(update_fields=['doctor_done', 'doctor_done_at'])
+    v.status = Visit.Status.FINISHED
+    v.save(update_fields=['doctor_done', 'doctor_done_at', 'status'])
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({'success': True, 'status': 'Finished', 'patient_id': v.patient_id})
     messages.success(request, 'Consultation marked as done.')
     # Reflect status on reception ticket
     today = timezone.localdate()
@@ -768,6 +934,15 @@ def doctor_consult_edit(request, did: int):
             visit.doctor_done = True
             visit.doctor_done_at = timezone.now()
         visit.save()
+        # Reflect status on reception ticket
+        today = timezone.localdate()
+        rec = (Visit.objects
+               .filter(service='reception', claimed_by=request.user, patient=visit.patient, timestamp__date=today)
+               .order_by('-timestamp')
+               .first())
+        if rec:
+            rec.doctor_status = 'finished' if done else 'in_consultation'
+            rec.save(update_fields=['doctor_status'])
         messages.success(request, 'Consultation {}.'.format('completed' if done else 'updated'))
         return redirect('dashboard_doctor')
     # Reuse consult template

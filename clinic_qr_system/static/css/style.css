@@ -1,0 +1,8 @@
+:root {
+  --bs-primary: #198754; /* Bootstrap success green as primary */
+  --bs-primary-rgb: 25, 135, 84;
+}
+body { background-color: #f8fbf8; }
+.navbar { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+
+
