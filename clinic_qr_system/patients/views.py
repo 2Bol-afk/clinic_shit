@@ -68,7 +68,7 @@ def signup(request):
                 to=[patient.email],
             )
             email.attach(file_name, buffer.getvalue(), 'image/png')
-            email.send(fail_silently=True)
+            email.send(fail_silently=settings.DEBUG)
             # Additional QR email as requested
             try:
                 qr_mail = EmailMessage(
@@ -81,7 +81,7 @@ def signup(request):
                     to=[patient.email],
                 )
                 qr_mail.attach(file_name, buffer.getvalue(), 'image/png')
-                qr_mail.send(fail_silently=True)
+                qr_mail.send(fail_silently=settings.DEBUG)
             except Exception:
                 pass
             # Auto-login
@@ -144,7 +144,7 @@ def register(request):
                 )
                 if patient.qr_code:
                     email.attach(file_name, buffer.getvalue(), 'image/png')
-                email.send(fail_silently=True)
+                email.send(fail_silently=settings.DEBUG)
                 # Additional QR email per requirements
                 try:
                     qr_mail = EmailMessage(
@@ -157,7 +157,7 @@ def register(request):
                         to=[patient.email],
                     )
                     qr_mail.attach(file_name, buffer.getvalue(), 'image/png')
-                    qr_mail.send(fail_silently=True)
+                    qr_mail.send(fail_silently=settings.DEBUG)
                 except Exception:
                     pass
 
