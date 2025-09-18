@@ -293,13 +293,13 @@ def reception_walkin(request):
                 if svc:
                     kwargs['service_type'] = svc
             Visit.objects.create(**kwargs)
-            # Email confirmation with QR attachment (send asynchronously)
-            def _send_confirmation_email(to_email: str, full_name: str, patient_code: str, qr_buffer: BytesIO | None, qr_file_name: str | None, qr_path: str | None):
-                try:
+            # Email confirmation with QR attachment (synchronous with short timeout)
+            try:
+                if patient.email:
                     parts = [
-                        f"Dear {full_name},\n",
+                        f"Dear {patient.full_name},\n",
                         "\nThank you for registering with Clinic QR System.\n",
-                        f"Your Patient Code is: {patient_code}\n",
+                        f"Your Patient Code is: {patient.patient_code}\n",
                     ]
                     if 'temp_password' in locals() and temp_password:
                         parts.append(f"Temporary Password: {temp_password}\n")
@@ -307,36 +307,29 @@ def reception_walkin(request):
                     parts.append("\nPlease keep this email for future reference.\n")
                     parts.append("You can use the attached QR code for faster check-in at the reception.\n\n")
                     parts.append("Regards,\nClinic QR System")
-                    body_local = ''.join(parts)
-                    email_local = EmailMessage(
+                    body_sync = ''.join(parts)
+                    email_sync = EmailMessage(
                         subject='Your Patient QR Code and Registration Details',
-                        body=body_local,
+                        body=body_sync,
                         from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None) or None,
-                        to=[to_email],
+                        to=[patient.email],
                     )
-                    if qr_path:
+                    qr_path_val = getattr(patient.qr_code, 'path', None)
+                    if qr_path_val:
                         try:
-                            with open(qr_path, 'rb') as f:
-                                email_local.attach(f"qr_{patient_code}.png", f.read(), 'image/png')
+                            with open(qr_path_val, 'rb') as f:
+                                email_sync.attach(f"qr_{patient.patient_code}.png", f.read(), 'image/png')
                         except Exception:
                             pass
-                    elif qr_buffer:
-                        email_local.attach(qr_file_name or 'qr.png', (qr_buffer.getvalue() if qr_buffer else b''), 'image/png')
-                    email_local.send(fail_silently=True)
-                except Exception:
-                    # swallow in background to avoid crashing worker
-                    pass
-
-            try:
-                if patient.email:
-                    threading.Thread(
-                        target=_send_confirmation_email,
-                        args=(patient.email, patient.full_name, patient.patient_code, buffer, file_name, getattr(patient.qr_code, 'path', None)),
-                        daemon=True,
-                    ).start()
-                    messages.info(request, f'Sending confirmation email to {patient.email}...')
+                    elif buffer:
+                        email_sync.attach(file_name or 'qr.png', (buffer.getvalue() if buffer else b''), 'image/png')
+                    sent_now = email_sync.send(fail_silently=False)
+                    if sent_now:
+                        messages.success(request, f'Confirmation email sent to {patient.email}.')
+                    else:
+                        messages.warning(request, f'Confirmation email not sent to {patient.email}.')
             except Exception as e:
-                messages.error(request, f'Email scheduling failed: {e}')
+                messages.error(request, f'Email send failed: {e}')
             messages.success(request, 'Walk-in patient registered and queued.')
             return redirect('dashboard_reception')
     else:

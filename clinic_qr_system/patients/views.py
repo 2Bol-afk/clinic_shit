@@ -59,40 +59,35 @@ def signup(request):
                 patient.save(update_fields=['user'])
                 group, _ = Group.objects.get_or_create(name='Patient')
                 user.groups.add(group)
-            # Email QR and confirmation (send asynchronously)
-            def _send_signup_email(to_email: str, full_name: str, patient_code: str, username_local: str, qr_buffer: BytesIO | None, qr_file_name: str, qr_path: str | None):
-                try:
+            # Email QR and confirmation (synchronous send for clear feedback)
+            try:
+                if patient.email:
                     body = (
-                        f"Dear {full_name},\n\nYour patient code is {patient_code}. "
-                        f"Use username {username_local} to log in."
+                        f"Dear {patient.full_name},\n\nYour patient code is {patient.patient_code}. "
+                        f"Use username {username} to log in."
                     )
                     msg = EmailMessage(
                         subject='Your Digital Health Pass',
                         body=body,
                         from_email=settings.DEFAULT_FROM_EMAIL,
-                        to=[to_email],
+                        to=[patient.email],
                     )
+                    qr_path = getattr(patient.qr_code, 'path', None)
                     if qr_path:
                         try:
                             with open(qr_path, 'rb') as f:
-                                msg.attach(qr_file_name, f.read(), 'image/png')
+                                msg.attach(file_name, f.read(), 'image/png')
                         except Exception:
                             pass
-                    elif qr_buffer:
-                        msg.attach(qr_file_name, qr_buffer.getvalue(), 'image/png')
-                    msg.send(fail_silently=True)
-                except Exception:
-                    pass
-
-            try:
-                if patient.email:
-                    threading.Thread(
-                        target=_send_signup_email,
-                        args=(patient.email, patient.full_name, patient.patient_code, username, buffer, file_name, getattr(patient.qr_code, 'path', None)),
-                        daemon=True,
-                    ).start()
-            except Exception:
-                pass
+                    elif buffer:
+                        msg.attach(file_name, buffer.getvalue(), 'image/png')
+                    sent = msg.send(fail_silently=False)
+                    if sent:
+                        messages.success(request, f'Confirmation email sent to {patient.email}.')
+                    else:
+                        messages.warning(request, f'Confirmation email not sent to {patient.email}.')
+            except Exception as e:
+                messages.error(request, f'Email send failed: {e}')
             # Auto-login
             user = authenticate(request, username=username, password=password)
             if user:
@@ -138,45 +133,40 @@ def register(request):
                 group, _ = Group.objects.get_or_create(name='Patient')
                 user.groups.add(group)
 
-            # Email QR code + credentials (send asynchronously)
-            def _send_register_email(to_email: str, full_name: str, patient_code: str, username_local: str, temp_pwd: str, qr_buffer: BytesIO | None, qr_file_name: str, qr_path: str | None):
-                try:
+            # Email QR code + credentials (synchronous send for clear feedback)
+            try:
+                if patient.email:
                     body = (
-                        f"Dear {full_name},\n\n"
-                        f"Your patient code: {patient_code}.\n"
-                        f"Portal login: {username_local}\n"
-                        f"Temporary password: {temp_pwd}\n\n"
+                        f"Dear {patient.full_name},\n\n"
+                        f"Your patient code: {patient.patient_code}.\n"
+                        f"Portal login: {username}\n"
+                        f"Temporary password: {temp_password}\n\n"
                         f"Please change your password after logging in at /accounts/login/.\n"
                     )
                     msg = EmailMessage(
                         subject='Your Digital Health Pass & Portal Access',
                         body=body,
                         from_email=settings.DEFAULT_FROM_EMAIL,
-                        to=[to_email],
+                        to=[patient.email],
                     )
+                    qr_path = getattr(patient.qr_code, 'path', None)
                     if qr_path:
                         try:
                             with open(qr_path, 'rb') as f:
-                                msg.attach(qr_file_name, f.read(), 'image/png')
+                                msg.attach(file_name, f.read(), 'image/png')
                         except Exception:
                             pass
-                    elif qr_buffer:
-                        msg.attach(qr_file_name, qr_buffer.getvalue(), 'image/png')
-                    msg.send(fail_silently=True)
-                except Exception:
-                    pass
+                    elif buffer:
+                        msg.attach(file_name, buffer.getvalue(), 'image/png')
+                    sent = msg.send(fail_silently=False)
+                    if sent:
+                        messages.success(request, f'Confirmation email sent to {patient.email}.')
+                    else:
+                        messages.warning(request, f'Confirmation email not sent to {patient.email}.')
+            except Exception as e:
+                messages.error(request, f'Email send failed: {e}')
 
-            try:
-                if patient.email:
-                    threading.Thread(
-                        target=_send_register_email,
-                        args=(patient.email, patient.full_name, patient.patient_code, username, temp_password, buffer, file_name, getattr(patient.qr_code, 'path', None)),
-                        daemon=True,
-                    ).start()
-            except Exception:
-                pass
-
-            messages.success(request, 'Registration complete. Sending your QR to your Gmail...')
+            messages.success(request, 'Registration complete.')
             return redirect(reverse('patient_register_success'))
     else:
         form = PatientRegistrationForm()
