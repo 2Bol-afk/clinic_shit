@@ -65,10 +65,18 @@ class LabResultForm(forms.Form):
         # Pre-select lab_type in form
         if lab_type_value:
             self.fields['lab_type'].initial = lab_type_value
+        # Ensure select styling
+        self.fields['lab_type'].widget.attrs['class'] = (
+            (self.fields['lab_type'].widget.attrs.get('class', '') + ' form-select').strip()
+        )
         # Build dynamic fields
         lt = lab_type_value or Laboratory.HEMATOLOGY
         for name, label in LAB_FIELDS.get(lt, []):
             self.fields[name] = forms.CharField(label=label, required=False)
+            # Apply consistent control styling
+            self.fields[name].widget.attrs['class'] = (
+                (self.fields[name].widget.attrs.get('class', '') + ' form-control').strip()
+            )
             # Prefill from instance JSON
             if self.instance and isinstance(self.instance.results, dict):
                 self.fields[name].initial = self.instance.results.get(name, '')

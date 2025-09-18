@@ -1,0 +1,7 @@
+.lab-work-card .form-label { font-weight: 600; }
+.lab-work-card .form-control, .lab-work-card .form-select {
+  border-radius: .5rem;
+  border-color: #dee2e6;
+}
+.lab-work-actions .btn { min-width: 160px; }
+

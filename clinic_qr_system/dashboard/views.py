@@ -761,7 +761,11 @@ def lab_result_work(request, pk: int):
         form = LabResultForm(request.POST, instance=lr, initial={'lab_type': lr.lab_type})
         if form.is_valid():
             lr.lab_type = form.cleaned_data['lab_type']
-            lr.results = form.to_results_json()
+            new_results = form.to_results_json()
+            # Preserve previously entered results if nothing was submitted (e.g., marking Not Done without changes)
+            if not new_results:
+                new_results = lr.results or {}
+            lr.results = new_results
             action = request.POST.get('action')
             if action == 'done':
                 lr.status = 'done'
