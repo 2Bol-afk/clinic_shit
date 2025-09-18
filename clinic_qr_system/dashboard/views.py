@@ -23,7 +23,7 @@ from django.http import JsonResponse
 import re
 import csv
 import os
-from django.core.mail import send_mail
+from django.core.mail import send_mail, get_connection
 try:
     from openpyxl import Workbook
 except Exception:
@@ -41,16 +41,24 @@ def is_reception(user):
 def send_test_email(request):
     to = request.GET.get('to') or os.getenv('TEST_EMAIL_TO') or settings.EMAIL_HOST_USER
     try:
-        sent = send_mail(
+        # Use a short timeout to avoid worker hangs on providers that block SMTP
+        timeout = int(os.getenv('EMAIL_TEST_TIMEOUT', '5'))
+        connection = get_connection(timeout=timeout, fail_silently=False)
+        msg = EmailMessage(
             subject='SMTP live test',
-            message='Hello from Clinic QR System.',
+            body='Hello from Clinic QR System.',
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[to],
-            fail_silently=False,
+            to=[to],
         )
-        return HttpResponse(f'OK sent={sent} to={to} FROM={settings.DEFAULT_FROM_EMAIL}')
+        sent = connection.send_messages([msg])
+        if sent:
+            messages.success(request, f'Email sent successfully to {to}.')
+        else:
+            messages.warning(request, f'No email was sent to {to}.')
+        return redirect(request.META.get('HTTP_REFERER') or 'dashboard_index')
     except Exception as e:
-        return HttpResponse(f'ERROR: {e}', status=500)
+        messages.error(request, f'Email send failed: {e}. If on a free host, SMTP may be blocked. Try a provider API (SendGrid/Mailgun) or set EMAIL_BACKEND to console for testing.')
+        return redirect(request.META.get('HTTP_REFERER') or 'dashboard_index')
 
 @login_required
 def index(request):
@@ -317,9 +325,10 @@ def reception_walkin(request):
                             pass
                     elif buffer:
                         email.attach(file_name or 'qr.png', (buffer.getvalue() if buffer else b''), 'image/png')
-                    email.send(fail_silently=True)
+                    email.send(fail_silently=settings.DEBUG)
             except Exception:
-                pass
+                if settings.DEBUG:
+                    raise
             messages.success(request, 'Walk-in patient registered and queued.')
             return redirect('dashboard_reception')
     else:

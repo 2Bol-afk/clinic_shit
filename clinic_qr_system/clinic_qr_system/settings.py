@@ -130,12 +130,13 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # Crispy Forms
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = 'bootstrap5'
+#'aayaxwoovhqnltwb'
 
 # Email configuration
 EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'roelsolera904@gmail.com')  # set in environment
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD','aayaxwoovhqnltwb')  # set in environment (app password)
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')  # set in environment
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')  # set in environment (app password)
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'true').lower() in ('1','true','yes')
 EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'false').lower() in ('1','true','yes')
 
