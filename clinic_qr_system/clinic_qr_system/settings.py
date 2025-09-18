@@ -150,6 +150,9 @@ EMAIL_BACKEND = (
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER or os.getenv('DEFAULT_FROM_EMAIL', 'noreply@example.com')
 SERVER_EMAIL = os.getenv('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
 
+# SMTP timeout (seconds) to avoid hanging workers if provider is unreachable
+EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '30'))
+
 # Security behind proxy (Render)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_SECURE = not DEBUG
