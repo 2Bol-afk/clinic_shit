@@ -44,7 +44,7 @@ def send_test_email(request):
         sent = send_mail(
             subject='SMTP live test',
             message='Hello from Clinic QR System.',
-            from_email=settings.DEFAULT_FROM_EMAIL,
+            from_email=(getattr(settings, 'EMAIL_HOST_USER', None) or settings.DEFAULT_FROM_EMAIL),
             recipient_list=[to],
             fail_silently=False,
         )
@@ -310,7 +310,7 @@ def reception_walkin(request):
                     email = EmailMessage(
                         subject='Your Patient QR Code and Registration Details',
                         body=body,
-                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None) or None,
+                        from_email=(getattr(settings, 'EMAIL_HOST_USER', None) or getattr(settings, 'DEFAULT_FROM_EMAIL', None) or None),
                         to=[patient.email],
                     )
                     if (patient.qr_code and hasattr(patient.qr_code, 'path')):

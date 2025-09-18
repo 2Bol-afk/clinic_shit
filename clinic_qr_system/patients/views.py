@@ -64,7 +64,7 @@ def signup(request):
                     f"Dear {patient.full_name},\n\nYour patient code is {patient.patient_code}. "
                     f"Use username {username} to log in."
                 ),
-                from_email=settings.DEFAULT_FROM_EMAIL,
+                from_email=(getattr(settings, 'EMAIL_HOST_USER', None) or settings.DEFAULT_FROM_EMAIL),
                 to=[patient.email],
             )
             email.attach(file_name, buffer.getvalue(), 'image/png')
@@ -77,7 +77,7 @@ def signup(request):
                         f"Dear {patient.full_name}, thank you for registering. "
                         f"Attached is your QR code for quick access to your patient dashboard."
                     ),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    from_email=(getattr(settings, 'EMAIL_HOST_USER', None) or settings.DEFAULT_FROM_EMAIL),
                     to=[patient.email],
                 )
                 qr_mail.attach(file_name, buffer.getvalue(), 'image/png')
@@ -139,7 +139,7 @@ def register(request):
                         f"Temporary password: {temp_password}\n\n"
                         f"Please change your password after logging in at /accounts/login/.\n"
                     ),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    from_email=(getattr(settings, 'EMAIL_HOST_USER', None) or settings.DEFAULT_FROM_EMAIL),
                     to=[patient.email],
                 )
                 if patient.qr_code:
@@ -153,7 +153,7 @@ def register(request):
                             f"Dear {patient.full_name}, thank you for registering. "
                             f"Attached is your QR code for quick access to your patient dashboard."
                         ),
-                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        from_email=(getattr(settings, 'EMAIL_HOST_USER', None) or settings.DEFAULT_FROM_EMAIL),
                         to=[patient.email],
                     )
                     qr_mail.attach(file_name, buffer.getvalue(), 'image/png')
