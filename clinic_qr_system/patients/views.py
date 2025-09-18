@@ -64,11 +64,11 @@ def signup(request):
                     f"Dear {patient.full_name},\n\nYour patient code is {patient.patient_code}. "
                     f"Use username {username} to log in."
                 ),
-                from_email=(getattr(settings, 'EMAIL_HOST_USER', None) or settings.DEFAULT_FROM_EMAIL),
+                from_email=settings.DEFAULT_FROM_EMAIL,
                 to=[patient.email],
             )
             email.attach(file_name, buffer.getvalue(), 'image/png')
-            email.send(fail_silently=False)
+            email.send(fail_silently=settings.DEBUG)
             # Additional QR email as requested
             try:
                 qr_mail = EmailMessage(
@@ -77,11 +77,11 @@ def signup(request):
                         f"Dear {patient.full_name}, thank you for registering. "
                         f"Attached is your QR code for quick access to your patient dashboard."
                     ),
-                    from_email=(getattr(settings, 'EMAIL_HOST_USER', None) or settings.DEFAULT_FROM_EMAIL),
+                    from_email=settings.DEFAULT_FROM_EMAIL,
                     to=[patient.email],
                 )
                 qr_mail.attach(file_name, buffer.getvalue(), 'image/png')
-                qr_mail.send(fail_silently=False)
+                qr_mail.send(fail_silently=settings.DEBUG)
             except Exception:
                 pass
             # Auto-login
@@ -139,12 +139,12 @@ def register(request):
                         f"Temporary password: {temp_password}\n\n"
                         f"Please change your password after logging in at /accounts/login/.\n"
                     ),
-                    from_email=(getattr(settings, 'EMAIL_HOST_USER', None) or settings.DEFAULT_FROM_EMAIL),
+                    from_email=settings.DEFAULT_FROM_EMAIL,
                     to=[patient.email],
                 )
                 if patient.qr_code:
                     email.attach(file_name, buffer.getvalue(), 'image/png')
-                email.send(fail_silently=False)
+                email.send(fail_silently=settings.DEBUG)
                 # Additional QR email per requirements
                 try:
                     qr_mail = EmailMessage(
@@ -153,11 +153,11 @@ def register(request):
                             f"Dear {patient.full_name}, thank you for registering. "
                             f"Attached is your QR code for quick access to your patient dashboard."
                         ),
-                        from_email=(getattr(settings, 'EMAIL_HOST_USER', None) or settings.DEFAULT_FROM_EMAIL),
+                        from_email=settings.DEFAULT_FROM_EMAIL,
                         to=[patient.email],
                     )
                     qr_mail.attach(file_name, buffer.getvalue(), 'image/png')
-                    qr_mail.send(fail_silently=False)
+                    qr_mail.send(fail_silently=settings.DEBUG)
                 except Exception:
                     pass
 
