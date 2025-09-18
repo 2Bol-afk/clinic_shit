@@ -12,9 +12,6 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
-import django_heroku
-django_heroku.settings(locals())
-
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -186,5 +183,15 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@clinic.local')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
+
+# Secret key (from Render environment variables)
+SECRET_KEY = os.environ.get("SECRET_KEY", "vk@hh$()uzrvsjrp)icxonor&8$#$s4b+i=fp&%4a8^=l&bw90A")
+
+# Debug mode (default False)
+DEBUG = os.environ.get("DEBUG", "False") == "True"
+
+# Allowed hosts (comma-separated in env var)
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
