@@ -21,6 +21,7 @@ from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 from django.http import JsonResponse
 import re
+import threading
 import csv
 import os
 from django.core.mail import send_mail
@@ -292,42 +293,50 @@ def reception_walkin(request):
                 if svc:
                     kwargs['service_type'] = svc
             Visit.objects.create(**kwargs)
-            # Email confirmation with QR attachment (explicit feedback)
-            try:
-                if patient.email:
-                    body_parts = [
-                        f"Dear {patient.full_name},\n",
+            # Email confirmation with QR attachment (send asynchronously)
+            def _send_confirmation_email(to_email: str, full_name: str, patient_code: str, qr_buffer: BytesIO | None, qr_file_name: str | None, qr_path: str | None):
+                try:
+                    parts = [
+                        f"Dear {full_name},\n",
                         "\nThank you for registering with Clinic QR System.\n",
-                        f"Your Patient Code is: {patient.patient_code}\n",
+                        f"Your Patient Code is: {patient_code}\n",
                     ]
                     if 'temp_password' in locals() and temp_password:
-                        body_parts.append(f"Temporary Password: {temp_password}\n")
-                        body_parts.append("\nPlease log in using the temporary password and change it on your first login.\n")
-                    body_parts.append("\nPlease keep this email for future reference.\n")
-                    body_parts.append("You can use the attached QR code for faster check-in at the reception.\n\n")
-                    body_parts.append("Regards,\nClinic QR System")
-                    body = ''.join(body_parts)
-                    email = EmailMessage(
+                        parts.append(f"Temporary Password: {temp_password}\n")
+                        parts.append("\nPlease log in using the temporary password and change it on your first login.\n")
+                    parts.append("\nPlease keep this email for future reference.\n")
+                    parts.append("You can use the attached QR code for faster check-in at the reception.\n\n")
+                    parts.append("Regards,\nClinic QR System")
+                    body_local = ''.join(parts)
+                    email_local = EmailMessage(
                         subject='Your Patient QR Code and Registration Details',
-                        body=body,
+                        body=body_local,
                         from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None) or None,
-                        to=[patient.email],
+                        to=[to_email],
                     )
-                    if (patient.qr_code and hasattr(patient.qr_code, 'path')):
+                    if qr_path:
                         try:
-                            with open(patient.qr_code.path, 'rb') as f:
-                                email.attach(f"qr_{patient.patient_code}.png", f.read(), 'image/png')
+                            with open(qr_path, 'rb') as f:
+                                email_local.attach(f"qr_{patient_code}.png", f.read(), 'image/png')
                         except Exception:
                             pass
-                    elif buffer:
-                        email.attach(file_name or 'qr.png', (buffer.getvalue() if buffer else b''), 'image/png')
-                    sent_count = email.send(fail_silently=False)
-                    if sent_count:
-                        messages.success(request, f'Confirmation email sent to {patient.email}.')
-                    else:
-                        messages.warning(request, f'Confirmation email not sent to {patient.email}.')
+                    elif qr_buffer:
+                        email_local.attach(qr_file_name or 'qr.png', (qr_buffer.getvalue() if qr_buffer else b''), 'image/png')
+                    email_local.send(fail_silently=True)
+                except Exception:
+                    # swallow in background to avoid crashing worker
+                    pass
+
+            try:
+                if patient.email:
+                    threading.Thread(
+                        target=_send_confirmation_email,
+                        args=(patient.email, patient.full_name, patient.patient_code, buffer, file_name, getattr(patient.qr_code, 'path', None)),
+                        daemon=True,
+                    ).start()
+                    messages.info(request, f'Sending confirmation email to {patient.email}...')
             except Exception as e:
-                messages.error(request, f'Email send failed: {e}')
+                messages.error(request, f'Email scheduling failed: {e}')
             messages.success(request, 'Walk-in patient registered and queued.')
             return redirect('dashboard_reception')
     else:
@@ -1478,3 +1487,4 @@ def doctor_consult_edit(request, did: int):
         return redirect('dashboard_doctor')
     # Reuse consult template
     return render(request, 'dashboard/doctor_consult.html', {'rec': None, 'draft': visit, 'is_edit': True})
+
