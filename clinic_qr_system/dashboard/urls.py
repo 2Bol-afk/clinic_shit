@@ -39,6 +39,7 @@ urlpatterns = [
     path('doctors/consult/<int:rid>/', views.doctor_consult, name='doctor_consult'),
     path('doctors/consult/<int:rid>/finish/', views.doctor_finish_inprogress, name='doctor_finish_inprogress'),
     path('doctors/consult/edit/<int:did>/', views.doctor_consult_edit, name='doctor_consult_edit'),
+    path('admin/send-test-email/', views.send_test_email, name='send_test_email'),
 ]
 
 

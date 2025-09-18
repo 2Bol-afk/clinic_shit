@@ -22,6 +22,8 @@ from django.http import HttpResponse
 from django.http import JsonResponse
 import re
 import csv
+import os
+from django.core.mail import send_mail
 try:
     from openpyxl import Workbook
 except Exception:
@@ -34,7 +36,21 @@ def is_admin(user):
 
 def is_reception(user):
     return user.is_superuser or user.groups.filter(name='Reception').exists()
-
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def send_test_email(request):
+    to = request.GET.get('to') or os.getenv('TEST_EMAIL_TO') or settings.EMAIL_HOST_USER
+    try:
+        sent = send_mail(
+            subject='SMTP live test',
+            message='Hello from Clinic QR System.',
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[to],
+            fail_silently=False,
+        )
+        return HttpResponse(f'OK sent={sent} to={to} FROM={settings.DEFAULT_FROM_EMAIL}')
+    except Exception as e:
+        return HttpResponse(f'ERROR: {e}', status=500)
 
 @login_required
 def index(request):
