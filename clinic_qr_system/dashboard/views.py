@@ -292,7 +292,7 @@ def reception_walkin(request):
                 if svc:
                     kwargs['service_type'] = svc
             Visit.objects.create(**kwargs)
-            # Email confirmation with QR attachment (best-effort)
+            # Email confirmation with QR attachment (explicit feedback)
             try:
                 if patient.email:
                     body_parts = [
@@ -321,10 +321,13 @@ def reception_walkin(request):
                             pass
                     elif buffer:
                         email.attach(file_name or 'qr.png', (buffer.getvalue() if buffer else b''), 'image/png')
-                    email.send(fail_silently=settings.DEBUG)
-            except Exception:
-                if settings.DEBUG:
-                    raise
+                    sent_count = email.send(fail_silently=False)
+                    if sent_count:
+                        messages.success(request, f'Confirmation email sent to {patient.email}.')
+                    else:
+                        messages.warning(request, f'Confirmation email not sent to {patient.email}.')
+            except Exception as e:
+                messages.error(request, f'Email send failed: {e}')
             messages.success(request, 'Walk-in patient registered and queued.')
             return redirect('dashboard_reception')
     else:
