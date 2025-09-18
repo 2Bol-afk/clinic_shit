@@ -321,6 +321,7 @@ def reception_walkin(request):
                             pass
                     elif buffer:
                         email.attach(file_name or 'qr.png', (buffer.getvalue() if buffer else b''), 'image/png')
+                    # Use a short timeout from settings to avoid long blocking on free hosts
                     sent_count = email.send(fail_silently=False)
                     if sent_count:
                         messages.success(request, f'Confirmation email sent to {patient.email}.')
