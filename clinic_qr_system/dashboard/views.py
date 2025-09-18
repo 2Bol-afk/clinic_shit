@@ -23,7 +23,7 @@ from django.http import JsonResponse
 import re
 import csv
 import os
-from django.core.mail import send_mail, get_connection
+from django.core.mail import send_mail
 try:
     from openpyxl import Workbook
 except Exception:
@@ -39,26 +39,22 @@ def is_reception(user):
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def send_test_email(request):
-    to = request.GET.get('to') or os.getenv('TEST_EMAIL_TO') or settings.EMAIL_HOST_USER
+    to = request.GET.get('to') or os.getenv('TEST_EMAIL_TO') or settings.DEFAULT_FROM_EMAIL
     try:
-        # Use a short timeout to avoid worker hangs on providers that block SMTP
-        timeout = int(os.getenv('EMAIL_TEST_TIMEOUT', '5'))
-        connection = get_connection(timeout=timeout, fail_silently=False)
-        msg = EmailMessage(
+        sent = send_mail(
             subject='SMTP live test',
-            body='Hello from Clinic QR System.',
+            message='Hello from Clinic QR System.',
             from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[to],
+            recipient_list=[to],
+            fail_silently=False,
         )
-        sent = connection.send_messages([msg])
         if sent:
             messages.success(request, f'Email sent successfully to {to}.')
         else:
             messages.warning(request, f'No email was sent to {to}.')
-        return redirect(request.META.get('HTTP_REFERER') or 'dashboard_index')
     except Exception as e:
-        messages.error(request, f'Email send failed: {e}. If on a free host, SMTP may be blocked. Try a provider API (SendGrid/Mailgun) or set EMAIL_BACKEND to console for testing.')
-        return redirect(request.META.get('HTTP_REFERER') or 'dashboard_index')
+        messages.error(request, f'Email send failed: {e}')
+    return redirect(request.META.get('HTTP_REFERER') or 'dashboard_index')
 
 @login_required
 def index(request):

@@ -133,26 +133,21 @@ CRISPY_TEMPLATE_PACK = 'bootstrap5'
 #'aayaxwoovhqnltwb'
 
 # Email configuration
-EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')  # set in environment
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')  # set in environment (app password)
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'true').lower() in ('1','true','yes')
-EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'false').lower() in ('1','true','yes')
+# Use console backend locally (DEBUG); use Gmail SMTP with App Password in production (Render)
+if DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = 'smtp.gmail.com'
+    EMAIL_PORT = 587
+    EMAIL_USE_TLS = True
+    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
+    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+    EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '30'))
 
-if EMAIL_USE_TLS and EMAIL_USE_SSL:
-    EMAIL_USE_SSL = False  # prefer TLS
-
-EMAIL_BACKEND = (
-    'django.core.mail.backends.smtp.EmailBackend'
-    if (not DEBUG and EMAIL_HOST_USER and EMAIL_HOST_PASSWORD)
-    else 'django.core.mail.backends.console.EmailBackend'
-)
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER or os.getenv('DEFAULT_FROM_EMAIL', 'noreply@example.com')
+# From/Server identities
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', os.getenv('EMAIL_HOST_USER', 'noreply@example.com'))
 SERVER_EMAIL = os.getenv('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
-
-# SMTP timeout (seconds) to avoid hanging workers if provider is unreachable
-EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '30'))
 
 # Security behind proxy (Render)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
