@@ -15,6 +15,7 @@ from django.contrib import messages
 import os
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User, Group
+from django.utils.text import slugify
 from django.contrib.auth import login as auth_login, authenticate
 from django.contrib.auth.decorators import login_required
 from django.urls import reverse_lazy
@@ -52,7 +53,15 @@ def signup(request):
                 except Exception:
                     pass
                 # Create user with provided password
-                username = f"p_{patient.patient_code.lower()}"
+                # Generate username from full name, ensure uniqueness
+                base_username = slugify(patient.full_name) or 'user'
+                candidate = base_username[:150]
+                i = 1
+                while User.objects.filter(username=candidate).exists():
+                    suffix = str(i)
+                    candidate = (base_username[: max(1, 150 - len(suffix))] + suffix)
+                    i += 1
+                username = candidate
                 password = form.cleaned_data['password']
                 user = User.objects.create_user(username=username, email=patient.email, password=password)
                 patient.user = user
@@ -123,7 +132,15 @@ def register(request):
                     pass
 
                 # Create user credentials for patient portal
-                username = f"p_{patient.patient_code.lower()}"
+                # Generate username from full name, ensure uniqueness
+                base_username = slugify(patient.full_name) or 'user'
+                candidate = base_username[:150]
+                i = 1
+                while User.objects.filter(username=candidate).exists():
+                    suffix = str(i)
+                    candidate = (base_username[: max(1, 150 - len(suffix))] + suffix)
+                    i += 1
+                username = candidate
                 temp_password = uuid.uuid4().hex[:12]
                 user = User.objects.create_user(username=username, email=patient.email, password=temp_password)
                 patient.user = user

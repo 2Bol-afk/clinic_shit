@@ -7,6 +7,7 @@ from patients.models import Patient, Doctor
 from visits.models import Visit, ServiceType, LabResult, Laboratory, VaccinationRecord, VaccinationType
 from visits.forms import LabResultForm, VaccinationForm
 from django.contrib.auth.models import Group, User
+from django.utils.text import slugify
 from .models import ActivityLog
 from patients.forms import DoctorForm
 from django import forms
@@ -217,7 +218,15 @@ def reception_walkin(request):
                 # Create portal user with temp password and force change
                 try:
                     temp_password = uuid.uuid4().hex[:12]
-                    username = f"p_{patient.patient_code.lower()}"
+                    # Generate username from full name, ensure uniqueness
+                    base_username = slugify(patient.full_name) or 'user'
+                    candidate = base_username[:150]
+                    i = 1
+                    while User.objects.filter(username=candidate).exists():
+                        suffix = str(i)
+                        candidate = (base_username[: max(1, 150 - len(suffix))] + suffix)
+                        i += 1
+                    username = candidate
                     user = User.objects.create_user(username=username, email=patient.email, password=temp_password)
                     patient.user = user
                     patient.must_change_password = True
@@ -248,7 +257,15 @@ def reception_walkin(request):
                     try:
                         import uuid as _uuid
                         temp_password = _uuid.uuid4().hex[:12]
-                        username = f"p_{existing.patient_code.lower()}"
+                        # Generate username from full name, ensure uniqueness
+                        base_username = slugify(existing.full_name) or 'user'
+                        candidate = base_username[:150]
+                        i = 1
+                        while User.objects.filter(username=candidate).exists():
+                            suffix = str(i)
+                            candidate = (base_username[: max(1, 150 - len(suffix))] + suffix)
+                            i += 1
+                        username = candidate
                         user = User.objects.create_user(username=username, email=existing.email, password=temp_password)
                         existing.user = user
                         existing.must_change_password = True

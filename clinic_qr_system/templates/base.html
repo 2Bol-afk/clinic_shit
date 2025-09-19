@@ -18,7 +18,7 @@
   <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-success">
       <div class="container-fluid">
-        <a class="navbar-brand d-flex align-items-center" href="/">
+        <a class="navbar-brand d-flex align-items-center" href="{% if request.user.is_authenticated %}{% if request.user.is_superuser %}/dashboard/{% elif request.user.groups.all.0.name == 'Reception' %}/dashboard/reception/{% elif request.user.groups.all.0.name == 'Doctor' %}/dashboard/doctor/{% elif request.user.groups.all.0.name == 'Laboratory' %}/dashboard/lab/{% elif request.user.groups.all.0.name == 'Pharmacy' %}/dashboard/pharmacy/{% elif request.user.groups.all.0.name == 'Vaccination' %}/dashboard/vaccination/{% elif request.user.groups.all.0.name == 'Patient' %}/patients/portal/{% else %}/dashboard/{% endif %}{% else %}/accounts/login/{% endif %}">
           <i class="bi bi-hospital me-2"></i>Clinic QR System
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarsMain">

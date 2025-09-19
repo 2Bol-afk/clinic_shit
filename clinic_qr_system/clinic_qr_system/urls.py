@@ -30,4 +30,5 @@ urlpatterns = [
     path('patients/', include('patients.urls')),
     path('visits/', include('visits.urls')),
     path('dashboard/', include('dashboard.urls')),
+    path('gmail-test/', include('gmail_test.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

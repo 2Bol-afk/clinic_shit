@@ -1,17 +1,7 @@
 {% extends 'base.html' %}
 {% block content %}
 <h4 class="d-flex align-items-center mb-3"><i class="bi bi-person-vcard text-success me-2"></i>Patient Dashboard</h4>
-<div class="card shadow-sm mb-3">
-  <div class="card-body">
-    <label class="form-label">Scan QR / Enter Patient Code</label>
-    <div class="input-group">
-      <span class="input-group-text"><i class="bi bi-qr-code-scan"></i></span>
-      <input type="text" class="form-control" id="pScanCode" placeholder="Scan or type code" value="{{ patient.patient_code }}">
-      <button class="btn btn-outline-secondary" id="pScanBtn"><i class="bi bi-search me-1"></i>Load</button>
-    </div>
-    <div class="small text-muted mt-1">Tip: Your patient code is prefilled.</div>
-  </div>
-</div>
+ 
 
 <div class="row g-3">
   <div class="col-lg-4">
@@ -61,20 +51,5 @@
   </div>
 </div>
 
-<script>
-(function(){
-  const btn = document.getElementById('pScanBtn');
-  const inp = document.getElementById('pScanCode');
-  if(btn && inp){
-    const go = ()=>{
-      const code = (inp.value||'').trim();
-      if(!code) return;
-      // Redirect to own dashboard with code param (future: could use API to load family members)
-      location.href = '/patients/portal/?code=' + encodeURIComponent(code);
-    };
-    btn.addEventListener('click', go);
-    inp.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); go(); }});
-  }
-})();
-</script>
+ 
 {% endblock %}
