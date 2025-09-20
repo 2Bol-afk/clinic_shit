@@ -89,9 +89,19 @@ class BrevoEmailBackend(BaseEmailBackend):
             # Prepare recipients
             to_recipients = []
             for email in message.to:
+                # Extract name from email if it's in format "Name <email@domain.com>"
+                recipient_name = email
+                if '<' in email and '>' in email:
+                    # Format: "Name <email@domain.com>"
+                    recipient_name = email.split('<')[0].strip()
+                    email = email.split('<')[1].split('>')[0].strip()
+                elif '@' in email:
+                    # Just email address, use email prefix as name
+                    recipient_name = email.split('@')[0]
+                
                 to_recipients.append(sib_api_v3_sdk.SendSmtpEmailTo(
                     email=email,
-                    name=""  # We don't have recipient names
+                    name=recipient_name
                 ))
             
             # Prepare email content
