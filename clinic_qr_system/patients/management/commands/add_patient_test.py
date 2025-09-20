@@ -8,6 +8,7 @@ from io import BytesIO
 import qrcode
 import uuid
 import re
+from clinic_qr_system.email_utils import send_patient_registration_email
 
 
 class Command(BaseCommand):
@@ -103,30 +104,31 @@ class Command(BaseCommand):
         else:
             self.stdout.write("QR Code not available.")
 
-        # Email
+        # Email using Brevo
         try:
-            subject = 'Your Patient QR Code - [Clinic QR System]'
-            body = (
-                f"Dear {patient.full_name},\n\n"
-                f"Thank you for registering with [Clinic QR System].\n"
-                f"Your Patient Code is: {patient.patient_code}\n\n"
-                f"Please keep this email for future reference.\n"
-                f"You can use the attached QR code for faster check-in at the reception.\n\n"
-                f"Regards,\n  [Clinic QR System]"
-            )
-            email_msg = EmailMessage(
-                subject=subject,
-                body=body,
-                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None) or None,
-                to=[patient.email],
-            )
+            # Prepare QR code data
+            qr_data = None
+            qr_filename = file_name
+            
             if patient.qr_code and hasattr(patient.qr_code, 'path'):
                 with open(patient.qr_code.path, 'rb') as f:
-                    email_msg.attach(file_name, f.read(), 'image/png')
+                    qr_data = f.read()
             elif buffer:
-                email_msg.attach(file_name, buffer.getvalue(), 'image/png')
-            email_msg.send(fail_silently=False)
-            self.stdout.write(self.style.SUCCESS(f"Email sent to: {patient.email}"))
+                qr_data = buffer.getvalue()
+            
+            # Send email using Brevo utility
+            sent = send_patient_registration_email(
+                patient_name=patient.full_name,
+                patient_code=patient.patient_code,
+                patient_email=patient.email,
+                qr_code_data=qr_data,
+                qr_filename=qr_filename
+            )
+            
+            if sent:
+                self.stdout.write(self.style.SUCCESS(f"Email sent to: {patient.email} via Brevo"))
+            else:
+                self.stdout.write(self.style.WARNING(f"Email not sent to: {patient.email}"))
         except Exception as e:
             self.stdout.write(self.style.WARNING(f"Email failed: {e}"))
 

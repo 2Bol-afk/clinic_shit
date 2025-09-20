@@ -26,6 +26,7 @@ import threading
 import csv
 import os
 from django.core.mail import send_mail
+from clinic_qr_system.email_utils import send_test_email, send_patient_registration_email
 try:
     from openpyxl import Workbook
 except Exception:
@@ -40,18 +41,16 @@ def is_reception(user):
     return user.is_superuser or user.groups.filter(name='Reception').exists()
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
-def send_test_email(request):
+def send_test_email_view(request):
     to = request.GET.get('to') or os.getenv('TEST_EMAIL_TO') or settings.DEFAULT_FROM_EMAIL
     try:
-        sent = send_mail(
-            subject='SMTP live test',
-            message='Hello from Clinic QR System.',
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[to],
-            fail_silently=False,
+        sent = send_test_email(
+            recipient_email=to,
+            message='Hello from Clinic QR System using Brevo email service.',
+            subject='Brevo SMTP Test'
         )
         if sent:
-            messages.success(request, f'Email sent successfully to {to}.')
+            messages.success(request, f'Email sent successfully to {to} via Brevo.')
         else:
             messages.warning(request, f'No email was sent to {to}.')
     except Exception as e:
@@ -310,39 +309,36 @@ def reception_walkin(request):
                 if svc:
                     kwargs['service_type'] = svc
             Visit.objects.create(**kwargs)
-            # Email confirmation with QR attachment (synchronous with short timeout)
+            # Email confirmation with QR attachment using Brevo
             try:
                 if patient.email:
-                    parts = [
-                        f"Dear {patient.full_name},\n",
-                        "\nThank you for registering with Clinic QR System.\n",
-                        f"Your Patient Code is: {patient.patient_code}\n",
-                    ]
-                    if 'temp_password' in locals() and temp_password:
-                        parts.append(f"Temporary Password: {temp_password}\n")
-                        parts.append("\nPlease log in using the temporary password and change it on your first login.\n")
-                    parts.append("\nPlease keep this email for future reference.\n")
-                    parts.append("You can use the attached QR code for faster check-in at the reception.\n\n")
-                    parts.append("Regards,\nClinic QR System")
-                    body_sync = ''.join(parts)
-                    email_sync = EmailMessage(
-                        subject='Your Patient QR Code and Registration Details',
-                        body=body_sync,
-                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None) or None,
-                        to=[patient.email],
-                    )
+                    # Prepare QR code data
+                    qr_data = None
+                    qr_filename = f"qr_{patient.patient_code}.png"
+                    
                     qr_path_val = getattr(patient.qr_code, 'path', None)
                     if qr_path_val:
                         try:
                             with open(qr_path_val, 'rb') as f:
-                                email_sync.attach(f"qr_{patient.patient_code}.png", f.read(), 'image/png')
+                                qr_data = f.read()
                         except Exception:
                             pass
                     elif buffer:
-                        email_sync.attach(file_name or 'qr.png', (buffer.getvalue() if buffer else b''), 'image/png')
-                    sent_now = email_sync.send(fail_silently=False)
+                        qr_data = buffer.getvalue() if buffer else None
+                    
+                    # Send email using Brevo utility
+                    sent_now = send_patient_registration_email(
+                        patient_name=patient.full_name,
+                        patient_code=patient.patient_code,
+                        patient_email=patient.email,
+                        qr_code_data=qr_data,
+                        qr_filename=qr_filename,
+                        temp_password=locals().get('temp_password'),
+                        username=locals().get('username')
+                    )
+                    
                     if sent_now:
-                        messages.success(request, f'Confirmation email sent to {patient.email}.')
+                        messages.success(request, f'Confirmation email sent to {patient.email} via Brevo.')
                     else:
                         messages.warning(request, f'Confirmation email not sent to {patient.email}.')
             except Exception as e:

@@ -21,6 +21,7 @@ from django.contrib.auth.decorators import login_required
 from django.urls import reverse_lazy
 from django.contrib.auth.views import PasswordChangeView
 from django.http import HttpResponseForbidden
+from clinic_qr_system.email_utils import send_patient_registration_email
 
 from .forms import PatientRegistrationForm, PatientSignupForm
 from .models import Patient
@@ -68,31 +69,35 @@ def signup(request):
                 patient.save(update_fields=['user'])
                 group, _ = Group.objects.get_or_create(name='Patient')
                 user.groups.add(group)
-            # Email QR and confirmation (synchronous send for clear feedback)
+            # Email QR and confirmation using Brevo
             try:
                 if patient.email:
-                    body = (
-                        f"Dear {patient.full_name},\n\nYour patient code is {patient.patient_code}. "
-                        f"Use username {username} to log in."
-                    )
-                    msg = EmailMessage(
-                        subject='Your Digital Health Pass',
-                        body=body,
-                        from_email=settings.DEFAULT_FROM_EMAIL,
-                        to=[patient.email],
-                    )
+                    # Prepare QR code data
+                    qr_data = None
+                    qr_filename = file_name
+                    
                     qr_path = getattr(patient.qr_code, 'path', None)
                     if qr_path:
                         try:
                             with open(qr_path, 'rb') as f:
-                                msg.attach(file_name, f.read(), 'image/png')
+                                qr_data = f.read()
                         except Exception:
                             pass
                     elif buffer:
-                        msg.attach(file_name, buffer.getvalue(), 'image/png')
-                    sent = msg.send(fail_silently=False)
+                        qr_data = buffer.getvalue()
+                    
+                    # Send email using Brevo utility
+                    sent = send_patient_registration_email(
+                        patient_name=patient.full_name,
+                        patient_code=patient.patient_code,
+                        patient_email=patient.email,
+                        qr_code_data=qr_data,
+                        qr_filename=qr_filename,
+                        username=username
+                    )
+                    
                     if sent:
-                        messages.success(request, f'Confirmation email sent to {patient.email}.')
+                        messages.success(request, f'Confirmation email sent to {patient.email} via Brevo.')
                     else:
                         messages.warning(request, f'Confirmation email not sent to {patient.email}.')
             except Exception as e:
@@ -150,34 +155,36 @@ def register(request):
                 group, _ = Group.objects.get_or_create(name='Patient')
                 user.groups.add(group)
 
-            # Email QR code + credentials (synchronous send for clear feedback)
+            # Email QR code + credentials using Brevo
             try:
                 if patient.email:
-                    body = (
-                        f"Dear {patient.full_name},\n\n"
-                        f"Your patient code: {patient.patient_code}.\n"
-                        f"Portal login: {username}\n"
-                        f"Temporary password: {temp_password}\n\n"
-                        f"Please change your password after logging in at /accounts/login/.\n"
-                    )
-                    msg = EmailMessage(
-                        subject='Your Digital Health Pass & Portal Access',
-                        body=body,
-                        from_email=settings.DEFAULT_FROM_EMAIL,
-                        to=[patient.email],
-                    )
+                    # Prepare QR code data
+                    qr_data = None
+                    qr_filename = file_name
+                    
                     qr_path = getattr(patient.qr_code, 'path', None)
                     if qr_path:
                         try:
                             with open(qr_path, 'rb') as f:
-                                msg.attach(file_name, f.read(), 'image/png')
+                                qr_data = f.read()
                         except Exception:
                             pass
                     elif buffer:
-                        msg.attach(file_name, buffer.getvalue(), 'image/png')
-                    sent = msg.send(fail_silently=False)
+                        qr_data = buffer.getvalue()
+                    
+                    # Send email using Brevo utility
+                    sent = send_patient_registration_email(
+                        patient_name=patient.full_name,
+                        patient_code=patient.patient_code,
+                        patient_email=patient.email,
+                        qr_code_data=qr_data,
+                        qr_filename=qr_filename,
+                        temp_password=temp_password,
+                        username=username
+                    )
+                    
                     if sent:
-                        messages.success(request, f'Confirmation email sent to {patient.email}.')
+                        messages.success(request, f'Confirmation email sent to {patient.email} via Brevo.')
                     else:
                         messages.warning(request, f'Confirmation email not sent to {patient.email}.')
             except Exception as e:

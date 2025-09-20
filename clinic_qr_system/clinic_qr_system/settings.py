@@ -134,26 +134,47 @@ CRISPY_TEMPLATE_PACK = 'bootstrap5'
 #'aayaxwoovhqnltwb'
 
 # Email configuration
-# Use console backend in DEBUG (prints emails to terminal).
-# Use SMTP when not DEBUG or when explicitly forced via FORCE_SMTP=true.
-if DEBUG and os.getenv('FORCE_SMTP', 'false').lower() != 'true':
-    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-    EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
-    EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
-    EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'true').lower() == 'true'
-    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
-    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-else:
+# Brevo (formerly Sendinblue) configuration
+BREVO_API_KEY = os.getenv('BREVO_API_KEY', '')
+BREVO_SMTP_HOST = os.getenv('BREVO_SMTP_HOST', 'smtp-relay.brevo.com')
+BREVO_SMTP_PORT = int(os.getenv('BREVO_SMTP_PORT', '587'))
+BREVO_SMTP_USER = os.getenv('BREVO_SMTP_USER', '')
+BREVO_SMTP_PASSWORD = os.getenv('BREVO_SMTP_PASSWORD', '')
+BREVO_SENDER_EMAIL = os.getenv('BREVO_SENDER_EMAIL', '')
+BREVO_SENDER_NAME = os.getenv('BREVO_SENDER_NAME', 'Clinic QR System')
+
+# Email backend selection
+EMAIL_PROVIDER = os.getenv('EMAIL_PROVIDER', 'brevo').lower()  # 'brevo', 'gmail', 'console'
+
+if EMAIL_PROVIDER == 'brevo':
+    if BREVO_API_KEY:
+        # Use Brevo API backend for better features and reliability
+        EMAIL_BACKEND = 'clinic_qr_system.email_backends.BrevoEmailBackend'
+    else:
+        # Fallback to Brevo SMTP
+        EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+        EMAIL_HOST = BREVO_SMTP_HOST
+        EMAIL_PORT = BREVO_SMTP_PORT
+        EMAIL_USE_TLS = True
+        EMAIL_HOST_USER = BREVO_SMTP_USER
+        EMAIL_HOST_PASSWORD = BREVO_SMTP_PASSWORD
+elif EMAIL_PROVIDER == 'gmail':
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
     EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
     EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
     EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'true').lower() == 'true'
     EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
     EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
-    EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
+else:  # console or debug
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
 
 # From/Server identities
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'noreply@example.com')
+if EMAIL_PROVIDER == 'brevo' and BREVO_SENDER_EMAIL:
+    DEFAULT_FROM_EMAIL = BREVO_SENDER_EMAIL
+else:
+    DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'noreply@example.com')
 SERVER_EMAIL = os.getenv('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
 
 # Security behind proxy (Render)
