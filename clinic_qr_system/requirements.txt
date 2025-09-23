@@ -1,9 +1,11 @@
 asgiref==3.9.1
+boto==2.49.0
 charset-normalizer==3.4.3
 colorama==0.4.6
 crispy-bootstrap5==2024.2
 Django==5.1.1
 django-crispy-forms==2.3
+django-storages==1.14.6
 et_xmlfile==2.0.0
 gunicorn==23.0.0
 numpy==2.3.3
@@ -23,4 +25,3 @@ sqlparse==0.5.3
 typing_extensions==4.15.0
 tzdata==2025.2
 wheel==0.45.1
-sib-api-v3-sdk==7.6.0
