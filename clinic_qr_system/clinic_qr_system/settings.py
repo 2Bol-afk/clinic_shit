@@ -125,9 +125,34 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 if WHITENOISE_AVAILABLE:
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Media files
+# Media files (default local)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# Optional: Supabase Storage via S3-compatible backend (django-storages)
+# Enable by setting USE_SUPABASE_STORAGE=true and the AWS_* env vars
+if os.getenv('USE_SUPABASE_STORAGE', 'false').lower() == 'true':
+    try:
+        import storages  # type: ignore
+    except Exception:
+        storages = None
+    else:
+        INSTALLED_APPS += ['storages']
+        DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+        AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+        AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+        AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME', 'media')
+        AWS_S3_ENDPOINT_URL = os.getenv('AWS_S3_ENDPOINT_URL')  # e.g. https://<PROJECT-REF>.supabase.co/storage/v1/s3
+        AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'us-east-1')
+        AWS_S3_SIGNATURE_VERSION = 's3v4'
+        AWS_S3_ADDRESSING_STYLE = 'virtual'
+        AWS_S3_CUSTOM_DOMAIN = os.getenv(
+            'AWS_S3_CUSTOM_DOMAIN',
+            os.getenv('SUPABASE_PUBLIC_MEDIA_DOMAIN')  # optional alt env var
+        )
+        # Derive MEDIA_URL from custom domain if provided
+        if AWS_S3_CUSTOM_DOMAIN:
+            MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/"
 
 # Crispy Forms
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
