@@ -1,6 +1,48 @@
 {% extends 'base.html' %}
 {% block content %}
-<h4 class="d-flex align-items-center mb-3"><i class="bi bi-graph-up-arrow text-success me-2"></i>Reports</h4>
+<h4 class="d-flex align-items-center mb-3">
+  <i class="bi bi-graph-up-arrow text-success me-2"></i>
+  {% if request.user.groups.all.0.name == 'Pharmacy' %}
+    Pharmacy Reports
+  {% elif request.user.groups.all.0.name == 'Doctor' %}
+    Doctor Reports
+  {% elif request.user.groups.all.0.name == 'Laboratory' %}
+    Laboratory Reports
+  {% elif request.user.groups.all.0.name == 'Vaccination' %}
+    Vaccination Reports
+  {% elif request.user.groups.all.0.name == 'Reception' %}
+    Reception Reports
+  {% else %}
+    Reports
+  {% endif %}
+</h4>
+
+{% if request.user.groups.all.0.name == 'Pharmacy' %}
+  <div class="alert alert-info mb-3">
+    <i class="bi bi-info-circle me-2"></i>
+    <strong>Pharmacy Reports:</strong> Showing only pharmacy-related transactions (prescriptions, medicine dispensing, pharmacy visits).
+  </div>
+{% elif request.user.groups.all.0.name == 'Doctor' %}
+  <div class="alert alert-info mb-3">
+    <i class="bi bi-info-circle me-2"></i>
+    <strong>Doctor Reports:</strong> Showing only your consultation records and patient visits.
+  </div>
+{% elif request.user.groups.all.0.name == 'Laboratory' %}
+  <div class="alert alert-info mb-3">
+    <i class="bi bi-info-circle me-2"></i>
+    <strong>Laboratory Reports:</strong> Showing only laboratory-related transactions (lab tests, results, lab visits).
+  </div>
+{% elif request.user.groups.all.0.name == 'Vaccination' %}
+  <div class="alert alert-info mb-3">
+    <i class="bi bi-info-circle me-2"></i>
+    <strong>Vaccination Reports:</strong> Showing only vaccination-related transactions (vaccine administration, vaccination visits).
+  </div>
+{% elif request.user.groups.all.0.name == 'Reception' %}
+  <div class="alert alert-info mb-3">
+    <i class="bi bi-info-circle me-2"></i>
+    <strong>Reception Reports:</strong> Showing all clinic visits and transactions across all departments.
+  </div>
+{% endif %}
 <div class="card shadow-sm mb-3">
   <div class="card-body">
     <form class="row g-2" method="get">
@@ -19,6 +61,7 @@
     </form>
   </div>
   <div class="card-footer d-flex gap-2">
+    <button class="btn btn-success btn-sm" onclick="printReport()"><i class="bi bi-printer me-1"></i>Print Report</button>
     <a class="btn btn-outline-primary btn-sm" href="?start={{ start }}&end={{ end }}&export=csv"><i class="bi bi-filetype-csv me-1"></i>Export CSV</a>
     <a class="btn btn-outline-primary btn-sm" href="?start={{ start }}&end={{ end }}&export=xlsx"><i class="bi bi-file-earmark-excel me-1"></i>Export XLSX</a>
     <a class="btn btn-outline-primary btn-sm" href="?start={{ start }}&end={{ end }}&export=pdf"><i class="bi bi-file-earmark-pdf me-1"></i>Export PDF</a>
@@ -33,7 +76,6 @@
           <th>Date</th>
           <th>Service</th>
           <th>Patient</th>
-          <th>Notes</th>
         </tr>
       </thead>
       <tbody>
@@ -41,16 +83,147 @@
           <tr>
             <td>{{ v.timestamp|date:'Y-m-d H:i' }}</td>
             <td>{{ v.get_service_display }}</td>
-            <td><a href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a></td>
-            <td>{{ v.notes|default:'-' }}</td>
+            <td>{{ v.patient.full_name }}</td>
           </tr>
         {% empty %}
-          <tr><td colspan="4" class="text-center text-muted py-4">No results.</td></tr>
+          <tr><td colspan="3" class="text-center text-muted py-4">No results.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+<!-- Print-friendly version (hidden by default) -->
+<div id="print-version" style="display: none;">
+  <div class="print-header">
+    <h2>Clinic Visits Report</h2>
+    <div class="print-filters">
+      <p><strong>Date Range:</strong> {{ start|default:'All dates' }} to {{ end|default:'All dates' }}</p>
+      <p><strong>Generated:</strong> {% now "Y-m-d H:i" %}</p>
+    </div>
+  </div>
+  
+  <table class="print-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Service</th>
+        <th>Patient</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in visits %}
+        <tr>
+          <td>{{ v.timestamp|date:'Y-m-d H:i' }}</td>
+          <td>{{ v.get_service_display }}</td>
+          <td>{{ v.patient.full_name }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="3" class="text-center">No results found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<style>
+/* Print-specific styles */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  #print-version, #print-version * {
+    visibility: visible;
+  }
+  
+  #print-version {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white;
+    padding: 20px;
+  }
+  
+  .print-header {
+    text-align: center;
+    margin-bottom: 30px;
+    border-bottom: 2px solid #333;
+    padding-bottom: 15px;
+  }
+  
+  .print-header h2 {
+    margin: 0 0 10px 0;
+    color: #333;
+    font-size: 24px;
+  }
+  
+  .print-filters {
+    font-size: 12px;
+    color: #666;
+  }
+  
+  .print-filters p {
+    margin: 5px 0;
+  }
+  
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    font-size: 12px;
+  }
+  
+  .print-table th,
+  .print-table td {
+    border: 1px solid #333;
+    padding: 8px;
+    text-align: left;
+  }
+  
+  .print-table th {
+    background-color: #f5f5f5;
+    font-weight: bold;
+  }
+  
+  .print-table tbody tr:nth-child(even) {
+    background-color: #f9f9f9;
+  }
+  
+  /* Hide navigation and other elements */
+  .navbar, .card-footer, .btn, .form-control, .card-header {
+    display: none !important;
+  }
+  
+  /* Ensure proper page breaks */
+  .print-table {
+    page-break-inside: auto;
+  }
+  
+  .print-table tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+}
+
+/* Regular screen styles for print button */
+#print-version {
+  display: none;
+}
+</style>
+
+<script>
+function printReport() {
+  // Show the print version
+  document.getElementById('print-version').style.display = 'block';
+  
+  // Print the page
+  window.print();
+  
+  // Hide the print version again
+  document.getElementById('print-version').style.display = 'none';
+}
+</script>
 {% endblock %}
 
 

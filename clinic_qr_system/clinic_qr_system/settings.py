@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'patients',
     'visits',
     'dashboard',
+    'vaccinations',
     'gmail_test',
 ]
 

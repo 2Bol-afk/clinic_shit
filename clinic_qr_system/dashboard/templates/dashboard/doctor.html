@@ -1,96 +1,97 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block content %}
 <h4 class="d-flex align-items-center mb-3"><i class="bi bi-stethoscope text-success me-2"></i>Doctor Dashboard ({{ today }})</h4>
-<hr>
+ 
 <div class="row g-3">
-  <div class="col-lg-6">
-    <div class="card shadow-sm mb-3">
-      <div class="card-header d-flex align-items-center"><i class="bi bi-person-walking me-2 text-primary"></i><span class="fw-semibold">Waiting (Reception)</span></div>
-      <div class="card-body">
-        {% if unfinished %}
-          <div class="alert alert-warning">Finish your current consultation before claiming another patient.</div>
-        {% endif %}
-        <ul class="list-group list-group-flush">
-          {% for r in waiting %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-              <span>
-                <a href="/patients/{{ r.patient.id }}/"><i class="bi bi-person-fill me-1"></i>{{ r.patient.full_name }}</a>
-                <small class="text-muted ms-2">Queue #{{ r.queue_number|default:'-' }} · {{ r.department|default:'General Medicine' }}</small>
-              </span>
+  <div class="col-md-6">
+    <h6>Waiting (Reception)</h6>
+    {% if unfinished %}
+      <div class="alert" style="background-color: #e6e6fa; border-color: #d8bfd8; color: #4a4a4a;">Finish your current consultation before claiming another patient.</div>
+    {% endif %}
+    <ul class="list-group mb-3" data-container="waiting">
+      {% for r in waiting %}
+        <li class="list-group-item" data-card>
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              {{ r.patient.full_name }}
+              <div class="small text-muted">Queue: {{ r.queue_number|default:'—' }}</div>
+              <div class="small">Dept: {{ r.department|default:'General Medicine' }} · At: {{ r.timestamp|date:'Y-m-d H:i' }}</div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
               <form method="post" action="/dashboard/doctors/claim/">
                 {% csrf_token %}
                 <input type="hidden" name="reception_visit_id" value="{{ r.id }}">
-                <button class="btn btn-success btn-sm" type="submit"><i class="bi bi-hand-index-thumb me-1"></i>Claim</button>
+                <button class="btn btn-outline-primary btn-sm" type="submit"><i class="bi bi-hand-index-thumb me-1"></i>Claim</button>
               </form>
-            </li>
-          {% empty %}
-            <li class="list-group-item">No waiting patients.</li>
-          {% endfor %}
-        </ul>
-      </div>
-    </div>
-    <div class="card shadow-sm">
-      <div class="card-header d-flex align-items-center"><i class="bi bi-person-check me-2 text-info"></i><span class="fw-semibold">Claimed · Waiting to Arrive</span></div>
-      <div class="card-body">
-        <ul class="list-group list-group-flush">
-          {% for r in claimed_waiting %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-              <span>
-                <a href="/patients/{{ r.patient.id }}/"><i class="bi bi-person-fill me-1"></i>{{ r.patient.full_name }}</a>
-                <small class="text-muted ms-2">Dept: {{ r.department|default:'General Medicine' }}</small>
-              </span>
+            </div>
+          </div>
+        </li>
+      {% empty %}
+        <li class="list-group-item">No waiting patients.</li>
+      {% endfor %}
+    </ul>
+    
+    <h6>Claimed · Waiting to Arrive (verify QR on arrival)</h6>
+    <ul class="list-group mb-3" data-container="claimed">
+      {% for r in claimed_waiting %}
+        <li class="list-group-item" data-card data-patient-code="{{ r.patient.patient_code }}" data-visit-id="{{ r.id }}">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              {{ r.patient.full_name }}
+              <div class="small text-muted">From Reception · Queue: {{ r.queue_number|default:'—' }}</div>
+              <div class="small">Dept: {{ r.department|default:'General Medicine' }} · At: {{ r.timestamp|date:'Y-m-d H:i' }}</div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
               <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#docVerifyModal" data-visit="{{ r.id }}"><i class="bi bi-qr-code-scan me-1"></i>Verify</button>
-            </li>
-          {% empty %}
-            <li class="list-group-item">No claimed patients waiting to arrive.</li>
-          {% endfor %}
-        </ul>
-      </div>
-    </div>
+            </div>
+          </div>
+        </li>
+      {% empty %}
+        <li class="list-group-item">No claimed patients waiting to arrive.</li>
+      {% endfor %}
+    </ul>
   </div>
-  <div class="col-lg-6">
-    <div class="card shadow-sm mb-3">
-      <div class="card-header"><i class="bi bi-clipboard2-pulse me-2"></i>Ready to Consult</div>
-      <div class="card-body">
-        <ul class="list-group">
-          {% for r in verified_claimed %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-              <span>
-                <a href="/patients/{{ r.patient.id }}/"><i class="bi bi-person-fill me-1"></i>{{ r.patient.full_name }}</a>
-                <small class="text-muted">(Department: {{ r.department|default:'General Medicine' }})</small>
-              </span>
-              <a class="btn btn-success btn-sm" href="/dashboard/doctors/consult/{{ r.id }}/"><i class="bi bi-play-circle me-1"></i>Start Consultation</a>
-            </li>
-          {% empty %}
-            <li class="list-group-item">No verified patients ready for consultation.</li>
-          {% endfor %}
-        </ul>
-      </div>
-    </div>
-    <div class="card shadow-sm">
-      <div class="card-header"><i class="bi bi-clipboard2-data me-2"></i>Not Done Consultations</div>
-      <div class="card-body">
-        <ul class="list-group">
-          {% for v in not_done %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-              <span>
-                <a href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a>
-                <small class="text-muted ms-2">Started: {{ v.timestamp|date:'H:i' }}</small>
-              </span>
-              <div class="d-flex gap-2">
-                <a class="btn btn-outline-primary btn-sm" href="/dashboard/doctors/consult/edit/{{ v.id }}/"><i class="bi bi-pencil-square me-1"></i>Edit</a>
-                <form method="post" action="/dashboard/doctors/consult/{{ v.id }}/finish/">
-                  {% csrf_token %}
-                  <button class="btn btn-outline-success btn-sm" type="submit"><i class="bi bi-check2-circle me-1"></i>Finish</button>
-                </form>
-              </div>
-            </li>
-          {% empty %}
-            <li class="list-group-item">No in-progress consultations.</li>
-          {% endfor %}
-        </ul>
-      </div>
-    </div>
+  <div class="col-md-6">
+    <h6>Ready to Consult</h6>
+    <ul class="list-group mb-3" data-container="ready">
+      {% for r in verified_claimed %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <div>
+            <a class="fw-semibold" href="/patients/{{ r.patient.id }}/">{{ r.patient.full_name }}</a>
+            <div class="small">Dept: {{ r.department|default:'General Medicine' }}</div>
+            <div class="small text-muted">Verified: {{ r.claimed_at|date:'Y-m-d H:i' }}{% if r.queue_number %} · Queue: {{ r.queue_number }}{% endif %}</div>
+          </div>
+          <div class="d-flex gap-2">
+            <a class="btn btn-primary btn-sm" href="/dashboard/doctors/consult/{{ r.id }}/"><i class="bi bi-play-circle me-1"></i>Start Consultation</a>
+          </div>
+        </li>
+      {% empty %}
+        <li class="list-group-item">No verified patients ready for consultation.</li>
+      {% endfor %}
+    </ul>
+    
+    <h6>Not Done Consultations</h6>
+    <ul class="list-group" data-container="not_done">
+      {% for v in not_done %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <div>
+            <a class="fw-semibold" href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a>
+            <div class="small">Started: {{ v.timestamp|date:'H:i' }}</div>
+            <div class="small text-muted">Status: In Progress</div>
+          </div>
+          <div class="d-flex gap-2">
+            <a class="btn btn-primary btn-sm" href="/dashboard/doctors/consult/edit/{{ v.id }}/"><i class="bi bi-pencil-square me-1"></i>Edit</a>
+            <form method="post" action="/dashboard/doctors/consult/{{ v.id }}/finish/">
+              {% csrf_token %}
+              <button class="btn btn-outline-success btn-sm" type="submit"><i class="bi bi-check2-circle me-1"></i>Finish</button>
+            </form>
+          </div>
+        </li>
+      {% empty %}
+        <li class="list-group-item">No in-progress consultations.</li>
+      {% endfor %}
+    </ul>
   </div>
 </div>
   <!-- Verify Modal -->
@@ -187,7 +188,6 @@ function handleVerifyQR(email) {
   const e = email.trim();
   if(!e) return;
   
-  console.log('handleVerifyQR called with email:', e);
   
   const statusDiv = document.getElementById('verifyStatus');
   const statusMessage = document.getElementById('verifyStatusMessage');
@@ -199,14 +199,14 @@ function handleVerifyQR(email) {
   fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(e))
     .then(r => r.json())
     .then(data => {
-      console.log('Patient validation response:', data);
+      
       if (data.success && data.patient) {
         // Show success message
         if(statusMessage) statusMessage.textContent = 'Patient found! Verifying arrival...';
         
         // Get the visit ID
         const visitId = document.getElementById('docVerifyVisitId').value;
-        console.log('Visit ID from form:', visitId);
+        
         if(!visitId) {
           showVerifyError('Visit ID not found. Please try again.');
           return;
@@ -226,7 +226,6 @@ function handleVerifyQR(email) {
 
 // Submit verification via AJAX
 function submitVerification(visitId, email) {
-  console.log('Submitting verification for visit ID:', visitId, 'email:', email);
   
   const formData = new FormData();
   formData.append('reception_visit_id', visitId);
@@ -236,12 +235,8 @@ function submitVerification(visitId, email) {
   const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
   if (csrfToken) {
     formData.append('csrfmiddlewaretoken', csrfToken.value);
-    console.log('CSRF token added');
-  } else {
-    console.log('No CSRF token found');
   }
   
-  console.log('Sending AJAX request to /dashboard/doctors/verify/');
   
   fetch('/dashboard/doctors/verify/', {
     method: 'POST',
@@ -251,14 +246,14 @@ function submitVerification(visitId, email) {
     }
   })
   .then(response => {
-    console.log('Response status:', response.status);
+    
     if (!response.ok) {
       throw new Error('Network response was not ok');
     }
     return response.json();
   })
   .then(data => {
-    console.log('Verification response:', data);
+    
     if (data.success) {
       showVerifySuccess(data.message);
       // Update UI immediately
@@ -280,33 +275,30 @@ function submitVerification(visitId, email) {
 
 // Update patient status in UI
 function updatePatientStatus(visitId, patientName) {
-  console.log('Updating patient status for visit ID:', visitId);
   
   // Find the patient item by looking for the verify button with the specific visit ID
   const verifyButtons = document.querySelectorAll('button[data-visit="' + visitId + '"]');
-  console.log('Found', verifyButtons.length, 'verify buttons for visit ID:', visitId);
   
   if (verifyButtons.length > 0) {
     const patientItem = verifyButtons[0].closest('.list-group-item');
     if (patientItem) {
-      console.log('Found patient item:', patientItem);
       
       // Find the "Ready to Consult" section
       const readySection = findReadySection();
       if (readySection) {
-        console.log('Found ready section, moving patient');
+        
         movePatientToReadySection(patientItem, patientName, readySection);
       } else {
-        console.log('Could not find ready section');
+        
         // Fallback: just remove the patient from claimed section
         patientItem.remove();
         showVerifySuccess('Patient verified! Status updated to Ready to Consult.');
       }
     } else {
-      console.log('Could not find patient item');
+      
     }
   } else {
-    console.log('No verify buttons found for visit ID:', visitId);
+    
   }
 }
 
@@ -327,12 +319,10 @@ function findReadySection() {
 
 // Move patient from claimed to ready section
 function movePatientToReadySection(patientItem, patientName, readySection) {
-  console.log('Moving patient to ready section:', patientName);
   
   if (readySection) {
     const readyList = readySection.querySelector('.list-group');
     if (readyList) {
-      console.log('Found ready list, creating new patient item');
       
       // Get the visit ID from the original button
       const originalBtn = patientItem.querySelector('button[data-visit]');
@@ -343,40 +333,39 @@ function movePatientToReadySection(patientItem, patientName, readySection) {
       newItem.className = 'list-group-item d-flex justify-content-between align-items-center';
       
       // Get patient info from the original item
-      const patientLink = patientItem.querySelector('a[href*="/patients/"]');
-      const patientName = patientLink ? patientLink.textContent.trim() : 'Unknown Patient';
-      const patientHref = patientLink ? patientLink.getAttribute('href') : '#';
-      
-      // Get department info
-      const deptInfo = patientItem.querySelector('small.text-muted');
+      const patientNameText = patientItem.querySelector('div > div:first-child').textContent.trim();
+      const deptInfo = patientItem.querySelector('div > div:nth-child(2)');
       const deptText = deptInfo ? deptInfo.textContent.trim() : '';
+      const timeInfo = patientItem.querySelector('div > div:nth-child(3)');
+      const timeText = timeInfo ? timeInfo.textContent.trim() : '';
       
-      // Create the HTML for the new item
+      // Create the HTML for the new item (Ready to Consult - keep link for doctor access to history)
       newItem.innerHTML = `
-        <span>
-          <a href="${patientHref}"><i class="bi bi-person-fill me-1"></i>${patientName}</a>
-          <small class="text-muted">${deptText}</small>
-        </span>
-        <a class="btn btn-success btn-sm" href="/dashboard/doctors/consult/${visitId}/">
-          <i class="bi bi-play-circle me-1"></i>Start Consultation
-        </a>
+        <div>
+          <a class="fw-semibold" href="/patients/${patientName.replace(/\s+/g, '').toLowerCase()}/">${patientNameText}</a>
+          <div class="small">${deptText}</div>
+          <div class="small text-muted">Verified: ${new Date().toLocaleString()} · ${timeText}</div>
+        </div>
+        <div class="d-flex gap-2">
+          <a class="btn btn-primary btn-sm" href="/dashboard/doctors/consult/${visitId}/">
+            <i class="bi bi-play-circle me-1"></i>Start Consultation
+          </a>
+        </div>
       `;
       
       // Add to ready section
       readyList.appendChild(newItem);
-      console.log('Added patient to ready section');
       
       // Remove from claimed section
       patientItem.remove();
-      console.log('Removed patient from claimed section');
       
       // Show success message
       showVerifySuccess('Patient verified! Status updated to Ready to Consult. You can now start the consultation.');
     } else {
-      console.log('Could not find ready list');
+      
     }
   } else {
-    console.log('Ready section not provided');
+    
   }
 }
 
@@ -406,10 +395,59 @@ function showVerifySuccess(message) {
 document.addEventListener('DOMContentLoaded', function() {
   // Set the callback for verification QR scans
   window.handleVerifyQRCallback = function(email) {
-    console.log('QR verification callback triggered for email:', email);
-    handleVerifyQR(email);
+    
+    handleDirectQRScan(email);
   };
 });
+
+// Handle direct QR scans (when not in verification modal context)
+function handleDirectQRScan(email) {
+  
+  
+  // First, find the patient
+  fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(email))
+    .then(r => r.json())
+    .then(data => {
+      if (data.success && data.patient) {
+        const patient = data.patient;
+        
+        // Look for a claimed visit for this patient
+        const claimedVisits = document.querySelectorAll('[data-container="claimed"] [data-card]');
+        let foundVisit = null;
+        
+        for (let visit of claimedVisits) {
+          const patientCode = visit.getAttribute('data-patient-code');
+          if (patientCode === patient.patient_code) {
+            foundVisit = visit;
+            break;
+          }
+        }
+        
+        if (foundVisit) {
+          // Found a claimed visit for this patient - verify them
+          const visitId = foundVisit.getAttribute('data-visit-id');
+          
+          // Set the visit ID in the modal and trigger verification
+          const visitIdInput = document.getElementById('docVerifyVisitId');
+          if (visitIdInput) {
+            visitIdInput.value = visitId;
+          }
+          
+          // Trigger the verification process
+          handleVerifyQR(email);
+        } else {
+          // No claimed visit found - show message
+          showQRScannerError('No claimed visit found for this patient. Please first claim the patient from the waiting list.');
+        }
+      } else {
+        showQRScannerError('Patient not found. Please scan a valid QR code.');
+      }
+    })
+    .catch(error => {
+      console.error('Error finding patient:', error);
+      showQRScannerError('Error validating QR code. Please try again.');
+    });
+}
 
 // Function to start consultation
 function startConsultation(visitId) {
@@ -418,15 +456,15 @@ function startConsultation(visitId) {
 }
 </script>
 <script>
-// Auto-refresh disabled to allow real-time UI updates
-// Disable Claim button immediately on click to prevent double-claiming
+// Auto-refresh disabled per request
+// Disable Claim/Verify buttons immediately on click to prevent double actions
 (function(){
   document.addEventListener('submit', function(e){
     const form = e.target;
     if(!form || !form.action) return;
-    if(form.action.includes('/dashboard/doctors/claim/')){
+    if(form.action.includes('/dashboard/doctors/claim/') || form.action.includes('/dashboard/doctors/verify/')){
       const btn = form.querySelector('button[type="submit"]');
-      if(btn){ btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Claiming…'; }
+      if(btn){ btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Processing…'; }
     }
   });
 })();

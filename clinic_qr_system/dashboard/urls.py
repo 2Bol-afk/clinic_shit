@@ -1,11 +1,12 @@
 from django.urls import path
-from . import views
+from . import views, admin_views
 
 
 urlpatterns = [
     path('', views.index, name='dashboard_index'),
     path('reception/', views.reception_dashboard, name='dashboard_reception'),
     path('reception/<int:pk>/edit/', views.reception_edit, name='reception_edit'),
+    path('reception/<int:pk>/visit-edit/', views.reception_visit_edit, name='reception_visit_edit'),
     path('reception/<int:pk>/delete/', views.reception_delete, name='reception_delete'),
     path('reception/walkin/', views.reception_walkin, name='reception_walkin'),
     path('doctor/', views.doctor_dashboard, name='dashboard_doctor'),
@@ -19,20 +20,26 @@ urlpatterns = [
     path('lab/<int:pk>/done/', views.lab_mark_done, name='lab_mark_done'),
     path('lab/<int:pk>/set-department/', views.lab_set_department, name='lab_set_department'),
     path('pharmacy/', views.pharmacy_dashboard, name='dashboard_pharmacy'),
+    path('pharmacy/dispense/<int:prescription_id>/', views.pharmacy_dispense, name='pharmacy_dispense'),
+    path('pharmacy/ready/<int:prescription_id>/', views.pharmacy_mark_ready, name='pharmacy_mark_ready'),
+    path('pharmacy/reports/', views.pharmacy_reports, name='pharmacy_reports'),
     path('vaccination/', views.vaccination_dashboard, name='dashboard_vaccination'),
     path('vaccination/claim/', views.vaccination_claim, name='vaccination_claim'),
     path('vaccination/receive/', views.vaccination_receive, name='vaccination_receive'),
     path('vaccination/verify-email/', views.vaccination_verify_email, name='vaccination_verify_email'),
     path('vaccination/work/<int:pk>/', views.vaccination_work, name='vaccination_work'),
+    path('vaccination/work/<int:pk>/autosave/', views.vaccination_autosave, name='vaccination_autosave'),
+    path('vaccination/work/<int:pk>/finish/', views.vaccination_finish, name='vaccination_finish'),
     # Lightweight API for pharmacy/doctor UI
     path('api/patient_by_code/<str:code>/', views.api_patient_by_code, name='api_patient_by_code'),
-    path('reports/', views.reports, name='dashboard_reports'),
     path('post-login/', views.post_login_redirect, name='post_login_redirect'),
     # Doctor CRUD (admin only)
     path('doctors/', views.doctor_list, name='doctor_list'),
     path('doctors/new/', views.doctor_create, name='doctor_create'),
     path('doctors/<int:pk>/edit/', views.doctor_edit, name='doctor_edit'),
     path('doctors/<int:pk>/delete/', views.doctor_delete, name='doctor_delete'),
+    path('doctors/password-change/', views.doctor_password_change, name='doctor_password_change'),
+    path('password/change/', views.change_password, name='change_password'),
     # Doctor claim
     path('doctors/claim/', views.doctor_claim, name='doctor_claim'),
     path('doctors/verify/', views.doctor_verify_arrival, name='doctor_verify_arrival'),
@@ -40,6 +47,24 @@ urlpatterns = [
     path('doctors/consult/<int:rid>/finish/', views.doctor_finish_inprogress, name='doctor_finish_inprogress'),
     path('doctors/consult/edit/<int:did>/', views.doctor_consult_edit, name='doctor_consult_edit'),
     path('admin/send-test-email/', views.send_test_email, name='send_test_email'),
+    # Admin URLs
+    path('admin/', admin_views.admin_dashboard, name='admin_dashboard'),
+    path('admin/patients/', admin_views.patient_management, name='admin_patient_management'),
+    path('admin/patients/<int:patient_id>/resend-qr/', admin_views.resend_qr_code, name='admin_resend_qr_code'),
+    path('admin/reports/', admin_views.admin_reports, name='admin_reports'),
+    path('admin/system-accounts/', admin_views.system_accounts, name='admin_system_accounts'),
+    path('admin/system-accounts/<str:account_type>/edit/', admin_views.edit_system_account, name='admin_edit_system_account'),
+    path('admin/system-accounts/<str:account_type>/reset-password/', admin_views.reset_system_account_password, name='admin_reset_system_account_password'),
+    path('admin/system-accounts/<str:account_type>/set-password/', admin_views.set_system_account_password, name='admin_set_system_account_password'),
+    path('admin/doctors/<int:doctor_id>/set-password/', admin_views.set_doctor_password, name='admin_set_doctor_password'),
+    path('admin/system-reports/', admin_views.system_reports, name='admin_system_reports'),
+    # Central Reports redirect and role reports
+    path('reports/', admin_views.reports_redirect, name='reports_redirect'),
+    path('patient/report/', admin_views.patient_report, name='patient_report'),
+    path('doctor/report/', admin_views.doctor_report, name='doctor_report'),
+    path('laboratory/report/', admin_views.lab_report, name='lab_report'),
+    path('pharmacy/report/', admin_views.pharmacy_report, name='pharmacy_report'),
+    path('vaccination/report/', admin_views.vaccination_report, name='vaccination_report'),
 ]
 
 

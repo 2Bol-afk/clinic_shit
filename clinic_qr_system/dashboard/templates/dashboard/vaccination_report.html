@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h4 class="mb-0 d-flex align-items-center">
+    <i class="bi bi-capsule-pill text-success me-2"></i>
+    Vaccination Activity Report
+  </h4>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-secondary" onclick="printVaccinationReport()">
+      <i class="bi bi-printer me-1"></i>Print
+    </button>
+  </div>
+  <script>
+    function printVaccinationReport() {
+      const src = document.getElementById('vaccination-report-print');
+      if (!src) { window.print(); return; }
+      const w = window.open('', 'PRINT', 'height=600,width=900');
+      w.document.write('<html><head><title>Vaccination Report</title>');
+      const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style')).map(n => n.outerHTML).join('');
+      w.document.write(styles);
+      w.document.write('</head><body>');
+      w.document.write(src.outerHTML);
+      w.document.write('</body></html>');
+      w.document.close();
+      w.focus();
+      setTimeout(() => { w.print(); w.close(); }, 200);
+    }
+  </script>
+  
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label">Start date</label>
+        <input type="date" name="start_date" value="{{ start_date }}" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">End date</label>
+        <input type="date" name="end_date" value="{{ end_date }}" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Dose</label>
+        <select name="dose" class="form-select">
+          <option value="">All</option>
+          <option value="dose1" {% if dose_filter == 'dose1' %}selected{% endif %}>1st Dose</option>
+          <option value="dose2" {% if dose_filter == 'dose2' %}selected{% endif %}>2nd Dose</option>
+          <option value="dose3" {% if dose_filter == 'dose3' %}selected{% endif %}>3rd Dose</option>
+          <option value="booster" {% if dose_filter == 'booster' %}selected{% endif %}>Booster</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Vaccine Type</label>
+        <select name="vtype" class="form-select">
+          <option value="">All</option>
+          {% for val,label in vaccine_types %}
+            <option value="{{ val }}" {% if vaccine_filter == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-funnel me-1"></i>Filter
+        </button>
+      </div>
+    </form>
+  </div>
+  <div class="card-footer text-muted small">
+    Showing records from {{ start_date }} to {{ end_date }}
+  </div>
+  
+</div>
+
+<div id="vaccination-report-print">
+  <div class="table-responsive">
+    <table class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Patient</th>
+          <th>Vaccine</th>
+          <th>Status</th>
+          <th>1st Dose</th>
+          <th>2nd Dose</th>
+          <th>3rd Dose</th>
+          {% if has_booster %}<th>Booster</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in records %}
+          <tr>
+            <td>{{ r.created_at|date:'Y-m-d H:i'|default:'—' }}</td>
+            <td>{{ r.visit.patient.full_name|default:'—' }}</td>
+            <td>{{ r.get_vaccine_type_display|default:r.visit.vaccine_type|default:'—' }}</td>
+            <td>{{ r.get_status_display|default:r.status }}</td>
+            <td>
+              {% if r.dose1_date %}
+                {{ r.dose1_date|date:'Y-m-d' }}
+              {% else %}
+                {% with doses=r.details.doses %}
+                  {% if doses %}
+                    {% for d in doses %}
+                      {% if d.label %}{% with lbl=d.label|lower %}{% if lbl|slice:":6" == "dose 1" %}{{ d.date }}{% endif %}{% endwith %}{% endif %}
+                    {% endfor %}
+                  {% endif %}
+                {% endwith %}
+              {% endif %}
+            </td>
+            <td>
+              {% if r.dose2_date %}
+                {{ r.dose2_date|date:'Y-m-d' }}
+              {% else %}
+                {% with doses=r.details.doses %}
+                  {% if doses %}
+                    {% for d in doses %}
+                      {% if d.label %}{% with lbl=d.label|lower %}{% if lbl|slice:":6" == "dose 2" %}{{ d.date }}{% endif %}{% endwith %}{% endif %}
+                    {% endfor %}
+                  {% endif %}
+                {% endwith %}
+              {% endif %}
+            </td>
+            <td>
+              {% if r.dose3_date %}
+                {{ r.dose3_date|date:'Y-m-d' }}
+              {% else %}
+                {% with doses=r.details.doses %}
+                  {% if doses %}
+                    {% for d in doses %}
+                      {% if d.label %}{% with lbl=d.label|lower %}{% if lbl|slice:":6" == "dose 3" %}{{ d.date }}{% endif %}{% endwith %}{% endif %}
+                    {% endfor %}
+                  {% endif %}
+                {% endwith %}
+              {% endif %}
+            </td>
+            {% if has_booster %}
+            <td>
+              {% if r.booster_date %}
+                {{ r.booster_date|date:'Y-m-d' }}
+              {% else %}
+                {% with doses=r.details.doses %}
+                  {% if doses %}
+                    {% for d in doses %}
+                      {% if d.label %}{% with lbl=d.label|lower %}{% if 'booster' in lbl %}{{ d.date }}{% endif %}{% endwith %}{% endif %}
+                    {% endfor %}
+                  {% endif %}
+                {% endwith %}
+              {% endif %}
+            </td>
+            {% endif %}
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="{% if has_booster %}8{% else %}7{% endif %}" class="text-center text-muted">No vaccination records found for the selected dates.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+
+

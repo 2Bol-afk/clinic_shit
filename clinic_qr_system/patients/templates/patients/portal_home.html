@@ -1,49 +1,571 @@
 {% extends 'base.html' %}
 {% block content %}
-<h4 class="d-flex align-items-center mb-3"><i class="bi bi-person-vcard text-success me-2"></i>Patient Dashboard</h4>
- 
+<h4 class="d-flex align-items-center mb-4"><i class="bi bi-person-vcard text-success me-2"></i>Patient Dashboard</h4>
 
-<div class="row g-3">
-  <div class="col-lg-4">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <h5 class="mb-1">{{ patient.full_name }}</h5>
-        <div class="small text-muted">ID: {{ patient.id }} · Code: <strong>{{ patient.patient_code }}</strong></div>
-        <div class="mt-2">Age: {{ patient.age }}</div>
-        <div>Email: {{ patient.email }}</div>
-        <div class="mt-2">Allergies: <span class="text-muted">Not recorded</span></div>
-        <div>Chronic Conditions: <span class="text-muted">Not recorded</span></div>
-        {% if patient.qr_code %}
-          <img src="{{ patient.qr_code.url }}" class="img-fluid mt-2 rounded" alt="QR">
-        {% endif %}
+<!-- Top Row: Profile Card and QR Code Card -->
+<div class="row g-4 mb-4">
+  <!-- Profile Card -->
+  <div class="col-lg-8">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-person-circle me-2"></i>Profile Information</h5>
       </div>
-    </div>
-    <div class="card shadow-sm mt-3">
-      <div class="card-header"><i class="bi bi-activity me-1"></i>Latest Updates</div>
-      <div class="card-body small">
-        <div><strong>Latest Doctor Diagnosis:</strong> {{ latest_doctor.diagnosis|default:'—' }}</div>
-        <div><strong>Prescription:</strong><br>{{ latest_doctor.prescription_notes|linebreaksbr|default:'—' }}</div>
-        <div class="mt-2"><strong>Latest Pharmacy:</strong> {{ latest_pharmacy.medicines|default:'—' }}</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-3 text-center">
+            {% if patient.profile_photo %}
+              <img src="{{ patient.profile_photo.url }}" 
+                   class="rounded-circle shadow-sm" 
+                   style="width: 120px; height: 120px; object-fit: cover;" 
+                   alt="Profile Photo">
+            {% else %}
+              <div class="rounded-circle bg-light d-flex align-items-center justify-content-center shadow-sm mx-auto" 
+                   style="width: 120px; height: 120px;">
+                <i class="bi bi-person-fill text-muted" style="font-size: 3rem;"></i>
+              </div>
+            {% endif %}
+            <div class="mt-2">
+              <small class="text-muted">Patient ID: {{ patient.id }}</small><br>
+              <small class="text-muted">Code: <strong>{{ patient.patient_code }}</strong></small>
+            </div>
+          </div>
+          <div class="col-md-9">
+            <div class="row g-3">
+              <div class="col-sm-6">
+                <div class="form-group">
+                  <label class="form-label text-muted small">Full Name</label>
+                  <div class="form-control-plaintext fw-semibold">{{ patient.full_name }}</div>
+                </div>
+              </div>
+              <div class="col-sm-6">
+                <div class="form-group">
+                  <label class="form-label text-muted small">Age</label>
+                  <div class="form-control-plaintext">{{ patient.age }} years old</div>
+                </div>
+              </div>
+              <div class="col-sm-6">
+                <div class="form-group">
+                  <label class="form-label text-muted small">Email</label>
+                  <div class="form-control-plaintext">{{ patient.email }}</div>
+                </div>
+              </div>
+              <div class="col-sm-6">
+                <div class="form-group">
+                  <label class="form-label text-muted small">Phone</label>
+                  <div class="form-control-plaintext">{{ patient.contact }}</div>
+                </div>
+              </div>
+              <div class="col-12">
+                <div class="form-group">
+                  <label class="form-label text-muted small">Address</label>
+                  <div class="form-control-plaintext">{{ patient.address }}</div>
+                </div>
+              </div>
+            </div>
+            <div class="mt-3">
+              <a href="{% url 'patient_account_edit' %}" class="btn btn-primary">
+                <i class="bi bi-pencil-square me-1"></i>Edit Profile
+              </a>
+              <a href="{% url 'patient_password_change' %}" class="btn btn-outline-secondary ms-2">
+                <i class="bi bi-shield-lock me-1"></i>Change Password
+              </a>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
-  <div class="col-lg-8">
+
+  <!-- QR Code Card -->
+  <div class="col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="bi bi-qr-code me-2"></i>Your QR Code</h5>
+      </div>
+      <div class="card-body text-center">
+        {% if patient.qr_code %}
+          <div class="qr-code-container p-3 border rounded bg-light shadow-sm mb-3">
+            <img src="{{ patient.qr_code.url }}" 
+                 class="img-fluid" 
+                 style="max-width: 200px; height: auto; border-radius: 8px;" 
+                 alt="Patient QR Code"
+                 id="qrCodeImage">
+          </div>
+          <div class="mb-3">
+            <small class="text-muted">Scan this code for quick check-in</small>
+          </div>
+          <div class="d-grid gap-2">
+            <a href="{% url 'patient_qr_download' %}" 
+               class="btn btn-success btn-sm" 
+               download="{{ patient.patient_code }}_qr_code.png"
+               title="Download your QR code as PNG">
+              <i class="bi bi-download me-1"></i>Download QR Code
+            </a>
+            <button class="btn btn-outline-success btn-sm" 
+                    onclick="printQRCode()" 
+                    title="Print QR code only">
+              <i class="bi bi-printer me-1"></i>Print QR Code
+            </button>
+          </div>
+        {% else %}
+          <div class="text-center p-4 border rounded bg-light">
+            <i class="bi bi-qr-code fs-1 text-muted mb-2"></i>
+            <p class="text-muted mb-2">QR Code not available</p>
+            <small class="text-muted">Please contact support if you need a QR code</small>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Reports section (patient-only view) -->
+<div class="row g-3 mb-4">
+  <div class="col-12">
     <div class="card shadow-sm">
-      <div class="card-header"><i class="bi bi-clock-history me-1"></i>Your Visits & Timeline</div>
+      <div class="card-header d-flex align-items-center">
+        <i class="bi bi-graph-up text-success me-2"></i>
+        <span class="fw-semibold">Your Activity Report</span>
+      </div>
+      <div class="card-body d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-primary" href="/patient/report/">
+          <i class="bi bi-person-lines-fill me-1"></i>View Your Records
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Second Row: Latest Updates and Upcoming Appointments -->
+<div class="row g-4 mb-4">
+  <!-- Latest Updates Card -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="bi bi-bell me-2"></i>Latest Updates</h5>
+      </div>
+      <div class="card-body">
+        {% if latest_doctor %}
+          <div class="mb-3">
+            <h6 class="text-primary mb-2"><i class="bi bi-stethoscope me-1"></i>Latest Doctor Consultation</h6>
+            <div class="small">
+              <div><strong>Date:</strong> {{ latest_doctor.timestamp|date:'M d, Y' }}</div>
+              <div><strong>Diagnosis:</strong> {{ latest_doctor.diagnosis|default:'Not provided' }}</div>
+              {% if latest_doctor.prescription_notes %}
+                <div><strong>Prescription:</strong> {{ latest_doctor.prescription_notes|truncatewords:20 }}</div>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
+        {% if vacc_next %}
+          <div class="mb-3">
+            <h6 class="text-warning mb-2"><i class="bi bi-shield-plus me-1"></i>Vaccination Update</h6>
+            <div class="small">
+              <div><strong>{{ vacc_next.label }}</strong> for <strong>{{ vacc_next.vaccine_name }}</strong>
+                {% if vacc_next.scheduled_date %} scheduled on <strong>{{ vacc_next.scheduled_date|date:'M d, Y' }}</strong>{% endif %}
+              </div>
+              <div class="text-muted">Please visit the vaccination desk to complete your dose.</div>
+            </div>
+          </div>
+        {% endif %}
+        {% if lab_pending %}
+          <div class="mb-2">
+            <h6 class="text-info mb-2"><i class="bi bi-droplet me-1"></i>Lab Pending</h6>
+            <div class="small">
+              {% for v in lab_pending %}
+                <div class="mb-1">{{ v.timestamp|date:'M d, Y H:i' }} — {{ v.lab_test_type|default:v.lab_tests|default:'Lab test' }}
+                  <span class="badge {% if v.status == 'queued' %}bg-secondary{% elif v.status == 'claimed' %}bg-warning text-dark{% else %}bg-info{% endif %} ms-1">{{ v.get_status_display }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+        
+        {% if latest_pharmacy %}
+          <div class="mb-3">
+            <h6 class="text-success mb-2"><i class="bi bi-capsule me-1"></i>Latest Pharmacy</h6>
+            <div class="small">
+              <div><strong>Date:</strong> {{ latest_pharmacy.timestamp|date:'M d, Y' }}</div>
+              <div><strong>Medicines:</strong> {{ latest_pharmacy.medicines|default:'Not provided' }}</div>
+            </div>
+          </div>
+        {% endif %}
+
+        {% if not latest_doctor and not latest_pharmacy and not vacc_next and not lab_pending %}
+          <div class="text-center text-muted py-3">
+            <i class="bi bi-info-circle fs-4 mb-2"></i>
+            <p class="mb-0">No recent updates available</p>
+            <small>Visit the clinic to see your latest information here</small>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Upcoming Appointments Card -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header" style="background-color: #e6e6fa; color: #4a4a4a;">
+        <h5 class="mb-0"><i class="bi bi-calendar-check me-2"></i>Upcoming Appointments</h5>
+      </div>
+      <div class="card-body">
+        {% for visit in visits|slice:":3" %}
+          {% if visit.status != 'done' %}
+            <div class="d-flex align-items-center mb-3 p-2 border rounded">
+              <div class="me-3">
+                {% if visit.service == 'doctor' %}
+                  <i class="bi bi-stethoscope text-primary fs-4"></i>
+                {% elif visit.service == 'lab' %}
+                  <i class="bi bi-droplet text-info fs-4"></i>
+                {% elif visit.service == 'pharmacy' %}
+                  <i class="bi bi-capsule text-success fs-4"></i>
+                {% elif visit.service == 'vaccination' %}
+                  <i class="bi bi-shield-plus" style="color: #6a4c93;" fs-4"></i>
+                {% else %}
+                  <i class="bi bi-clipboard-check text-secondary fs-4"></i>
+                {% endif %}
+              </div>
+              <div class="flex-grow-1">
+                <div class="fw-semibold">{{ visit.get_service_display }}</div>
+                <div class="small text-muted">
+                  {{ visit.timestamp|date:'M d, Y H:i' }}
+                  {% if visit.queue_number %}
+                    · Queue #{{ visit.queue_number }}
+                  {% endif %}
+                </div>
+                <div class="small">
+                  <span class="badge {% if visit.status == 'queued' %}bg-secondary{% elif visit.status == 'claimed' %}" style="background-color: #d8bfd8; color: #4a4a4a;"{% elif visit.status == 'in_process' %}bg-info{% else %}bg-success{% endif %}">
+                    {{ visit.get_status_display }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          {% endif %}
+        {% empty %}
+          <div class="text-center text-muted py-3">
+            <i class="bi bi-calendar-x fs-4 mb-2"></i>
+            <p class="mb-0">No upcoming appointments</p>
+            <small>Visit the clinic to schedule your next appointment</small>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Third Row: Medical History Snapshot and Lab Results & Prescriptions -->
+<div class="row g-4 mb-4">
+  <!-- Medical History Snapshot Card -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Recent Medical History</h5>
+      </div>
+      <div class="card-body">
+        {% for visit in visits|slice:":3" %}
+          <div class="d-flex align-items-start mb-3 p-2 border rounded">
+            <div class="me-3">
+              {% if visit.service == 'doctor' %}
+                <i class="bi bi-stethoscope text-primary"></i>
+              {% elif visit.service == 'lab' %}
+                <i class="bi bi-droplet text-info"></i>
+              {% elif visit.service == 'pharmacy' %}
+                <i class="bi bi-capsule text-success"></i>
+              {% elif visit.service == 'vaccination' %}
+                <i class="bi bi-shield-plus" style="color: #6a4c93;"></i>
+              {% else %}
+                <i class="bi bi-clipboard-check text-secondary"></i>
+              {% endif %}
+            </div>
+            <div class="flex-grow-1">
+              <div class="fw-semibold">{{ visit.get_service_display }}</div>
+              <div class="small text-muted">{{ visit.timestamp|date:'M d, Y H:i' }}</div>
+              {% if visit.diagnosis %}
+                <div class="small mt-1"><strong>Diagnosis:</strong> {{ visit.diagnosis|truncatewords:10 }}</div>
+              {% endif %}
+              {% if visit.notes %}
+                <div class="small mt-1"><strong>Notes:</strong> {{ visit.notes|truncatewords:8 }}</div>
+              {% endif %}
+            </div>
+          </div>
+        {% empty %}
+          <div class="text-center text-muted py-3">
+            <i class="bi bi-clipboard-data fs-4 mb-2"></i>
+            <p class="mb-0">No medical history available</p>
+            <small>Your visit history will appear here</small>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Lab Results & Prescriptions Card -->
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-dark text-white">
+        <h5 class="mb-0"><i class="bi bi-clipboard2-pulse me-2"></i>Lab Results & Prescriptions</h5>
+      </div>
+      <div class="card-body">
+        <div class="d-flex justify-content-end mb-3">
+          <a class="btn btn-outline-primary btn-sm" href="/patient/report/">
+            <i class="bi bi-clipboard-data me-1"></i>My Reports
+          </a>
+        </div>
+        <!-- Lab Results Section -->
+        <div class="mb-4">
+          <h6 class="text-info mb-2"><i class="bi bi-droplet me-1"></i>Latest Lab Results</h6>
+          {% for visit in visits %}
+            {% if visit.service == 'lab' and visit.lab_results %}
+              <div class="small mb-2 p-2 bg-light rounded">
+                <div><strong>Date:</strong> {{ visit.timestamp|date:'M d, Y' }}</div>
+                <div><strong>Tests:</strong> {{ visit.lab_test_type|default:visit.lab_tests|default:'Not specified' }}</div>
+                <div><strong>Results:</strong> {{ visit.lab_results|truncatewords:15 }}</div>
+              </div>
+            {% endif %}
+          {% empty %}
+            <div class="text-muted small">No lab results available</div>
+          {% endfor %}
+          {% if not visits %}
+            <div class="text-muted small">No lab results available</div>
+          {% endif %}
+        </div>
+
+        <!-- Prescriptions Section -->
+        <div>
+          <h6 class="text-success mb-2"><i class="bi bi-capsule me-1"></i>Current Prescriptions</h6>
+          {% for prescription in prescriptions|slice:":3" %}
+            <div class="small mb-3 p-2 bg-light rounded">
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <div><strong>Date:</strong> {{ prescription.created_at|date:'M d, Y' }}</div>
+                <span class="badge {% if prescription.status == 'pending' %}" style="background-color: #d8bfd8; color: #4a4a4a;"{% elif prescription.status == 'ready' %}bg-info{% elif prescription.status == 'dispensed' %}bg-success{% else %}bg-secondary{% endif %}">
+                  {{ prescription.get_status_display }}
+                </span>
+              </div>
+              <div><strong>Doctor:</strong> {{ prescription.doctor.get_full_name|default:prescription.doctor.username }}</div>
+              {% if prescription.medicines.all %}
+                <div class="mt-2">
+                  <strong>Medicines:</strong>
+                  {% for medicine in prescription.medicines.all %}
+                    <div class="ms-2 small">
+                      • {{ medicine.drug_name }} - {{ medicine.dosage }} ({{ medicine.frequency }})
+                      {% if medicine.special_instructions %}
+                        <div class="text-muted ms-2">{{ medicine.special_instructions }}</div>
+                      {% endif %}
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+              {% if prescription.pharmacy_notes %}
+                <div class="mt-2"><strong>Pharmacy Notes:</strong> {{ prescription.pharmacy_notes }}</div>
+              {% endif %}
+            </div>
+          {% empty %}
+            {% if latest_doctor and latest_doctor.prescription_notes %}
+              <div class="small mb-3 p-2 bg-light rounded">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                  <div><strong>Date:</strong> {{ latest_doctor.timestamp|date:'M d, Y' }}</div>
+                  <span class="badge bg-secondary">From Latest Consultation</span>
+                </div>
+                <div><strong>Prescription:</strong> {{ latest_doctor.prescription_notes|linebreaksbr }}</div>
+              </div>
+            {% else %}
+              <div class="text-muted small">No prescriptions available</div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Fourth Row: Prescribed Medicines Card -->
+<div class="row g-4 mb-4">
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-capsule-pill me-2"></i>Prescribed Medicines</h5>
+      </div>
+      <div class="card-body">
+        {% if prescriptions %}
+          <div class="row g-3">
+            {% for prescription in prescriptions %}
+              <div class="col-md-6">
+                <div class="card border h-100">
+                  <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">{{ prescription.created_at|date:'M d, Y' }}</h6>
+                    <span class="badge {% if prescription.status == 'pending' %}" style="background-color: #d8bfd8; color: #4a4a4a;"{% elif prescription.status == 'ready' %}bg-info{% elif prescription.status == 'dispensed' %}bg-success{% else %}bg-secondary{% endif %}">
+                      {{ prescription.get_status_display }}
+                    </span>
+                  </div>
+                  <div class="card-body">
+                    <div class="mb-2">
+                      <strong>Doctor:</strong> {{ prescription.doctor.get_full_name|default:prescription.doctor.username }}
+                    </div>
+                    {% if prescription.medicines.all %}
+                      <div class="mb-2">
+                        <strong>Medicines:</strong>
+                        {% for medicine in prescription.medicines.all %}
+                          <div class="small mt-1 p-2 bg-light rounded">
+                            <div class="fw-semibold">{{ medicine.drug_name }}</div>
+                            <div class="text-muted">{{ medicine.dosage }} - {{ medicine.frequency }}</div>
+                            <div class="text-muted">Duration: {{ medicine.duration }}</div>
+                            <div class="text-muted">Quantity: {{ medicine.quantity }}</div>
+                            {% if medicine.special_instructions %}
+                              <div class="text-info mt-1"><em>{{ medicine.special_instructions }}</em></div>
+                            {% endif %}
+                            {% if medicine.dispensed_quantity %}
+                              <div class="text-success mt-1"><strong>Dispensed:</strong> {{ medicine.dispensed_quantity }}</div>
+                            {% endif %}
+                            {% if medicine.substitution_notes %}
+                              <div class="mt-1" style="color: #6a4c93;"><strong>Substitution:</strong> {{ medicine.substitution_notes }}</div>
+                            {% endif %}
+                          </div>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                    {% if prescription.pharmacy_notes %}
+                      <div class="small">
+                        <strong>Pharmacy Notes:</strong> {{ prescription.pharmacy_notes }}
+                      </div>
+                    {% endif %}
+                    {% if prescription.dispensed_by %}
+                      <div class="small text-muted mt-2">
+                        <strong>Dispensed by:</strong> {{ prescription.dispensed_by.get_full_name|default:prescription.dispensed_by.username }}
+                        {% if prescription.dispensed_at %}
+                          on {{ prescription.dispensed_at|date:'M d, Y H:i' }}
+                        {% endif %}
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          {% if latest_doctor and latest_doctor.prescription_notes %}
+            <div class="row g-3">
+              <div class="col-md-6">
+                <div class="card border h-100">
+                  <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">{{ latest_doctor.timestamp|date:'M d, Y' }}</h6>
+                    <span class="badge bg-secondary">From Latest Consultation</span>
+                  </div>
+                  <div class="card-body">
+                    <div class="mb-2"><strong>Doctor Notes:</strong></div>
+                    <div class="small">{{ latest_doctor.prescription_notes|linebreaksbr }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% else %}
+            <div class="text-center text-muted py-4">
+              <i class="bi bi-capsule fs-1 mb-3"></i>
+              <p class="mb-0">No prescribed medicines found</p>
+              <small>Your prescriptions will appear here after doctor consultations</small>
+            </div>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Fifth Row: Doctor Notes Card -->
+<div class="row g-4 mb-4">
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-chat-dots me-2"></i>Doctor Notes & Advice</h5>
+      </div>
+      <div class="card-body">
+        {% for visit in visits %}
+          {% if visit.service == 'doctor' and visit.symptoms %}
+            <div class="row g-3">
+              <div class="col-md-6">
+                <h6 class="text-primary mb-2"><i class="bi bi-clipboard-pulse me-1"></i>Symptoms Reported</h6>
+                <div class="p-3 bg-light rounded">
+                  <div class="small">{{ visit.symptoms|linebreaksbr }}</div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <h6 class="text-success mb-2"><i class="bi bi-lightbulb me-1"></i>Doctor's Advice</h6>
+                <div class="p-3 bg-light rounded">
+                  <div class="small">
+                    {% if visit.diagnosis %}
+                      <div><strong>Diagnosis:</strong> {{ visit.diagnosis|linebreaksbr }}</div>
+                    {% endif %}
+                    {% if visit.prescription_notes %}
+                      <div class="mt-2"><strong>Prescription:</strong> {{ visit.prescription_notes|linebreaksbr }}</div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% endif %}
+        {% empty %}
+          <div class="text-center text-muted py-4">
+            <i class="bi bi-chat-square-text fs-4 mb-2"></i>
+            <p class="mb-0">No doctor notes available</p>
+            <small>Visit a doctor to see consultation notes and advice here</small>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Full Timeline Section -->
+<div class="row g-4">
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header bg-light">
+        <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Complete Visit Timeline</h5>
+      </div>
       <div class="card-body p-0">
         <ul class="list-group list-group-flush">
           {% for v in visits %}
             <li class="list-group-item">
               <div class="d-flex align-items-start">
-                <div class="me-2">{% if v.service == 'doctor' %}🩺{% elif v.service == 'lab' %}🧪{% elif v.service == 'pharmacy' %}💊{% elif v.service == 'vaccination' %}💉{% else %}📌{% endif %}</div>
-                <div>
+                <div class="me-3">
+                  {% if v.service == 'doctor' %}
+                    <i class="bi bi-stethoscope text-primary fs-5"></i>
+                  {% elif v.service == 'lab' %}
+                    <i class="bi bi-droplet text-info fs-5"></i>
+                  {% elif v.service == 'pharmacy' %}
+                    <i class="bi bi-capsule text-success fs-5"></i>
+                  {% elif v.service == 'vaccination' %}
+                    <i class="bi bi-shield-plus fs-5" style="color: #6a4c93;"></i>
+                  {% else %}
+                    <i class="bi bi-clipboard-check text-secondary fs-5"></i>
+                  {% endif %}
+                </div>
+                <div class="flex-grow-1">
                   <div class="fw-semibold">{{ v.timestamp|date:'Y-m-d H:i' }} — {{ v.get_service_display }}</div>
-                  <div class="small text-muted">{{ v.notes|default:'' }}</div>
+                  {% if v.department %}
+                    <div class="small text-muted">Department: {{ v.department }}</div>
+                  {% endif %}
+                  {% if v.notes %}
+                    <div class="small text-muted mt-1">{{ v.notes }}</div>
+                  {% endif %}
+                  {% if v.diagnosis %}
+                    <div class="small text-primary mt-1"><strong>Diagnosis:</strong> {{ v.diagnosis }}</div>
+                  {% endif %}
+                  {% if v.prescription_notes %}
+                    <div class="small text-success mt-1"><strong>Prescription:</strong> {{ v.prescription_notes }}</div>
+                  {% endif %}
+                </div>
+                <div class="ms-2">
+                  <span class="badge {% if v.status == 'queued' %}bg-secondary{% elif v.status == 'claimed' %}" style="background-color: #d8bfd8; color: #4a4a4a;"{% elif v.status == 'in_process' %}bg-info{% else %}bg-success{% endif %}">
+                    {{ v.get_status_display }}
+                  </span>
                 </div>
               </div>
             </li>
           {% empty %}
-            <li class="list-group-item text-center text-muted">No visits yet.</li>
+            <li class="list-group-item text-center text-muted py-4">
+              <i class="bi bi-clipboard-data fs-4 mb-2"></i>
+              <p class="mb-0">No visits yet.</p>
+              <small>Your visit history will appear here</small>
+            </li>
           {% endfor %}
         </ul>
       </div>
@@ -51,5 +573,94 @@
   </div>
 </div>
 
- 
+<script>
+function printQRCode() {
+  // Create a new window for printing
+  const printWindow = window.open('', '_blank', 'width=600,height=600');
+  
+  // Get the QR code container
+  const qrContainer = document.querySelector('.qr-code-container');
+  
+  if (qrContainer) {
+    // Create the print content
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>QR Code - {{ patient.full_name }}</title>
+        <style>
+          body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+          }
+          .qr-code-container {
+            text-align: center;
+            max-width: 100%;
+          }
+          .qr-code-container img {
+            max-width: 100%;
+            height: auto;
+            border: 2px solid #333;
+            border-radius: 8px;
+          }
+          .patient-info {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #333;
+          }
+          .patient-name {
+            font-weight: bold;
+            font-size: 20px;
+            margin-bottom: 10px;
+          }
+          .patient-code {
+            font-size: 16px;
+            color: #666;
+          }
+          .instructions {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
+            font-style: italic;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="qr-code-container">
+          ${qrContainer.innerHTML}
+          <div class="patient-info">
+            <div class="patient-name">{{ patient.full_name }}</div>
+            <div class="patient-code">Patient Code: {{ patient.patient_code }}</div>
+          </div>
+          <div class="instructions">
+            Scan this QR code for quick check-in at the clinic
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    // Write content to the new window
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    
+    // Wait for content to load, then print
+    printWindow.onload = function() {
+      printWindow.focus();
+      printWindow.print();
+      printWindow.close();
+    };
+  } else {
+    alert('QR code not found');
+  }
+}
+</script>
+
 {% endblock %}

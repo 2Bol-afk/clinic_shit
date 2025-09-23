@@ -1,0 +1,322 @@
+{% extends 'base.html' %}
+{% block content %}
+<h4 class="d-flex align-items-center mb-3">
+  <i class="bi bi-gear text-warning me-2"></i>System Accounts Management
+</h4>
+
+<!-- System Accounts Table -->
+<div class="card">
+  <div class="card-header">
+    <h5 class="card-title mb-0">
+      <i class="bi bi-shield-check me-2"></i>System Accounts
+    </h5>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>Account Type</th>
+            <th>Username</th>
+            <th>Email</th>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for account in system_accounts %}
+            <tr>
+              <td>
+                <span class="badge bg-primary">{{ account.type }}</span>
+              </td>
+              <td>
+                <strong>{{ account.username }}</strong>
+              </td>
+              <td>{{ account.email }}</td>
+              <td>{{ account.first_name }} {{ account.last_name }}</td>
+              <td>
+                {% if account.is_active %}
+                  <span class="badge bg-success">Active</span>
+                {% else %}
+                  <span class="badge bg-danger">Inactive</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="btn-group btn-group-sm" role="group">
+                  <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal{{ forloop.counter }}">
+                    <i class="bi bi-pencil"></i> Edit
+                  </button>
+                  <form method="post" action="{% url 'admin_reset_system_account_password' account.type %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-warning" onclick="return confirm('Reset password for {{ account.type }} account?')">
+                      <i class="bi bi-key"></i> Reset Password
+                    </button>
+                  </form>
+                  <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#setPwModal{{ forloop.counter }}">
+                    <i class="bi bi-shield-lock"></i> Set Password
+                  </button>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Doctors Table -->
+<div class="card mt-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h5 class="card-title mb-0">
+      <i class="bi bi-person-vcard me-2"></i>Doctor Accounts
+    </h5>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Department</th>
+            <th>Username</th>
+            <th>Email</th>
+            <th>Role Assigned</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in doctor_accounts %}
+            <tr>
+              <td>{{ d.full_name }}</td>
+              <td>{{ d.specialization }}</td>
+              <td>{{ d.username }}</td>
+              <td>{{ d.email }}</td>
+              <td>
+                {% if d.has_doctor_group %}
+                  <span class="badge bg-success">Doctor</span>
+                {% else %}
+                  <span class="badge bg-danger">Missing</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="btn-group btn-group-sm" role="group">
+                  <a href="{% url 'doctor_edit' d.id %}" class="btn btn-outline-primary">
+                    <i class="bi bi-pencil"></i> Edit
+                  </a>
+                  <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#setDoctorPwModal{{ forloop.counter }}">
+                    <i class="bi bi-shield-lock"></i> Set Password
+                  </button>
+                </div>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="text-muted text-center">No doctor accounts found.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modals -->
+{% for account in system_accounts %}
+<div class="modal fade" id="editModal{{ forloop.counter }}" tabindex="-1" aria-labelledby="editModal{{ forloop.counter }}Label" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="editModal{{ forloop.counter }}Label">
+          <i class="bi bi-pencil me-2"></i>Edit {{ account.type }} Account
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" action="{% url 'admin_edit_system_account' account.type %}">
+        {% csrf_token %}
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="username{{ forloop.counter }}" class="form-label">Username</label>
+            <input type="text" class="form-control" id="username{{ forloop.counter }}" name="username" value="{{ account.username }}" required>
+          </div>
+          <div class="mb-3">
+            <label for="email{{ forloop.counter }}" class="form-label">Email</label>
+            <input type="email" class="form-control" id="email{{ forloop.counter }}" name="email" value="{{ account.email }}" required>
+          </div>
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="first_name{{ forloop.counter }}" class="form-label">First Name</label>
+                <input type="text" class="form-control" id="first_name{{ forloop.counter }}" name="first_name" value="{{ account.first_name }}" required>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="last_name{{ forloop.counter }}" class="form-label">Last Name</label>
+                <input type="text" class="form-control" id="last_name{{ forloop.counter }}" name="last_name" value="{{ account.last_name }}" required>
+              </div>
+            </div>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="is_active{{ forloop.counter }}" name="is_active" {% if account.is_active %}checked{% endif %}>
+            <label class="form-check-label" for="is_active{{ forloop.counter }}">
+              Account Active
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check me-1"></i>Save Changes
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<!-- Set Password Modals -->
+{% for account in system_accounts %}
+<div class="modal fade" id="setPwModal{{ forloop.counter }}" tabindex="-1" aria-labelledby="setPwModal{{ forloop.counter }}Label" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="setPwModal{{ forloop.counter }}Label">
+          <i class="bi bi-shield-lock me-2"></i>Set Password — {{ account.type }} Account
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" action="{% url 'admin_set_system_account_password' account.type %}">
+        {% csrf_token %}
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">New Password</label>
+            <div class="input-group">
+              <input type="password" name="password1" id="sysPw1{{ forloop.counter }}" class="form-control" required minlength="8">
+              <button type="button" class="btn btn-outline-secondary toggle-pw" data-target="sysPw1{{ forloop.counter }}" aria-label="Show password">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Confirm Password</label>
+            <div class="input-group">
+              <input type="password" name="password2" id="sysPw2{{ forloop.counter }}" class="form-control" required minlength="8">
+              <button type="button" class="btn btn-outline-secondary toggle-pw" data-target="sysPw2{{ forloop.counter }}" aria-label="Show password">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+          </div>
+          <div class="text-muted small">Minimum 8 characters.</div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-check2-circle me-1"></i>Update Password
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<!-- Set Doctor Password Modals -->
+{% for d in doctor_accounts %}
+<div class="modal fade" id="setDoctorPwModal{{ forloop.counter }}" tabindex="-1" aria-labelledby="setDoctorPwModal{{ forloop.counter }}Label" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="setDoctorPwModal{{ forloop.counter }}Label">
+          <i class="bi bi-shield-lock me-2"></i>Set Password — {{ d.full_name }}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" action="{% url 'admin_set_doctor_password' d.id %}">
+        {% csrf_token %}
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">New Password</label>
+            <div class="input-group">
+              <input type="password" name="password1" id="docPw1{{ forloop.counter }}" class="form-control" required minlength="8">
+              <button type="button" class="btn btn-outline-secondary toggle-pw" data-target="docPw1{{ forloop.counter }}" aria-label="Show password">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Confirm Password</label>
+            <div class="input-group">
+              <input type="password" name="password2" id="docPw2{{ forloop.counter }}" class="form-control" required minlength="8">
+              <button type="button" class="btn btn-outline-secondary toggle-pw" data-target="docPw2{{ forloop.counter }}" aria-label="Show password">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+          </div>
+          <div class="text-muted small">Minimum 8 characters.</div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-check2-circle me-1"></i>Update Password
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<script>
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.toggle-pw');
+  if (!btn) return;
+  const targetId = btn.getAttribute('data-target');
+  const input = document.getElementById(targetId);
+  if (!input) return;
+  const icon = btn.querySelector('i');
+  if (input.type === 'password') {
+    input.type = 'text';
+    if (icon) { icon.classList.remove('bi-eye'); icon.classList.add('bi-eye-slash'); }
+    btn.setAttribute('aria-label', 'Hide password');
+  } else {
+    input.type = 'password';
+    if (icon) { icon.classList.remove('bi-eye-slash'); icon.classList.add('bi-eye'); }
+    btn.setAttribute('aria-label', 'Show password');
+  }
+});
+</script>
+
+<!-- Information Card -->
+<div class="card mt-4">
+  <div class="card-header">
+    <h5 class="card-title mb-0">
+      <i class="bi bi-info-circle me-2"></i>System Accounts Information
+    </h5>
+  </div>
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-4">
+        <h6><i class="bi bi-shield-check text-primary me-2"></i>Pharmacy Account</h6>
+        <p class="text-muted small">Used for pharmacy operations and prescription management.</p>
+      </div>
+      <div class="col-md-4">
+        <h6><i class="bi bi-flask text-success me-2"></i>Laboratory Account</h6>
+        <p class="text-muted small">Used for laboratory operations and test result management.</p>
+      </div>
+      <div class="col-md-4">
+        <h6><i class="bi bi-shield-plus text-warning me-2"></i>Vaccination Account</h6>
+        <p class="text-muted small">Used for vaccination operations and immunization management.</p>
+      </div>
+    </div>
+    <div class="alert alert-info mt-3">
+      <i class="bi bi-lightbulb me-2"></i>
+      <strong>Note:</strong> System accounts are automatically created if they don't exist. 
+      Password resets generate temporary passwords that should be changed on first login.
+    </div>
+  </div>
+</div>
+
+{% endblock %}

@@ -21,14 +21,19 @@ from django.conf.urls.static import static
 from django.views.generic import RedirectView
 from django.contrib.auth import views as auth_views
 
+from dashboard import admin_views as dashboard_admin_views
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('django.contrib.auth.urls')),
-    # Ensure password change URL works for patient flow
-    path('accounts/password_change/', auth_views.PasswordChangeView.as_view(), name='password_change'),
+    # Removed Django built-in password change view to prevent account selection issues
+    # Custom password change views are used instead
     path('', RedirectView.as_view(url='/accounts/login/', permanent=False)),
     path('patients/', include('patients.urls')),
+    # Patient self-service reports
+    path('patient/report/', dashboard_admin_views.patient_report, name='patient_self_report'),
     path('visits/', include('visits.urls')),
     path('dashboard/', include('dashboard.urls')),
+    path('vaccinations/', include('vaccinations.urls')),
     path('gmail-test/', include('gmail_test.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

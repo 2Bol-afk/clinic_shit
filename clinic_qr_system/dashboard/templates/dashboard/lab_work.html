@@ -9,8 +9,7 @@
 <div class="card shadow-sm">
   <div class="card-body">
     <div class="mb-2 text-muted small">Logged: {{ v.timestamp|date:'Y-m-d H:i' }}{% if v.queue_number %} · Queue: {{ v.queue_number }}{% endif %}</div>
-    <div class="mb-1"><strong>Requested Tests:</strong> {{ v.lab_tests|default:'-' }}</div>
-    <div class="mb-3"><strong>Department:</strong> {{ v.lab_test_type|default:'Not Selected' }}</div>
+    <div class="mb-1"><strong>Requested Test:</strong> {{ v.lab_test_type|default:v.lab_tests|default:'Not Selected' }}</div>
     <form method="post" class="row g-3">
       {% csrf_token %}
       <div class="col-md-6 result-field" data-index="1">
@@ -38,9 +37,8 @@
         <input class="form-control" name="interpretation" value="{{ prefill.interpretation }}">
       </div>
       <div class="col-12 d-flex gap-2">
-        <button class="btn btn-primary" name="save_only" value="1" type="submit"><i class="bi bi-save me-1"></i>Save</button>
         <button class="btn btn-success" name="complete" value="1" type="submit"><i class="bi bi-check2-circle me-1"></i>Mark as Done</button>
-        <button class="btn btn-warning" name="mark_not_done" value="1" type="submit"><i class="bi bi-x-circle me-1"></i>Mark as Not Done</button>
+        <button class="btn" name="mark_not_done" value="1" type="submit" style="background-color: #6a4c93; color: white; border-color: #6a4c93;"><i class="bi bi-x-circle me-1"></i>Mark as Not Done</button>
       </div>
     </form>
   </div>
@@ -50,33 +48,111 @@
 
 <script>
 (function(){
+  // Labels for main departments
   const labelSets = {
-    'Hematology': ['Hemoglobin','Hematocrit','WBC Count','RBC Count','Platelet Count'],
-    'Clinical Microscopy': ['Color','Appearance','Specific Gravity','pH','Protein'],
-    'Clinical Chemistry': ['Glucose','Cholesterol','Triglycerides','LDL','HDL'],
-    'Immunology and Serology': ['Test Type','Result','Antibody/Antigen Level','',''],
-    'Microbiology': ['Specimen Type','Organism Isolated','Gram Stain Result','Antibiotic Sensitivity',''],
-    'Pathology': ['Specimen Type','Gross Description','Microscopic Findings','Diagnosis/Interpretation','']
+    'Hematology': ['WBC','RBC','Hemoglobin','Hematocrit','Platelet Count'],
+    'Clinical Chemistry': ['Fasting Blood Sugar','Cholesterol','Triglycerides','Creatinine','Uric Acid'],
+    'Immunology and Serology': ['HBsAg','HIV','Syphilis','',''],
+    'Microbiology': ['Specimen Type','Culture Result','Sensitivity','',''],
+    'Pathology': ['Specimen Description','Gross Findings','Microscopic Findings','Pathologist Impression','']
+  };
+  const placeholderSets = {
+    'Hematology': [
+      'Enter White Blood Cell count',
+      'Enter Red Blood Cell count',
+      'Enter Hemoglobin level (g/dL)',
+      'Enter Hematocrit percentage (%)',
+      'Enter Platelet count (×10⁹/L)'
+    ],
+    'Clinical Chemistry': [
+      'Enter FBS result (mg/dL)',
+      'Enter cholesterol level (mg/dL)',
+      'Enter triglyceride level (mg/dL)',
+      'Enter creatinine level (mg/dL)',
+      'Enter uric acid level (mg/dL)'
+    ],
+    'Immunology and Serology': [
+      'Enter HBsAg test result (Reactive/Non-reactive)',
+      'Enter HIV test result (Reactive/Non-reactive)',
+      'Enter Syphilis test result (Reactive/Non-reactive)','', ''
+    ],
+    'Microbiology': [
+      'Enter specimen type (e.g., urine, blood, sputum)',
+      'Enter culture findings',
+      'Enter antibiotic sensitivity results','', ''
+    ],
+    'Pathology': [
+      'Enter tissue/biopsy specimen description',
+      'Enter gross examination findings',
+      'Enter microscopic examination findings',
+      'Enter final diagnosis or impression',''
+    ]
+  };
+  // Clinical Microscopy subtypes
+  const microSubLabels = {
+    urinalysis: ['Color','Clarity','pH','Protein','Glucose / Ketones'],
+    fecalysis: ['Consistency','Color','Microscopic Findings','','']
+  };
+  const microSubPlaceholders = {
+    urinalysis: [
+      'Enter urine color',
+      'Enter urine clarity/appearance',
+      'Enter urine pH level',
+      'Enter protein result',
+      'Enter glucose and/or ketone results'
+    ],
+    fecalysis: [
+      'Enter stool consistency (formed, soft, loose, watery)',
+      'Enter stool color',
+      'Enter microscopic findings (e.g., ova, parasites, pus cells)','', ''
+    ]
   };
   const interpretationLabels = {
     'Hematology': 'Remarks',
-    'Clinical Microscopy': 'Microscopy Findings / Remarks',
+    'Clinical Microscopy': 'Remarks',
     'Clinical Chemistry': 'Remarks',
     'Immunology and Serology': 'Remarks',
     'Microbiology': 'Remarks',
     'Pathology': 'Remarks'
   };
+  function setField(i, labelText, placeholder){
+    const lid = ['label_r1','label_r2','label_r3','label_r4','label_r5'][i];
+    const inp = document.querySelectorAll('input[name^="result_"]')[i];
+    const wrap = document.querySelectorAll('.result-field')[i];
+    if(document.getElementById(lid)) document.getElementById(lid).textContent = labelText || `Result ${i+1}`;
+    if(inp) inp.placeholder = placeholder || '';
+    if(wrap) wrap.style.display = labelText ? '' : 'none';
+  }
+  function applyMicroscopy(sub){
+    const labels = microSubLabels[sub] || [];
+    const ph = microSubPlaceholders[sub] || [];
+    for(let i=0;i<5;i++) setField(i, labels[i]||'', ph[i]||'');
+    const li = document.getElementById('label_interp');
+    if(li){ li.textContent = 'Remarks'; }
+  }
   function applyLabels(dept){
-    const labels = labelSets[dept] || [];
-    const ls = [document.getElementById('label_r1'),document.getElementById('label_r2'),document.getElementById('label_r3'),document.getElementById('label_r4'),document.getElementById('label_r5')];
-    const wrappers = document.querySelectorAll('.result-field');
-    for(let i=0;i<ls.length;i++){
-      const text = labels[i] || '';
-      if(ls[i]) ls[i].textContent = text || `Result ${i+1}`;
-      if(wrappers[i]) wrappers[i].style.display = text ? '' : 'none';
-    }
+    const ls = labelSets[dept] || [];
+    const ph = placeholderSets[dept] || [];
+    for(let i=0;i<5;i++) setField(i, ls[i]||'', ph[i]||'');
     const li = document.getElementById('label_interp');
     if(li){ li.textContent = interpretationLabels[dept] || 'Interpretation'; }
+    // Handle microscopy subtype picker
+    const infoRow = document.querySelector('.mb-3'); // department row
+    if(dept === 'Clinical Microscopy'){
+      let subWrap = document.getElementById('microscopy-subtype-wrap');
+      if(!subWrap){
+        subWrap = document.createElement('div');
+        subWrap.id = 'microscopy-subtype-wrap';
+        subWrap.className = 'mt-2';
+        subWrap.innerHTML = '<label class="form-label">Clinical Microscopy Subtype</label><select class="form-select" id="microscopy-subtype"><option value="urinalysis">Urinalysis</option><option value="fecalysis">Fecalysis</option></select>';
+        if(infoRow && infoRow.parentNode){ infoRow.parentNode.insertBefore(subWrap, infoRow.nextSibling); }
+        subWrap.querySelector('select').addEventListener('change', function(){ applyMicroscopy(this.value); });
+      }
+      applyMicroscopy('urinalysis');
+    } else {
+      const subWrap = document.getElementById('microscopy-subtype-wrap');
+      if(subWrap) subWrap.remove();
+    }
   }
   const dept = '{{ v.lab_test_type|default:"" }}';
   if(dept){ applyLabels(dept); }

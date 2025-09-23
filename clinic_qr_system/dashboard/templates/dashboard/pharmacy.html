@@ -1,227 +1,258 @@
 {% extends 'base.html' %}
 {% block content %}
-<h4 class="d-flex align-items-center mb-3"><i class="bi bi-capsule-pill text-success me-2"></i>Pharmacy Workflow</h4>
-<div class="mb-3">
-  <a href="#" class="btn btn-lg btn-outline-success qr-scan-btn" data-intent="staff"><i class="bi bi-camera me-2"></i>Scan QR</a>
-  <small class="text-muted ms-2">Retrieve prescription via patient QR</small>
-  <hr>
-</div>
-
-<div class="card shadow-sm mb-3">
-  <div class="card-body">
-    <label class="form-label">Scan QR / Enter Patient Code</label>
-    <div class="input-group">
-      <span class="input-group-text"><i class="bi bi-qr-code-scan"></i></span>
-      <input type="text" id="pharmCode" class="form-control" placeholder="Scan or type patient code">
-      <button class="btn btn-success" id="pharmLoad"><i class="bi bi-search me-1"></i>Load</button>
-    </div>
-  </div>
-</div>
-
-<div class="row g-3">
-  <div class="col-lg-5">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <h6 class="mb-2">Patient Profile</h6>
-        <div id="patientCard" class="small text-muted">Scan a QR to load patient...</div>
-      </div>
-    </div>
-    <div class="card shadow-sm mt-3">
-      <div class="card-body">
-        <h6 class="mb-2">Prescription Review</h6>
-        <div id="rxDetails" class="small text-muted">No prescription loaded.</div>
-        <div class="mt-2">
-          <label class="form-label">Pharmacist Notes / Validation</label>
-          <textarea id="pharmNotes" class="form-control" rows="2" placeholder="Check allergies, interactions, etc."></textarea>
-        </div>
-        <div class="mt-2 text-success d-none" id="step1Done"><i class="bi bi-check-circle-fill me-1"></i>Review completed</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-lg-7">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <h6 class="mb-2">Medicine Preparation & Dispensing</h6>
-        <div id="medList" class="small text-muted">No medicines.</div>
-        <div class="mt-3">
-          <label class="form-label">Auto Label</label>
-          <textarea id="labelOut" class="form-control" rows="3" readonly></textarea>
-        </div>
-        <div class="mt-2 text-success d-none" id="step2Done"><i class="bi bi-check-circle-fill me-1"></i>Dispensing completed</div>
-      </div>
-    </div>
-    <div class="card shadow-sm mt-3">
-      <div class="card-body">
-        <h6 class="mb-2">Patient Counseling</h6>
-        <textarea id="counseling" class="form-control" rows="3" placeholder="Usage, side effects, precautions..."></textarea>
-        <div class="form-check mt-2">
-          <input class="form-check-input" type="checkbox" id="counselDone">
-          <label class="form-check-label" for="counselDone">Counseling Completed</label>
-        </div>
-        <div class="mt-2 text-success d-none" id="step3Done"><i class="bi bi-check-circle-fill me-1"></i>Counseling completed</div>
-      </div>
-    </div>
-    <div class="card shadow-sm mt-3">
-      <div class="card-body">
-        <h6 class="mb-2">Documentation & Follow-Up</h6>
-        <div class="row g-2">
-          <div class="col-md-6">
-            <label class="form-label">Next Refill</label>
-            <input type="date" id="nextRefill" class="form-control">
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">Reminder Notes</label>
-            <input type="text" id="followNotes" class="form-control" placeholder="Reminder / monitoring notes">
-          </div>
-        </div>
-        <div class="mt-3 d-flex gap-2">
-          <button class="btn btn-success" id="completeAll"><i class="bi bi-check2-circle me-1"></i>Complete & Log</button>
-          <button class="btn btn-outline-secondary" id="resetAll"><i class="bi bi-arrow-counterclockwise me-1"></i>Reset</button>
-        </div>
-        <div class="mt-2 text-success d-none" id="docLogged"><i class="bi bi-check-circle-fill me-1"></i>Documentation saved</div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="row g-3 mt-4">
-  <div class="col-md-6">
-    <div class="card shadow-sm">
-      <div class="card-header"><i class="bi bi-list-check me-2"></i>Prescriptions from Doctors</div>
-      <div class="card-body p-0">
-        <ul class="list-group list-group-flush">
-          {% for v in prescriptions %}
-            <li class="list-group-item">
-              <a href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a>
-              <div class="small">Prescription: {{ v.prescription_notes|default:'-' }}</div>
-              <div class="small text-muted">{{ v.timestamp|date:'Y-m-d H:i' }}</div>
-            </li>
-          {% empty %}
-            <li class="list-group-item">No prescriptions.</li>
-          {% endfor %}
-        </ul>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-6">
-    <div class="card shadow-sm">
-      <div class="card-header"><i class="bi bi-check2-square me-2"></i>Recently Dispensed</div>
-      <div class="card-body p-0">
-        <ul class="list-group list-group-flush">
-          {% for v in dispensed %}
-            <li class="list-group-item">
-              <a href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a>
-              <div class="small">Medicines: {{ v.medicines|default:'-' }}</div>
-              <div class="small text-muted">{{ v.timestamp|date:'Y-m-d H:i' }}</div>
-            </li>
-          {% empty %}
-            <li class="list-group-item">No dispenses yet.</li>
-          {% endfor %}
-        </ul>
-      </div>
-    </div>
-  </div>
-</div>
-
 <script>
-(function(){
-  const codeInput = document.getElementById('pharmCode');
-  const loadBtn = document.getElementById('pharmLoad');
-  const patientCard = document.getElementById('patientCard');
-  const rxDetails = document.getElementById('rxDetails');
-  const medList = document.getElementById('medList');
-  const labelOut = document.getElementById('labelOut');
-  const notes = document.getElementById('pharmNotes');
-  const counsel = document.getElementById('counseling');
-  const counselDone = document.getElementById('counselDone');
-  const step1Done = document.getElementById('step1Done');
-  const step2Done = document.getElementById('step2Done');
-  const step3Done = document.getElementById('step3Done');
-  const nextRefill = document.getElementById('nextRefill');
-  const followNotes = document.getElementById('followNotes');
-  const completeAll = document.getElementById('completeAll');
-  const resetAll = document.getElementById('resetAll');
-
-  function setStep(el, done){ el.classList.toggle('d-none', !done); }
-
-  function buildLabel(patient, med){
-    return `${patient.full_name} — ${med.name} — ${med.dosage} — ${med.frequency} — ${med.duration}`;
-  }
-
-  function renderMeds(meds, patient){
-    if(!meds || !meds.length){ medList.textContent = 'No medicines.'; return; }
-    const ul = document.createElement('ul');
-    ul.className = 'list-group';
-    meds.forEach((m, idx)=>{
-      const li = document.createElement('li');
-      li.className = 'list-group-item';
-      li.innerHTML = `
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" id="med_${idx}">
-          <label class="form-check-label" for="med_${idx}"><strong>${m.name}</strong> — ${m.dosage}, ${m.frequency}, ${m.duration}</label>
-        </div>
-        <div class="row g-2 mt-2">
-          <div class="col-6">
-            <label class="form-label">Quantity</label>
-            <input type="number" class="form-control" id="qty_${idx}" min="0" value="0">
-          </div>
-          <div class="col-6">
-            <label class="form-label">Label</label>
-            <input type="text" class="form-control" id="lbl_${idx}" value="${buildLabel(patient, m)}">
-          </div>
-        </div>
-      `;
-      ul.appendChild(li);
-    });
-    medList.innerHTML = '';
-    medList.appendChild(ul);
-  }
-
-  function parsePrescription(text){
-    // Expecting lines like: Drug — Dosage — Frequency — Duration
-    const meds = [];
-    if(!text) return meds;
-    text.split('\n').forEach(line=>{
-      const parts = line.split(/\s+[-–—]\s+/);
-      if(parts.length >= 4){
-        meds.push({ name: parts[0], dosage: parts[1], frequency: parts[2], duration: parts[3] });
-      }
-    });
-    return meds;
-  }
-
-  function loadPatientByCode(code){
-    if(!code){ return; }
-    fetch(`/dashboard/api/patient_by_code/${encodeURIComponent(code)}/`).then(r=>{
-      if(!r.ok) throw new Error('Not found');
-      return r.json();
-    }).then(data=>{
-      patientCard.innerHTML = `<div class="fw-semibold">${data.full_name}</div>
-        <div class="small text-muted">Age: ${data.age} · ID: ${data.id}</div>`;
-      const meds = parsePrescription(data.last_prescription || '');
-      rxDetails.textContent = data.last_prescription || 'No prescription loaded.';
-      renderMeds(meds, data);
-      labelOut.value = meds.map(m=> buildLabel(data, m)).join('\n');
-      setStep(step1Done, true);
-    }).catch(()=>{
-      patientCard.textContent = 'Patient not found.';
-      rxDetails.textContent = 'No prescription loaded.';
-      medList.textContent = 'No medicines.';
-      labelOut.value = '';
-      setStep(step1Done, false);
-    });
-  }
-
-  loadBtn.addEventListener('click', ()=> loadPatientByCode(codeInput.value.trim()));
-  codeInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); loadPatientByCode(codeInput.value.trim()); }});
-
-  completeAll.addEventListener('click', ()=>{
-    setStep(step2Done, true);
-    setStep(step3Done, counselDone.checked);
-    // TODO: POST to backend to log dispensed meds
-    setStep(document.getElementById('docLogged'), true);
-  });
-  resetAll.addEventListener('click', ()=>{ location.reload(); });
-})();
+  // Set pharmacy role for QR scanning
+  document.body.setAttribute('data-user-role', 'pharmacy');
 </script>
+<h4 class="d-flex align-items-center mb-3"><i class="bi bi-capsule-pill text-success me-2"></i>Pharmacy Dashboard</h4>
+
+<!-- Statistics Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card" style="background-color: #e6e6fa; color: #4a4a4a;">
+      <div class="card-body">
+        <div class="d-flex align-items-center">
+          <div class="flex-grow-1">
+            <h5 class="mb-0">{{ stats.total_pending }}</h5>
+            <small>Pending Prescriptions</small>
+          </div>
+          <i class="bi bi-clock-history fs-1 opacity-50"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card bg-success text-white">
+      <div class="card-body">
+        <div class="d-flex align-items-center">
+          <div class="flex-grow-1">
+            <h5 class="mb-0">{{ stats.total_dispensed_today }}</h5>
+            <small>Dispensed Today</small>
+          </div>
+          <i class="bi bi-check-circle fs-1 opacity-50"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card bg-info text-white">
+      <div class="card-body">
+        <div class="d-flex align-items-center">
+          <div class="flex-grow-1">
+            <h5 class="mb-0">{{ stats.total_dispensed_week }}</h5>
+            <small>Dispensed This Week</small>
+          </div>
+          <i class="bi bi-graph-up fs-1 opacity-50"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Search and Filter -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-3">
+      <div class="col-md-3">
+        {{ search_form.search }}
+      </div>
+      <div class="col-md-2">
+        {{ search_form.status }}
+      </div>
+      <div class="col-md-2">
+        {{ search_form.date_from }}
+      </div>
+      <div class="col-md-2">
+        {{ search_form.date_to }}
+      </div>
+      <div class="col-md-1">
+        <button class="btn btn-primary w-100" type="submit">
+          <i class="bi bi-search me-1"></i>Search
+        </button>
+      </div>
+      <div class="col-md-2">
+        <button type="button" class="btn btn-success w-100 qr-scan-btn" data-intent="pharmacy">
+          <i class="bi bi-qr-code-scan me-1"></i>Scan QR
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Pending Prescriptions -->
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-list-check me-2"></i>Pending Prescriptions</h5>
+        <span class="badge" style="background-color: #d8bfd8; color: #4a4a4a;">{{ pending_prescriptions.count }}</span>
+      </div>
+      <div class="card-body p-0">
+        {% if pending_prescriptions %}
+          <div class="list-group list-group-flush">
+            {% for prescription in pending_prescriptions %}
+              <div class="list-group-item">
+                <div class="row g-3 align-items-center">
+                  <div class="col-md-2">
+                    {% if prescription.visit.patient.profile_photo %}
+                      <img src="{{ prescription.visit.patient.profile_photo.url }}" 
+                           class="rounded-circle" 
+                           style="width: 50px; height: 50px; object-fit: cover;" 
+                           alt="Profile Photo">
+                    {% else %}
+                      <div class="rounded-circle bg-light d-flex align-items-center justify-content-center" 
+                           style="width: 50px; height: 50px;">
+                        <i class="bi bi-person-fill text-muted"></i>
+                      </div>
+                    {% endif %}
+                  </div>
+                  <div class="col-md-6">
+                    <div class="fw-semibold">{{ prescription.visit.patient.full_name }}</div>
+                    <div class="small text-muted">
+                      Doctor: {{ prescription.doctor.get_full_name|default:prescription.doctor.username }}
+                    </div>
+                    <div class="small text-muted">
+                      Created: {{ prescription.created_at|date:'M d, Y H:i' }}
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="small mb-1">
+                      <strong>Medicines:</strong>
+                      {% for medicine in prescription.medicines.all %}
+                        <div class="small">{{ medicine.drug_name }} - {{ medicine.dosage }}</div>
+                      {% endfor %}
+                    </div>
+                    <div class="d-flex gap-1">
+                      <span class="badge {% if prescription.status == 'pending' %}" style="background-color: #d8bfd8; color: #4a4a4a;"{% else %}bg-info{% endif %}">
+                        {{ prescription.get_status_display }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div class="row mt-2">
+                  <div class="col-12">
+                    <div class="d-flex gap-2">
+                      {% if prescription.status == 'pending' %}
+                        <a href="{% url 'pharmacy_mark_ready' prescription.id %}" 
+                           class="btn btn-outline-info btn-sm">
+                          <i class="bi bi-check-circle me-1"></i>Mark Ready
+                        </a>
+                      {% endif %}
+                      <a href="{% url 'pharmacy_dispense' prescription.id %}" 
+                         class="btn btn-success btn-sm">
+                        <i class="bi bi-capsule me-1"></i>Dispense
+                      </a>
+                      <a href="/patients/{{ prescription.visit.patient.id }}/" 
+                         class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-person me-1"></i>View Patient
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-center py-4 text-muted">
+            <i class="bi bi-inbox fs-1 mb-2"></i>
+            <p class="mb-0">No pending prescriptions found.</p>
+            {% if search_query or status_filter or date_from or date_to %}
+              <small>Try adjusting your search filters.</small>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Recently Dispensed -->
+  <div class="col-lg-4">
+    <div class="card shadow-sm">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-check2-square me-2"></i>Recently Dispensed</h5>
+      </div>
+      <div class="card-body p-0">
+        {% if dispensed_prescriptions %}
+          <div class="list-group list-group-flush">
+            {% for prescription in dispensed_prescriptions %}
+              <div class="list-group-item">
+                <div class="d-flex align-items-start">
+                  <div class="me-3">
+                    {% if prescription.visit.patient.profile_photo %}
+                      <img src="{{ prescription.visit.patient.profile_photo.url }}" 
+                           class="rounded-circle" 
+                           style="width: 40px; height: 40px; object-fit: cover;" 
+                           alt="Profile Photo">
+                    {% else %}
+                      <div class="rounded-circle bg-light d-flex align-items-center justify-content-center" 
+                           style="width: 40px; height: 40px;">
+                        <i class="bi bi-person-fill text-muted small"></i>
+                      </div>
+                    {% endif %}
+                  </div>
+                  <div class="flex-grow-1">
+                    <div class="fw-semibold small">{{ prescription.visit.patient.full_name }}</div>
+                    <div class="small text-muted">
+                      {{ prescription.dispensed_at|date:'M d, Y H:i' }}
+                    </div>
+                    <div class="small text-muted">
+                      Dispensed by:
+                      {% if prescription.dispensed_by %}
+                        {{ prescription.dispensed_by.get_full_name|default:prescription.dispensed_by.username }}
+                      {% else %}
+                        —
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-center py-4 text-muted">
+            <i class="bi bi-check-circle fs-1 mb-2"></i>
+            <p class="mb-0">No dispensed prescriptions yet.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mt-4">
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-lightning me-2"></i>Quick Actions</h5>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-3">
+            <a href="?status=pending" class="btn w-100" style="border-color: #d8bfd8; color: #6a4c93;">
+              <i class="bi bi-clock me-1"></i>View Pending Only
+            </a>
+          </div>
+          <div class="col-md-3">
+            <a href="?status=ready" class="btn btn-outline-info w-100">
+              <i class="bi bi-check-circle me-1"></i>View Ready Only
+            </a>
+          </div>
+          <div class="col-md-3">
+            <a href="?status=dispensed" class="btn btn-outline-success w-100">
+              <i class="bi bi-check2-square me-1"></i>View Dispensed Only
+            </a>
+          </div>
+          <div class="col-md-3">
+            <a href="{% url 'pharmacy_reports' %}" class="btn btn-outline-info w-100">
+              <i class="bi bi-graph-up me-1"></i>View Reports
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 {% endblock %}

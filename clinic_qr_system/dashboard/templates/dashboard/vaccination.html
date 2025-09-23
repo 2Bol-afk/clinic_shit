@@ -1,10 +1,8 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h4 class="mb-0 d-flex align-items-center"><i class="bi bi-shield-plus text-success me-2"></i>Vaccination Dashboard ({{ today }})</h4>
-  <div class="d-flex gap-2"></div>
-  </div>
-
+<h4 class="d-flex align-items-center mb-3"><i class="bi bi-shield-plus text-success me-2"></i>Vaccination Dashboard ({{ today }})</h4>
+ 
 <div class="row g-3">
   <div class="col-md-6">
     <h6>Unclaimed (Reception-tagged for Vaccination)</h6>
@@ -13,7 +11,7 @@
         <li class="list-group-item" data-card>
           <div class="d-flex justify-content-between align-items-center">
             <div>
-              <a href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a>
+              {{ v.patient.full_name }}
               <div class="small text-muted">Queue: {{ v.queue_number|default:'—' }}</div>
               <div class="small">At: {{ v.timestamp|date:'Y-m-d H:i' }}</div>
             </div>
@@ -30,30 +28,14 @@
         <li class="list-group-item">No unclaimed tickets.</li>
       {% endfor %}
     </ul>
-    <h6>Not Done</h6>
-    <ul class="list-group mb-3" data-container="not_done">
-      {% for r in not_done %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          <div>
-            <a class="fw-semibold" href="/patients/{{ r.visit.patient.id }}/">{{ r.visit.patient.full_name }}</a>
-            <div class="small">Type: {{ r.vaccine_type }}</div>
-            <div class="small text-muted">Updated: {{ r.updated_at|date:'Y-m-d H:i' }}</div>
-          </div>
-          <div class="d-flex gap-2">
-            <a class="btn btn-primary btn-sm" href="/dashboard/vaccination/work/{{ r.visit.id }}/"><i class="bi bi-pencil-square me-1"></i>Reopen</a>
-          </div>
-        </li>
-      {% empty %}
-        <li class="list-group-item">No not-done items.</li>
-      {% endfor %}
-    </ul>
+    
     <h6>Claimed · Waiting to Arrive (verify QR on arrival)</h6>
     <ul class="list-group" data-container="claimed">
       {% for v in pending_claimed %}
         <li class="list-group-item" data-card data-patient-code="{{ v.patient.patient_code }}" data-visit-id="{{ v.id }}">
           <div class="d-flex justify-content-between align-items-center">
             <div>
-              <a href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a>
+              {{ v.patient.full_name }}
               <div class="small text-muted">From Reception · Queue: {{ v.queue_number|default:'—' }}</div>
               <div class="small">At: {{ v.timestamp|date:'Y-m-d H:i' }}</div>
             </div>
@@ -70,7 +52,7 @@
 
   <!-- Verify Modal -->
   <div class="modal fade" id="vaccVerifyModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title"><i class="bi bi-qr-code-scan me-2"></i>Verify Arrival</h5>
@@ -80,6 +62,7 @@
           {% csrf_token %}
         <div class="modal-body">
           <input type="hidden" name="reception_visit_id" id="vaccVerifyVisitId">
+          <input type="hidden" name="verify_code" id="vaccVerifyCodeHidden">
           
           <!-- QR Scanner Section -->
           <div class="row">
@@ -131,12 +114,15 @@
             </div>
           </div>
           
-          <label class="form-label mt-3">Vaccine Type</label>
-          <select name="vaccine_type" id="vaccModalType" class="form-select" required>
-            {% for code,label in vaccine_types %}
-              <option value="{{ code }}">{{ label }}</option>
-            {% endfor %}
-          </select>
+          <!-- Vaccine Type Selection -->
+          <div class="mt-4">
+            <label class="form-label">Vaccine Type</label>
+            <select name="vaccine_type" id="vaccModalType" class="form-select" required disabled>
+              {% for code,label in vaccine_types %}
+                <option value="{{ code }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
         </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -148,33 +134,43 @@
   </div>
 
   <div class="col-md-6">
-    <h6>In Process</h6>
-    <ul class="list-group mb-3" data-container="in_process">
+    <h6>Ready to Vaccinate</h6>
+    <ul class="list-group mb-3" data-container="ready">
       {% for r in in_process %}
         <li class="list-group-item d-flex justify-content-between align-items-center">
           <div>
             <a class="fw-semibold" href="/patients/{{ r.visit.patient.id }}/">{{ r.visit.patient.full_name }}</a>
             <div class="small">Type: {{ r.vaccine_type }}</div>
-            <div class="small text-muted">Logged: {{ r.visit.timestamp|date:'Y-m-d H:i' }}{% if r.visit.queue_number %} · Queue: {{ r.visit.queue_number }}{% endif %}</div>
+            <div class="small text-muted">Verified: {{ r.visit.timestamp|date:'Y-m-d H:i' }}{% if r.visit.queue_number %} · Queue: {{ r.visit.queue_number }}{% endif %}</div>
           </div>
           <div class="d-flex gap-2">
-            <a class="btn btn-primary btn-sm" href="/dashboard/vaccination/work/{{ r.visit.id }}/"><i class="bi bi-pencil-square me-1"></i>Open Work</a>
+            <a class="btn btn-primary btn-sm" href="/dashboard/vaccination/work/{{ r.visit.id }}/"><i class="bi bi-shield-plus me-1"></i>Start Vaccination</a>
           </div>
         </li>
       {% empty %}
-        <li class="list-group-item">No in-process vaccinations.</li>
+        <li class="list-group-item">No verified patients ready for vaccination.</li>
       {% endfor %}
     </ul>
-    <h6>Recently Completed</h6>
-    <ul class="list-group">
-      {% for r in completed %}
-        <li class="list-group-item">
-          <a href="/patients/{{ r.visit.patient.id }}/">{{ r.visit.patient.full_name }}</a>
-          <div class="small">Type: {{ r.vaccine_type }}</div>
-          <div class="small text-muted">Updated: {{ r.updated_at|date:'Y-m-d H:i' }}</div>
+    
+    <h6>Not Done Vaccinations</h6>
+    <ul class="list-group" data-container="not_done">
+      {% for r in not_done %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <div>
+            <a class="fw-semibold" href="/patients/{{ r.visit.patient.id }}/">{{ r.visit.patient.full_name }}</a>
+            <div class="small">Type: {{ r.vaccine_type }}</div>
+            <div class="small text-muted">Status: In Progress</div>
+          </div>
+          <div class="d-flex gap-2">
+            <a class="btn btn-primary btn-sm" href="/dashboard/vaccination/work/{{ r.visit.id }}/"><i class="bi bi-pencil-square me-1"></i>Edit</a>
+            <form method="post" action="/dashboard/vaccination/work/{{ r.visit.id }}/finish/">
+              {% csrf_token %}
+              <button class="btn btn-outline-success btn-sm" type="submit"><i class="bi bi-check2-circle me-1"></i>Finish</button>
+            </form>
+          </div>
         </li>
       {% empty %}
-        <li class="list-group-item">No completed vaccinations yet.</li>
+        <li class="list-group-item">No in-progress vaccinations.</li>
       {% endfor %}
     </ul>
   </div>
@@ -199,8 +195,28 @@
       const emailError = modal.querySelector('#vaccEmailError');
       const emailOk = modal.querySelector('#vaccEmailOk');
       let emailVerified = false;
-      function updateSubmitState(){ if(submitBtn) submitBtn.disabled = !(emailVerified && (typeSel && typeSel.value)); }
-      function updateSelectEnabled(){ if(typeSel) typeSel.disabled = !emailVerified; }
+      const profileCard = document.getElementById('vaccVerifiedProfile');
+      const nameEl = document.getElementById('vaccPatientName');
+      const codeEl = document.getElementById('vaccPatientCode');
+      const mailEl = document.getElementById('vaccPatientEmail');
+      const photoEl = document.getElementById('vaccPatientPhoto');
+      const badgeEl = document.getElementById('vaccVerifiedBadge');
+      function isVerified(){ return emailVerified || (modal && modal.dataset.verified === '1'); }
+      function updateSubmitState(){ if(submitBtn) submitBtn.disabled = !(isVerified() && (typeSel && typeSel.value)); }
+      function updateSelectEnabled(){ if(typeSel) typeSel.disabled = !isVerified(); }
+      function showProfile(p){
+        if(!profileCard) return;
+        if(p){
+          nameEl && (nameEl.textContent = p.full_name || '');
+          codeEl && (codeEl.textContent = p.patient_code || '');
+          mailEl && (mailEl.textContent = p.email || '');
+          if(photoEl){ if(p.profile_photo){ photoEl.src = p.profile_photo; photoEl.style.display='inline-block'; } else { photoEl.style.display='none'; } }
+          badgeEl && badgeEl.classList.remove('d-none');
+          profileCard.classList.remove('d-none');
+        } else {
+          profileCard.classList.add('d-none');
+        }
+      }
       if(typeSel) typeSel.addEventListener('change', updateSubmitState);
       if(emailInput){ emailInput.addEventListener('input', function(){ emailVerified = false; emailOk && emailOk.classList.add('d-none'); emailError && emailError.classList.add('d-none'); updateSelectEnabled(); updateSubmitState(); }); }
       const btnVerifyEmail = modal.querySelector('#btnVaccVerifyEmail');
@@ -220,16 +236,109 @@
             const resp = await fetch('/dashboard/vaccination/verify-email/', {method:'POST', headers:{'X-CSRFToken': csrf ? csrf.value : ''}, body: form});
             const data = await resp.json();
             if(!data.success){ throw new Error(data.message || 'Verification failed'); }
-            emailVerified = true; emailOk && emailOk.classList.remove('d-none'); updateSelectEnabled(); updateSubmitState();
+            emailVerified = true; emailOk && emailOk.classList.remove('d-none'); if(modal){ modal.dataset.verified = '1'; } if(data.patient){ showProfile(data.patient); } updateSelectEnabled(); updateSubmitState();
           }catch(e){ emailVerified = false; if(emailError){ emailError.textContent = e.message || 'Email does not match this patient.'; emailError.classList.remove('d-none'); } updateSelectEnabled(); updateSubmitState(); }
         });
       }
       // Initialize button state
+      if(modal){ modal.dataset.verified = ''; }
       updateSelectEnabled();
       updateSubmitState();
-      // No QR callback; email verification only
+      
+      // Handle form submission
+      const formEl = modal.querySelector('form');
+      if(formEl){
+        formEl.addEventListener('submit', async function(e){
+          e.preventDefault();
+          const fd = new FormData(formEl);
+          // set loading state
+          const submitBtn = modal.querySelector('#vaccModalSubmitBtn');
+          if(submitBtn){ submitBtn.disabled = true; submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Processing…'; }
+          try{
+            const resp = await fetch(formEl.action, { method:'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: fd });
+            const data = await resp.json();
+            if(!data || !data.success){ throw new Error((data && data.message) || 'Failed to receive.'); }
+            // Success: close modal and move card to In Process without full reload
+            const bsModal = bootstrap.Modal.getInstance(modal);
+            if(bsModal) bsModal.hide();
+            // Remove from claimed list (reception ticket li)
+            const recId = fd.get('reception_visit_id');
+            const claimedLi = recId ? document.querySelector(`[data-container="claimed"] [data-visit-id="${recId}"]`) : null;
+            if(claimedLi){ claimedLi.remove(); }
+            // Refresh the Ready list from server to reflect accurate markup
+            try{
+              const pageHtml = await fetch(window.location.pathname, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(r=>r.text());
+              const tempDiv = document.createElement('div'); tempDiv.innerHTML = pageHtml;
+              const newReady = tempDiv.querySelector('ul[data-container="ready"]');
+              const curReady = document.querySelector('ul[data-container="ready"]');
+              if(newReady && curReady){ curReady.innerHTML = newReady.innerHTML; }
+            }catch(_){}
+            // Show a toast-like alert
+            const msg = document.createElement('div');
+            msg.className = 'alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3';
+            msg.style.zIndex = '1060';
+            msg.textContent = data.message || 'Patient moved to Ready to Vaccinate.';
+            document.body.appendChild(msg);
+            setTimeout(()=>{ msg.remove(); }, 1500);
+            if(submitBtn){ submitBtn.disabled = false; submitBtn.textContent = 'Verify & Receive'; }
+          }catch(err){
+            const errBox = modal.querySelector('#vaccEmailError');
+            if(errBox){ errBox.textContent = err.message || 'Error receiving patient.'; errBox.classList.remove('d-none'); }
+            const submitBtn = modal.querySelector('#vaccModalSubmitBtn');
+            if(submitBtn){ submitBtn.disabled = false; submitBtn.textContent = 'Verify & Receive'; }
+          }
+        });
+      }
+      // Enable QR verification via global scanner callback
     });
   }
+})();
+// Page-specific QR verification callback to keep flow inside modal
+(function(){
+  window.handleVerifyQRCallback = async function(email){
+    const m = document.getElementById('vaccVerifyModal');
+    if(!m) return;
+    const bs = bootstrap.Modal.getOrCreateInstance(m);
+    bs.show();
+    const emailInput = document.getElementById('vaccModalPatientEmail');
+    if(emailInput){ emailInput.value = email; }
+    const visitId = (document.getElementById('vaccVerifyVisitId')||{}).value || '';
+    try{
+      const form = new FormData();
+      form.append('patient_email', email);
+      form.append('reception_visit_id', visitId);
+      const csrf = document.querySelector('input[name="csrfmiddlewaretoken"]');
+      const resp = await fetch('/dashboard/vaccination/verify-email/', {method:'POST', headers:{'X-CSRFToken': csrf ? csrf.value : ''}, body: form});
+      const data = await resp.json();
+      if(!data.success) throw new Error(data.message||'Verification failed');
+      const emailOk = document.getElementById('vaccEmailOk');
+      emailOk && emailOk.classList.remove('d-none');
+      m.dataset.verified = '1';
+      if(data.patient){
+        const profileCard = document.getElementById('vaccVerifiedProfile');
+        const nameEl = document.getElementById('vaccPatientName');
+        const codeEl = document.getElementById('vaccPatientCode');
+        const mailEl = document.getElementById('vaccPatientEmail');
+        const photoEl = document.getElementById('vaccPatientPhoto');
+        const badgeEl = document.getElementById('vaccVerifiedBadge');
+        if(profileCard){
+          nameEl && (nameEl.textContent = data.patient.full_name || '');
+          codeEl && (codeEl.textContent = data.patient.patient_code || '');
+          mailEl && (mailEl.textContent = data.patient.email || '');
+          if(photoEl){ if(data.patient.profile_photo){ photoEl.src = data.patient.profile_photo; photoEl.style.display='inline-block'; } else { photoEl.style.display='none'; } }
+          badgeEl && badgeEl.classList.remove('d-none');
+          profileCard.classList.remove('d-none');
+        }
+      }
+      const typeSel = document.getElementById('vaccModalType');
+      const submitBtn = document.getElementById('vaccModalSubmitBtn');
+      if(typeSel){ typeSel.disabled = false; }
+      if(submitBtn){ submitBtn.disabled = !typeSel.value; }
+    }catch(e){
+      const emailError = document.getElementById('vaccEmailError');
+      emailError && (emailError.textContent = e.message||'Verification error', emailError.classList.remove('d-none'));
+    }
+  };
 })();
 </script>
 {% endblock %}

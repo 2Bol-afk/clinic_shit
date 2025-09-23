@@ -1,0 +1,163 @@
+{% extends 'vaccinations/base.html' %}
+
+{% block page_title %}Administer Dose {{ dose.dose_number }} - {{ dose.vaccination.patient.full_name }}{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'vaccinations:patient_vaccination_detail' dose.vaccination.pk %}" class="btn btn-secondary">
+    <i class="fas fa-arrow-left"></i> Back to Vaccination Details
+</a>
+{% endblock %}
+
+{% block page_content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <!-- Dose Information -->
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Dose Information</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>Patient:</strong><br>
+                        <span class="text-muted">{{ dose.vaccination.patient.full_name }}</span>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Vaccine:</strong><br>
+                        <span class="text-muted">{{ dose.vaccination.vaccine_type.name }}</span>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <strong>Dose Number:</strong><br>
+                        <span class="badge bg-info fs-6">{{ dose.dose_number }}</span>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Scheduled Date:</strong><br>
+                        <span class="text-muted">{{ dose.scheduled_date }}</span>
+                    </div>
+                </div>
+                
+                {% if dose.is_overdue %}
+                <div class="alert alert-warning mt-3">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Overdue:</strong> This dose was scheduled for {{ dose.scheduled_date }} and is overdue.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Administration Form -->
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Administer Dose</h6>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <!-- Administration Date -->
+                    <div class="mb-3">
+                        <label for="{{ form.administered_date.id_for_label }}" class="form-label">Administered Date *</label>
+                        {{ form.administered_date }}
+                        {% if form.administered_date.errors %}
+                            <div class="text-danger">{{ form.administered_date.errors }}</div>
+                        {% endif %}
+                        <div class="form-text">Date when the dose was administered</div>
+                    </div>
+
+                    
+
+                    <!-- Injection Site -->
+                    <div class="mb-3">
+                        <label for="{{ form.site_of_injection.id_for_label }}" class="form-label">Site of Injection</label>
+                        {{ form.site_of_injection }}
+                        {% if form.site_of_injection.errors %}
+                            <div class="text-danger">{{ form.site_of_injection.errors }}</div>
+                        {% endif %}
+                        <div class="form-text">e.g., Left arm, Right arm, Left thigh</div>
+                    </div>
+
+                    <!-- Adverse Reactions -->
+                    <div class="mb-3">
+                        <label for="{{ form.adverse_reactions.id_for_label }}" class="form-label">Adverse Reactions</label>
+                        {{ form.adverse_reactions }}
+                        {% if form.adverse_reactions.errors %}
+                            <div class="text-danger">{{ form.adverse_reactions.errors }}</div>
+                        {% endif %}
+                        <div class="form-text">Record any adverse reactions or side effects</div>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="mb-3">
+                        <label for="{{ form.notes.id_for_label }}" class="form-label">Notes</label>
+                        {{ form.notes }}
+                        {% if form.notes.errors %}
+                            <div class="text-danger">{{ form.notes.errors }}</div>
+                        {% endif %}
+                        <div class="form-text">Additional notes about the administration</div>
+                    </div>
+
+                    <!-- Form Errors -->
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {{ form.non_field_errors }}
+                        </div>
+                    {% endif %}
+
+                    <!-- Submit Buttons -->
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'vaccinations:patient_vaccination_detail' dose.vaccination.pk %}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-syringe"></i> Administer Dose
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Common Injection Sites -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-info">Common Injection Sites</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Intramuscular (IM) Injections</h6>
+                        <ul class="small">
+                            <li>Deltoid muscle (upper arm)</li>
+                            <li>Vastus lateralis (thigh)</li>
+                            <li>Gluteus medius (buttock)</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Subcutaneous (SC) Injections</h6>
+                        <ul class="small">
+                            <li>Upper arm</li>
+                            <li>Thigh</li>
+                            <li>Abdomen</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const administeredDateInput = document.getElementById('{{ form.administered_date.id_for_label }}');
+    
+    // Set default administered date to today
+    if (!administeredDateInput.value) {
+        administeredDateInput.value = new Date().toISOString().split('T')[0];
+    }
+});
+</script>
+{% endblock %}

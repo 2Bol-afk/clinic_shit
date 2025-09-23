@@ -6,16 +6,6 @@
   <a class="btn btn-outline-secondary" href="/dashboard/doctor/"><i class="bi bi-arrow-left"></i> Back</a>
   </div>
 
-<div class="card shadow-sm mb-3">
-  <div class="card-body">
-    <label class="form-label">Scan QR / Enter Patient Code</label>
-    <div class="input-group">
-      <span class="input-group-text"><i class="bi bi-qr-code-scan"></i></span>
-      <input type="text" id="scanCode" class="form-control" placeholder="Scan or type patient code" value="{% if rec %}{{ rec.patient.patient_code }}{% elif draft %}{{ draft.patient.patient_code }}{% endif %}">
-      <button class="btn btn-success" id="doLoad"><i class="bi bi-search me-1"></i>Load</button>
-    </div>
-  </div>
-</div>
 
 <div class="row g-3">
   <div class="col-lg-4">
@@ -113,13 +103,16 @@
   const addMed = document.getElementById('addMed');
   const rxSummary = document.getElementById('rxSummary');
   const rxNotes = document.getElementById('prescription_notes');
-  const fields = ['name','dosage','frequency','duration'];
+  const fields = ['name','dosage','frequency','duration','quantity','instructions'];
   function renderSummary(){
     const rows = medRows.querySelectorAll('.med-row');
     const lines = [];
-    rows.forEach(r=>{
+    rows.forEach((r, index)=>{
       const vals = fields.map(f=> r.querySelector(`[data-med="${f}"]`).value.trim());
-      if(vals[0]){ lines.push(`${vals[0]} — ${vals[1]} — ${vals[2]} — ${vals[3]}`); }
+      if(vals[0]){ 
+        const line = `${vals[0]} — ${vals[1]} — ${vals[2]} — ${vals[3]}${vals[4] ? ` (${vals[4]})` : ''}${vals[5] ? ` - ${vals[5]}` : ''}`;
+        lines.push(line);
+      }
     });
     const txt = lines.join('\n');
     rxSummary.value = txt;
@@ -127,29 +120,39 @@
     document.getElementById('rxStep').classList.toggle('d-none', !txt);
   }
   function addRow(init){
-    const idx = medRows.querySelectorAll('.med-row').length + 1;
+    const idx = medRows.querySelectorAll('.med-row').length;
     const div = document.createElement('div');
     div.className = 'med-row border rounded p-2 mb-2 bg-white';
     div.innerHTML = `
       <div class="row g-2 align-items-end">
         <div class="col-md-3">
           <label class="form-label">Medicine</label>
-          <input class="form-control" data-med="name" value="${(init&&init.name)||''}">
+          <input class="form-control" data-med="name" name="medicine_${idx}_name" value="${(init&&init.name)||''}" placeholder="e.g., Amoxicillin">
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
           <label class="form-label">Dosage</label>
-          <input class="form-control" data-med="dosage" value="${(init&&init.dosage)||''}">
+          <input class="form-control" data-med="dosage" name="medicine_${idx}_dosage" value="${(init&&init.dosage)||''}" placeholder="e.g., 500mg">
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
           <label class="form-label">Frequency</label>
-          <input class="form-control" data-med="frequency" value="${(init&&init.frequency)||''}">
+          <input class="form-control" data-med="frequency" name="medicine_${idx}_frequency" value="${(init&&init.frequency)||''}" placeholder="e.g., 3x daily">
         </div>
         <div class="col-md-2">
           <label class="form-label">Duration</label>
-          <input class="form-control" data-med="duration" value="${((init&&init.duration)||'').replace('days','').trim()}">
+          <input class="form-control" data-med="duration" name="medicine_${idx}_duration" value="${((init&&init.duration)||'').replace('days','').trim()}" placeholder="e.g., 7 days">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Quantity</label>
+          <input class="form-control" data-med="quantity" name="medicine_${idx}_quantity" value="${(init&&init.quantity)||''}" placeholder="e.g., 30 tablets">
         </div>
         <div class="col-md-1 text-end">
           <button class="btn btn-outline-danger btn-sm" type="button" data-action="remove"><i class="bi bi-x"></i></button>
+        </div>
+      </div>
+      <div class="row g-2 mt-1">
+        <div class="col-12">
+          <label class="form-label">Special Instructions</label>
+          <textarea class="form-control" data-med="instructions" name="medicine_${idx}_instructions" rows="1" placeholder="Special instructions for this medicine">${(init&&init.instructions)||''}</textarea>
         </div>
       </div>`;
     div.addEventListener('input', renderSummary);

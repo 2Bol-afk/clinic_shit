@@ -1,0 +1,281 @@
+{% extends 'base.html' %}
+{% block content %}
+<h4 class="d-flex align-items-center mb-3">
+  <i class="bi bi-graph-up text-success me-2"></i>Admin Reports & Analytics
+</h4>
+
+<!-- Date Range and Department Filter -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-3">
+      <div class="col-md-2">
+        <label class="form-label">Start Date</label>
+        <input type="date" class="form-control" name="start_date" value="{{ start_date }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">End Date</label>
+        <input type="date" class="form-control" name="end_date" value="{{ end_date }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Department</label>
+        <select class="form-select" name="department">
+          <option value="all" {% if department_filter == 'all' %}selected{% endif %}>All Reports</option>
+          <option value="doctor" {% if department_filter == 'doctor' %}selected{% endif %}>Doctor Reports</option>
+          <option value="laboratory" {% if department_filter == 'laboratory' %}selected{% endif %}>Laboratory Reports</option>
+          <option value="pharmacy" {% if department_filter == 'pharmacy' %}selected{% endif %}>Pharmacy Reports</option>
+          <option value="vaccination" {% if department_filter == 'vaccination' %}selected{% endif %}>Vaccination Reports</option>
+        </select>
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="bi bi-search me-1"></i>Filter
+        </button>
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <a href="?export=csv&start_date={{ start_date }}&end_date={{ end_date }}&department={{ department_filter }}" class="btn btn-outline-success w-100">
+          <i class="bi bi-filetype-csv me-1"></i>Export CSV
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Summary Statistics -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card bg-primary text-white">
+      <div class="card-body text-center">
+        <h3>{{ total_visits }}</h3>
+        <p class="mb-0">Total Visits</p>
+        <small>{{ start_date }} to {{ end_date }}</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-success text-white">
+      <div class="card-body text-center">
+        <h3>{{ dept_stats.doctor }}</h3>
+        <p class="mb-0">Doctor Consultations</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-info text-white">
+      <div class="card-body text-center">
+        <h3>{{ dept_stats.laboratory }}</h3>
+        <p class="mb-0">Lab Tests</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-warning text-white">
+      <div class="card-body text-center">
+        <h3>{{ dept_stats.pharmacy }}</h3>
+        <p class="mb-0">Pharmacy Visits</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Department Activity Chart -->
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-bar-chart me-2"></i>Department Activity
+        </h5>
+      </div>
+      <div class="card-body">
+        <div class="row g-2">
+          <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded mb-2">
+              <span><i class="bi bi-hospital me-2"></i>Reception</span>
+              <div class="d-flex align-items-center">
+                <div class="progress me-2" style="width: 100px; height: 20px;">
+                  <div class="progress-bar bg-primary" style="width: {% widthratio dept_stats.reception total_visits 100 %}%"></div>
+                </div>
+                <span class="badge bg-primary">{{ dept_stats.reception }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded mb-2">
+              <span><i class="bi bi-stethoscope me-2"></i>Doctor</span>
+              <div class="d-flex align-items-center">
+                <div class="progress me-2" style="width: 100px; height: 20px;">
+                  <div class="progress-bar bg-success" style="width: {% widthratio dept_stats.doctor total_visits 100 %}%"></div>
+                </div>
+                <span class="badge bg-success">{{ dept_stats.doctor }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded mb-2">
+              <span><i class="bi bi-flask me-2"></i>Laboratory</span>
+              <div class="d-flex align-items-center">
+                <div class="progress me-2" style="width: 100px; height: 20px;">
+                  <div class="progress-bar bg-info" style="width: {% widthratio dept_stats.laboratory total_visits 100 %}%"></div>
+                </div>
+                <span class="badge bg-info">{{ dept_stats.laboratory }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded mb-2">
+              <span><i class="bi bi-capsule me-2"></i>Pharmacy</span>
+              <div class="d-flex align-items-center">
+                <div class="progress me-2" style="width: 100px; height: 20px;">
+                  <div class="progress-bar bg-warning" style="width: {% widthratio dept_stats.pharmacy total_visits 100 %}%"></div>
+                </div>
+                <span class="badge bg-warning">{{ dept_stats.pharmacy }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded mb-2">
+              <span><i class="bi bi-shield-plus me-2"></i>Vaccination</span>
+              <div class="d-flex align-items-center">
+                <div class="progress me-2" style="width: 100px; height: 20px;">
+                  <div class="progress-bar bg-secondary" style="width: {% widthratio dept_stats.vaccination total_visits 100 %}%"></div>
+                </div>
+                <span class="badge bg-secondary">{{ dept_stats.vaccination }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-people me-2"></i>Staff Activity
+        </h5>
+      </div>
+      <div class="card-body">
+        {% if staff_activity %}
+          <div class="list-group list-group-flush">
+            {% for staff in staff_activity %}
+              <div class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="mb-1">{{ staff.name }}</h6>
+                  <small class="text-muted">{{ staff.role }}</small>
+                </div>
+                <span class="badge bg-primary">{{ staff.visits }} visits</span>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-muted">No staff activity data available</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Department-Specific Reports -->
+{% if department_reports %}
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-clipboard-data me-2"></i>Department Reports
+          {% if department_filter != 'all' %}
+            - {{ department_filter|title }}
+          {% endif %}
+        </h5>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Department</th>
+                <th>Total Visits</th>
+                <th>Completed</th>
+                <th>Pending</th>
+                <th>Cancelled</th>
+                <th>Completion Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for report in department_reports %}
+                <tr>
+                  <td>
+                    <span class="badge bg-primary">{{ report.department }}</span>
+                  </td>
+                  <td><strong>{{ report.total_visits }}</strong></td>
+                  <td>
+                    <span class="badge bg-success">{{ report.completed_visits }}</span>
+                  </td>
+                  <td>
+                    <span class="badge bg-warning">{{ report.pending_visits }}</span>
+                  </td>
+                  <td>
+                    <span class="badge bg-danger">{{ report.cancelled_visits }}</span>
+                  </td>
+                  <td>
+                    {% if report.total_visits > 0 %}
+                      {% widthratio report.completed_visits report.total_visits 100 %}%
+                    {% else %}
+                      0%
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Quick Actions -->
+<div class="row g-3">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-lightning me-2"></i>Quick Actions
+        </h5>
+      </div>
+      <div class="card-body">
+        <div class="row g-2">
+          <div class="col-md-2">
+            <a href="{% url 'admin_reports' %}?export=csv&start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-outline-success w-100">
+              <i class="bi bi-filetype-csv me-1"></i>Export CSV
+            </a>
+          </div>
+          <div class="col-md-2">
+            <a href="{% url 'admin_system_reports' %}?start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-outline-primary w-100">
+              <i class="bi bi-graph-up me-1"></i>System Reports
+            </a>
+          </div>
+          
+          <div class="col-md-2">
+            <a href="{% url 'admin_patient_management' %}" class="btn btn-outline-success w-100">
+              <i class="bi bi-person-heart me-1"></i>Patient Management
+            </a>
+          </div>
+          <div class="col-md-2">
+            <a href="{% url 'admin_system_accounts' %}" class="btn btn-outline-warning w-100">
+              <i class="bi bi-gear me-1"></i>System Accounts
+            </a>
+          </div>
+          <div class="col-md-2">
+            <a href="/admin/" class="btn btn-outline-secondary w-100" target="_blank">
+              <i class="bi bi-gear me-1"></i>Django Admin
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

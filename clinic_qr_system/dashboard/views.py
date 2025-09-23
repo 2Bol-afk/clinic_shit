@@ -5,11 +5,12 @@ from django.db import models, transaction
 from django.db.models import Q
 from patients.models import Patient, Doctor
 from visits.models import Visit, ServiceType, LabResult, Laboratory, VaccinationRecord, VaccinationType
+from vaccinations.models import VaccinationReminder
 from visits.forms import LabResultForm, VaccinationForm
 from django.contrib.auth.models import Group, User
 from django.utils.text import slugify
 from .models import ActivityLog
-from patients.forms import DoctorForm
+from patients.forms import DoctorForm, DoctorPasswordChangeForm
 from django import forms
 from django.contrib import messages
 from django.core.mail import EmailMessage
@@ -18,6 +19,8 @@ from io import BytesIO
 from django.core.files.base import ContentFile
 import qrcode
 from django.views.decorators.http import require_POST
+import re
+import logging
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 from django.http import JsonResponse
@@ -31,6 +34,11 @@ try:
     from openpyxl import Workbook
 except Exception:
     Workbook = None
+from django.contrib.auth.forms import PasswordChangeForm
+from django.contrib.auth import update_session_auth_hash
+
+
+logger = logging.getLogger(__name__)
 
 
 def is_admin(user):
@@ -55,23 +63,27 @@ def send_test_email_view(request):
             messages.warning(request, f'No email was sent to {to}.')
     except Exception as e:
         messages.error(request, f'Email send failed: {e}')
-    return redirect(request.META.get('HTTP_REFERER') or 'dashboard_index')
+    return redirect(request.META.get('HTTP_REFERER') or 'admin_dashboard')
 
 @login_required
 def index(request):
-    # Redirect to role-specific dashboard if not superuser
-    if not request.user.is_superuser:
-        gnames = set(request.user.groups.values_list('name', flat=True))
-        if 'Reception' in gnames:
-            return redirect('dashboard_reception')
-        if 'Doctor' in gnames:
-            return redirect('dashboard_doctor')
-        if 'Laboratory' in gnames:
-            return redirect('dashboard_lab')
-        if 'Pharmacy' in gnames:
-            return redirect('dashboard_pharmacy')
-        if 'Vaccination' in gnames:
-            return redirect('dashboard_vaccination')
+    # Redirect to role-specific dashboard
+    if request.user.is_superuser:
+        return redirect('admin_dashboard')  # Redirect admin users to Admin Panel
+    
+    gnames = set(request.user.groups.values_list('name', flat=True))
+    if 'Reception' in gnames:
+        return redirect('dashboard_reception')
+    if 'Doctor' in gnames:
+        return redirect('dashboard_doctor')
+    if 'Laboratory' in gnames:
+        return redirect('dashboard_lab')
+    if 'Pharmacy' in gnames:
+        return redirect('dashboard_pharmacy')
+    if 'Vaccination' in gnames:
+        return redirect('dashboard_vaccination')
+    
+    # Fallback for users without specific roles
     now = timezone.localdate()
     total_patients = Patient.objects.count()
     patients_served_today = Visit.objects.filter(timestamp__date=now).values('patient').distinct().count()
@@ -108,10 +120,17 @@ def post_login_redirect(request):
     except AttributeError:
         # User doesn't have a patient profile, check if they're staff
         if request.user.is_superuser:
-            return redirect('dashboard_index')
+            return redirect('admin_dashboard')  # Redirect to Admin Panel directly
         elif request.user.groups.filter(name='Reception').exists():
             return redirect('dashboard_reception')
         elif request.user.groups.filter(name='Doctor').exists():
+            # Check if doctor needs to change password
+            try:
+                doctor = request.user.doctor_profile
+                if doctor.must_change_password:
+                    return redirect('doctor_password_change')
+            except Doctor.DoesNotExist:
+                pass
             return redirect('dashboard_doctor')
         elif request.user.groups.filter(name='Laboratory').exists():
             return redirect('dashboard_lab')
@@ -163,38 +182,177 @@ def reception_dashboard(request):
     )
 
 
-class WalkInForm(forms.Form):
-    full_name = forms.CharField(max_length=255)
-    age = forms.IntegerField(min_value=0)
-    address = forms.CharField(widget=forms.Textarea)
-    contact = forms.CharField(max_length=50)
-    email = forms.EmailField()
-    reception_visit_type = forms.ChoiceField(choices=[('consultation','Consultation'),('laboratory','Laboratory'),('vaccination','Vaccination')])
-    department = forms.ChoiceField(choices=Visit.Department.choices, required=False)
+class VisitEditForm(forms.Form):
+    """Form for editing visit details in reception dashboard"""
+    visit_type = forms.ChoiceField(
+        choices=[
+            ('consultation', 'Consultation'),
+            ('laboratory', 'Laboratory'),
+            ('vaccination', 'Vaccination')
+        ],
+        widget=forms.Select(attrs={
+            'class': 'form-select',
+            'placeholder': 'Select visit type',
+            'required': True
+        }),
+        required=True,
+        label='Visit Type'
+    )
+    department = forms.ChoiceField(
+        choices=[
+            ('', 'No Department'),
+            ('Pediatrics', 'Pediatrics (Children\'s Health)'),
+            ('OB-GYN', 'Obstetrics and Gynecology (OB-GYN)'),
+            ('Cardiology', 'Cardiology (Heart Care)'),
+            ('Radiology', 'Radiology'),
+            ('Surgery', 'Surgery'),
+            ('Dermatology', 'Dermatology (Skin Care)'),
+            ('ENT', 'ENT (Ear, Nose, Throat)')
+        ],
+        widget=forms.Select(attrs={
+            'class': 'form-select',
+            'placeholder': 'Select department (optional)'
+        }),
+        required=False,
+        label='Department'
+    )
 
     def __init__(self, *args, **kwargs):
+        self.visit = kwargs.pop('visit', None)
         super().__init__(*args, **kwargs)
-        for name, field in self.fields.items():
-            css = 'form-select' if isinstance(field.widget, forms.Select) else 'form-control'
-            existing = field.widget.attrs.get('class', '')
-            field.widget.attrs['class'] = (existing + ' ' + css).strip()
+        
+        if self.visit:
+            # Check if visit is claimed - disable form if claimed
+            if self.visit.status == 'claimed' or self.visit.claimed_by:
+                for field in self.fields.values():
+                    field.widget.attrs['disabled'] = True
+                    field.widget.attrs['readonly'] = True
+            
+            # Set initial values based on visit data
+            if self.visit.department:
+                self.fields['visit_type'].initial = 'consultation'
+            elif self.visit.notes and 'vaccination' in self.visit.notes.lower():
+                self.fields['visit_type'].initial = 'vaccination'
+            elif self.visit.notes and 'laboratory' in self.visit.notes.lower():
+                self.fields['visit_type'].initial = 'laboratory'
+            else:
+                self.fields['visit_type'].initial = 'consultation'
+            
+            self.fields['department'].initial = self.visit.department
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        
+        # Prevent form submission if visit is claimed
+        if self.visit and (self.visit.status == 'claimed' or self.visit.claimed_by):
+            raise forms.ValidationError('Cannot edit claimed visits. This visit has been claimed by another staff member.')
+        
+        return cleaned_data
+
+
+class WalkInForm(forms.Form):
+    full_name = forms.CharField(
+        max_length=255,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Enter patient\'s full name',
+            'required': True
+        }),
+        required=True
+    )
+    age = forms.IntegerField(
+        min_value=0,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Enter patient\'s age',
+            'min': '0',
+            'max': '150',
+            'required': True
+        }),
+        required=True
+    )
+    address = forms.CharField(
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'placeholder': 'Enter patient\'s complete address',
+            'rows': 3,
+            'required': True
+        }),
+        required=True
+    )
+    contact = forms.CharField(
+        max_length=50,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Enter contact number',
+            'required': True
+        }),
+        required=True
+    )
+    email = forms.EmailField(
+        widget=forms.EmailInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Enter email address',
+            'required': True
+        }),
+        required=True
+    )
+    profile_photo = forms.ImageField(
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': 'image/*',
+            'capture': 'environment',
+            'required': True
+        }),
+        required=True
+    )
+    reception_visit_type = forms.ChoiceField(
+        choices=[('consultation','Consultation'),('laboratory','Laboratory'),('vaccination','Vaccination')],
+        widget=forms.Select(attrs={
+            'class': 'form-select',
+            'placeholder': 'Select visit type',
+            'required': True
+        }),
+        required=True
+    )
+    department = forms.ChoiceField(
+        choices=Visit.Department.choices,
+        widget=forms.Select(attrs={
+            'class': 'form-select',
+            'placeholder': 'Select department (optional)'
+        }),
+        required=False
+    )
 
 
 @login_required
 @user_passes_test(is_reception)
 def reception_walkin(request):
+    # Handle pre-selected patient from QR scan
+    patient_id = request.GET.get('patient_id')
+    pre_selected_patient = None
+    if patient_id:
+        try:
+            pre_selected_patient = Patient.objects.get(pk=patient_id)
+        except Patient.DoesNotExist:
+            pass
+    
     if request.method == 'POST':
         form = WalkInForm(request.POST)
         if form.is_valid():
             data = form.cleaned_data
-            # Reuse existing patient by email if exists
-            existing = Patient.objects.filter(email__iexact=data['email']).first()
-            patient = existing
-            if not existing:
-                # Create patient with generated patient_code and minimal fields
-                import uuid
-                patient_code = uuid.uuid4().hex[:10].upper()
-                patient = Patient.objects.create(
+            # If patient was pre-selected, use that patient
+            if pre_selected_patient:
+                patient = pre_selected_patient
+            else:
+                # Reuse existing patient by email if exists
+                existing = Patient.objects.filter(email__iexact=data['email']).first()
+                patient = existing
+                if not existing:
+                    # Create patient with generated patient_code and minimal fields
+                    import uuid
+                    patient_code = uuid.uuid4().hex[:10].upper()
+                    patient = Patient.objects.create(
                     full_name=data['full_name'],
                     age=data['age'],
                     address=data['address'],
@@ -234,45 +392,45 @@ def reception_walkin(request):
                     user.groups.add(group)
                 except Exception:
                     temp_password = None
-            else:
-                # Ensure existing patient has a QR; generate if missing
-                buffer = None
-                file_name = None
-                if not existing.qr_code:
-                    try:
-                        qr_payload = f"email:{existing.email};id:{existing.id}"
-                        qr_img = qrcode.make(qr_payload)
-                        buffer = BytesIO()
-                        qr_img.save(buffer, format='PNG')
-                        file_name = f"qr_{existing.patient_code}.png"
-                        existing.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=False)
-                        existing.save(update_fields=['qr_code'])
-                    except Exception:
-                        buffer = None
-                        file_name = None
-                # If existing patient has no portal user, create temp credentials
-                temp_password = None
-                if not existing.user:
-                    try:
-                        import uuid as _uuid
-                        temp_password = _uuid.uuid4().hex[:12]
-                        # Generate username from full name, ensure uniqueness
-                        base_username = slugify(existing.full_name) or 'user'
-                        candidate = base_username[:150]
-                        i = 1
-                        while User.objects.filter(username=candidate).exists():
-                            suffix = str(i)
-                            candidate = (base_username[: max(1, 150 - len(suffix))] + suffix)
-                            i += 1
-                        username = candidate
-                        user = User.objects.create_user(username=username, email=existing.email, password=temp_password)
-                        existing.user = user
-                        existing.must_change_password = True
-                        existing.save(update_fields=['user','must_change_password'])
-                        group, _ = Group.objects.get_or_create(name='Patient')
-                        user.groups.add(group)
-                    except Exception:
-                        temp_password = None
+                else:
+                    # Ensure existing patient has a QR; generate if missing
+                    buffer = None
+                    file_name = None
+                    if not existing.qr_code:
+                        try:
+                            qr_payload = f"email:{existing.email};id:{existing.id}"
+                            qr_img = qrcode.make(qr_payload)
+                            buffer = BytesIO()
+                            qr_img.save(buffer, format='PNG')
+                            file_name = f"qr_{existing.patient_code}.png"
+                            existing.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=False)
+                            existing.save(update_fields=['qr_code'])
+                        except Exception:
+                            buffer = None
+                            file_name = None
+                    # If existing patient has no portal user, create temp credentials
+                    temp_password = None
+                    if not existing.user:
+                        try:
+                            import uuid as _uuid
+                            temp_password = _uuid.uuid4().hex[:12]
+                            # Generate username from full name, ensure uniqueness
+                            base_username = slugify(existing.full_name) or 'user'
+                            candidate = base_username[:150]
+                            i = 1
+                            while User.objects.filter(username=candidate).exists():
+                                suffix = str(i)
+                                candidate = (base_username[: max(1, 150 - len(suffix))] + suffix)
+                                i += 1
+                            username = candidate
+                            user = User.objects.create_user(username=username, email=existing.email, password=temp_password)
+                            existing.user = user
+                            existing.must_change_password = True
+                            existing.save(update_fields=['user','must_change_password'])
+                            group, _ = Group.objects.get_or_create(name='Patient')
+                            user.groups.add(group)
+                        except Exception:
+                            temp_password = None
             # Create reception visit
             visit_type = data['reception_visit_type']
             kwargs = {
@@ -308,7 +466,45 @@ def reception_walkin(request):
                 svc = ServiceType.objects.filter(name__iexact=svc_name).first()
                 if svc:
                     kwargs['service_type'] = svc
-            Visit.objects.create(**kwargs)
+            visit = Visit.objects.create(**kwargs)
+            
+            # Send queue notification email
+            try:
+                if patient.email:
+                    from clinic_qr_system.email_utils import send_queue_notification_email_html
+                    
+                    # Determine service type for email
+                    if visit_type == 'consultation':
+                        service_type = 'consultation'
+                        department = data.get('department', '')
+                    elif visit_type == 'laboratory':
+                        service_type = 'laboratory'
+                        department = None
+                    elif visit_type == 'vaccination':
+                        service_type = 'vaccination'
+                        department = None
+                    else:
+                        service_type = visit_type
+                        department = data.get('department', '')
+                    
+                    # Send queue notification email
+                    email_sent = send_queue_notification_email_html(
+                        patient_name=patient.full_name,
+                        patient_email=patient.email,
+                        queue_number=visit.queue_number,
+                        service_type=service_type,
+                        department=department,
+                        visit_id=visit.id
+                    )
+                    
+                    if email_sent:
+                        messages.success(request, f'Queue notification email sent to {patient.email}.')
+                    else:
+                        messages.warning(request, f'Queue notification email failed to send to {patient.email}.')
+                        
+            except Exception as e:
+                messages.error(request, f'Queue notification email failed: {e}')
+            
             # Email confirmation with QR attachment using Brevo
             try:
                 if patient.email:
@@ -347,7 +543,19 @@ def reception_walkin(request):
             return redirect('dashboard_reception')
     else:
         form = WalkInForm()
-    return render(request, 'dashboard/reception_walkin.html', {'form': form})
+        # Pre-populate form if patient is pre-selected
+        if pre_selected_patient:
+            form = WalkInForm(initial={
+                'full_name': pre_selected_patient.full_name,
+                'age': pre_selected_patient.age,
+                'address': pre_selected_patient.address,
+                'contact': pre_selected_patient.contact,
+                'email': pre_selected_patient.email,
+            })
+    return render(request, 'dashboard/reception_walkin.html', {
+        'form': form,
+        'pre_selected_patient': pre_selected_patient
+    })
 
 
 @login_required
@@ -383,7 +591,132 @@ def reception_delete(request, pk: int):
 
 
 @login_required
+def reception_visit_edit(request, pk):
+    """Edit visit details in reception dashboard"""
+    # Security check: Only reception staff and superusers can edit visits
+    if not (request.user.is_superuser or request.user.groups.filter(name='Reception').exists()):
+        messages.error(request, 'Access denied. Only reception staff can edit visits.')
+        return redirect('dashboard_reception')
+    
+    visit = get_object_or_404(Visit, pk=pk, service='reception')
+    
+    # Check if visit is claimed - prevent editing
+    if visit.status == 'claimed' or visit.claimed_by:
+        messages.error(request, f'Cannot edit claimed visits. This visit has been claimed by {visit.claimed_by.get_full_name() if visit.claimed_by else "another staff member"}.')
+        return redirect('dashboard_reception')
+    
+    if request.method == 'POST':
+        form = VisitEditForm(request.POST, visit=visit)
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    # Update visit based on form data
+                    visit_type = form.cleaned_data['visit_type']
+                    department = form.cleaned_data['department']
+                    
+                    # Update department
+                    visit.department = department if department else ''
+                    
+                    # Update notes based on visit type
+                    if visit_type == 'consultation':
+                        visit.notes = ''
+                        # Clear service type when switching to consultation
+                        visit.service_type = None
+                    elif visit_type == 'laboratory':
+                        visit.notes = "[Visit: Laboratory]"
+                        visit.department = ''
+                        # Set service_type to Laboratory if available
+                        try:
+                            svc = ServiceType.objects.filter(name__iexact='Laboratory').first()
+                            visit.service_type = svc
+                        except Exception:
+                            pass
+                    elif visit_type == 'vaccination':
+                        visit.notes = "[Visit: Vaccination]"
+                        visit.department = ''
+                        # Set service_type to Vaccination if available
+                        try:
+                            svc = ServiceType.objects.filter(name__iexact='Vaccination').first()
+                            visit.service_type = svc
+                        except Exception:
+                            pass
+                    
+                    visit.save()
+                    
+                    messages.success(request, f'Visit for {visit.patient.full_name} updated successfully!')
+                    return redirect('dashboard_reception')
+                    
+            except Exception as e:
+                messages.error(request, f'An error occurred while updating the visit: {str(e)}')
+                return render(request, 'dashboard/reception_visit_edit.html', {
+                    'form': form,
+                    'visit': visit
+                })
+    else:
+        form = VisitEditForm(visit=visit)
+    
+    return render(request, 'dashboard/reception_visit_edit.html', {
+        'form': form,
+        'visit': visit
+    })
+
+
+@login_required
+def doctor_password_change(request):
+    """Doctor view to change their password - forced on first login"""
+    # Security check: Ensure user is a doctor
+    if not request.user.groups.filter(name='Doctor').exists():
+        messages.error(request, 'Access denied. Only doctors can access this page.')
+        return redirect('dashboard_doctor')
+    
+    try:
+        doctor = request.user.doctor_profile
+    except Doctor.DoesNotExist:
+        messages.error(request, 'Doctor profile not found. Please contact support.')
+        return redirect('dashboard_doctor')
+    
+    if request.method == 'POST':
+        form = DoctorPasswordChangeForm(request.user, request.POST)
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    # Update the password for the logged-in user
+                    request.user.set_password(form.cleaned_data['new_password'])
+                    request.user.save()
+                    
+                    # Clear the must_change_password flag
+                    doctor.must_change_password = False
+                    doctor.save()
+                    
+                    messages.success(request, 'Password changed successfully! You can now access the system.')
+                    return redirect('dashboard_doctor')
+                    
+            except Exception as e:
+                messages.error(request, f'An error occurred while changing your password: {str(e)}')
+                return render(request, 'dashboard/doctors/password_change.html', {
+                    'form': form,
+                    'doctor': doctor
+                })
+    else:
+        form = DoctorPasswordChangeForm(request.user)
+    
+    return render(request, 'dashboard/doctors/password_change.html', {
+        'form': form,
+        'doctor': doctor
+    })
+
+
+@login_required
 def doctor_dashboard(request):
+    # Check if doctor needs to change password
+    if request.user.groups.filter(name='Doctor').exists():
+        try:
+            doctor = request.user.doctor_profile
+            if doctor.must_change_password:
+                return redirect('doctor_password_change')
+        except Doctor.DoesNotExist:
+            pass
+    
     today = timezone.localdate()
     # Show only this doctor's consultations if user is a Doctor; admins see all
     base_qs = Visit.objects.filter(service='doctor', timestamp__date=today)
@@ -578,6 +911,28 @@ def lab_receive(request):
             queue_number=qn,
             created_by=request.user,
         )
+        
+        # Send queue notification email for lab visits
+        try:
+            if src.patient.email and qn:  # Only send if there's a queue number
+                from clinic_qr_system.email_utils import send_queue_notification_email_html
+                
+                email_sent = send_queue_notification_email_html(
+                    patient_name=src.patient.full_name,
+                    patient_email=src.patient.email,
+                    queue_number=qn,
+                    service_type='laboratory',
+                    department=None,
+                    visit_id=new_visit.id
+                )
+                
+                if email_sent:
+                    messages.success(request, f'Lab queue notification email sent to {src.patient.email}.')
+                else:
+                    messages.warning(request, f'Lab queue notification email failed to send to {src.patient.email}.')
+                    
+        except Exception as e:
+            messages.error(request, f'Lab queue notification email failed: {e}')
         # Seed LabResult for this lab visit and set its workflow state
         lr_status = 'in_process' if test_type else 'queue'
         LabResult.objects.create(
@@ -667,6 +1022,70 @@ def lab_mark_done(request, pk: int):
             description=f"Completed tests: {lab_visit.lab_tests or ''}{(' · Results: '+lab_visit.lab_results) if lab_visit.lab_results else ''}",
             patient=lab_visit.patient,
         )
+        
+        # Send lab result email to patient
+        try:
+            from clinic_qr_system.email_utils import send_lab_result_email
+            from clinic_qr_system.pdf_utils import generate_lab_result_pdf, generate_lab_result_pdf_simple
+            
+            # Get patient email
+            patient_email = lab_visit.patient.email or lab_visit.patient.user.email
+            if patient_email:
+                # Generate PDF attachment
+                pdf_content = None
+                if generate_lab_result_pdf:
+                    pdf_content = generate_lab_result_pdf(
+                        patient_name=lab_visit.patient.full_name,
+                        patient_code=lab_visit.patient.patient_code,
+                        lab_type=lab_visit.lab_test_type or 'Laboratory Test',
+                        lab_results=lab_visit.lab_results or 'No results available',
+                        visit_id=lab_visit.id,
+                        completed_at=lab_visit.lab_completed_at.strftime('%Y-%m-%d %H:%M:%S'),
+                        doctor_name=lab_visit.doctor_user.get_full_name() if lab_visit.doctor_user else None
+                    )
+                
+                # Fallback to simple PDF if ReportLab PDF fails
+                if not pdf_content:
+                    pdf_content = generate_lab_result_pdf_simple(
+                        patient_name=lab_visit.patient.full_name,
+                        patient_code=lab_visit.patient.patient_code,
+                        lab_type=lab_visit.lab_test_type or 'Laboratory Test',
+                        lab_results=lab_visit.lab_results or 'No results available',
+                        visit_id=lab_visit.id,
+                        completed_at=lab_visit.lab_completed_at.strftime('%Y-%m-%d %H:%M:%S'),
+                        doctor_name=lab_visit.doctor_user.get_full_name() if lab_visit.doctor_user else None
+                    )
+                
+                # Prepare attachment data
+                attachment_data = None
+                if pdf_content:
+                    attachment_data = {
+                        'filename': f'lab_result_{lab_visit.id}_{lab_visit.patient.patient_code}.pdf',
+                        'content': pdf_content,
+                        'mimetype': 'application/pdf'
+                    }
+                
+                # Send email
+                email_sent = send_lab_result_email(
+                    patient_name=lab_visit.patient.full_name,
+                    patient_email=patient_email,
+                    lab_type=lab_visit.lab_test_type or 'Laboratory Test',
+                    lab_results=lab_visit.lab_results or 'No results available',
+                    visit_id=lab_visit.id,
+                    completed_at=lab_visit.lab_completed_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    attachment_data=attachment_data
+                )
+                
+                if email_sent:
+                    messages.success(request, 'Lab marked as done and result email sent to patient.')
+                else:
+                    messages.warning(request, 'Lab marked as done, but failed to send result email to patient.')
+            else:
+                messages.warning(request, 'Lab marked as done, but no patient email found for notification.')
+        except Exception as e:
+            logger.error(f"Failed to send lab result email: {e}")
+            messages.warning(request, 'Lab marked as done, but failed to send result email.')
+    
     messages.success(request, 'Marked as done.')
     return redirect('dashboard_lab')
 
@@ -754,6 +1173,69 @@ def lab_work(request, pk: int):
             if rec:
                 rec.status = Visit.Status.DONE
                 rec.save(update_fields=['status'])
+            # Send lab result email to patient
+            try:
+                from clinic_qr_system.email_utils import send_lab_result_email
+                from clinic_qr_system.pdf_utils import generate_lab_result_pdf, generate_lab_result_pdf_simple
+                
+                # Get patient email
+                patient_email = lab_visit.patient.email or lab_visit.patient.user.email
+                if patient_email:
+                    # Generate PDF attachment
+                    pdf_content = None
+                    if generate_lab_result_pdf:
+                        pdf_content = generate_lab_result_pdf(
+                            patient_name=lab_visit.patient.full_name,
+                            patient_code=lab_visit.patient.patient_code,
+                            lab_type=lab_visit.lab_test_type or 'Laboratory Test',
+                            lab_results=lab_visit.lab_results or 'No results available',
+                            visit_id=lab_visit.id,
+                            completed_at=lab_visit.lab_completed_at.strftime('%Y-%m-%d %H:%M:%S'),
+                            doctor_name=lab_visit.doctor_user.get_full_name() if lab_visit.doctor_user else None
+                        )
+                    
+                    # Fallback to simple PDF if ReportLab PDF fails
+                    if not pdf_content:
+                        pdf_content = generate_lab_result_pdf_simple(
+                            patient_name=lab_visit.patient.full_name,
+                            patient_code=lab_visit.patient.patient_code,
+                            lab_type=lab_visit.lab_test_type or 'Laboratory Test',
+                            lab_results=lab_visit.lab_results or 'No results available',
+                            visit_id=lab_visit.id,
+                            completed_at=lab_visit.lab_completed_at.strftime('%Y-%m-%d %H:%M:%S'),
+                            doctor_name=lab_visit.doctor_user.get_full_name() if lab_visit.doctor_user else None
+                        )
+                    
+                    # Prepare attachment data
+                    attachment_data = None
+                    if pdf_content:
+                        attachment_data = {
+                            'filename': f'lab_result_{lab_visit.id}_{lab_visit.patient.patient_code}.pdf',
+                            'content': pdf_content,
+                            'mimetype': 'application/pdf'
+                        }
+                    
+                    # Send email
+                    email_sent = send_lab_result_email(
+                        patient_name=lab_visit.patient.full_name,
+                        patient_email=patient_email,
+                        lab_type=lab_visit.lab_test_type or 'Laboratory Test',
+                        lab_results=lab_visit.lab_results or 'No results available',
+                        visit_id=lab_visit.id,
+                        completed_at=lab_visit.lab_completed_at.strftime('%Y-%m-%d %H:%M:%S'),
+                        attachment_data=attachment_data
+                    )
+                    
+                    if email_sent:
+                        messages.success(request, 'Lab marked as done and result email sent to patient.')
+                    else:
+                        messages.warning(request, 'Lab marked as done, but failed to send result email to patient.')
+                else:
+                    messages.warning(request, 'Lab marked as done, but no patient email found for notification.')
+            except Exception as e:
+                logger.error(f"Failed to send lab result email: {e}")
+                messages.warning(request, 'Lab marked as done, but failed to send result email.')
+            
             messages.success(request, 'Marked as Done.')
             return redirect('dashboard_lab')
         elif action == 'not_done':
@@ -836,6 +1318,69 @@ def lab_result_work(request, pk: int):
                  .filter(Q(notes__icontains='[visit: laboratory]') | Q(service_type__name__iexact='Laboratory'))
                  .exclude(status=Visit.Status.DONE)
                  .update(status=Visit.Status.DONE))
+                
+                # Send lab result email to patient
+                try:
+                    from clinic_qr_system.email_utils import send_lab_result_email
+                    from clinic_qr_system.pdf_utils import generate_lab_result_pdf, generate_lab_result_pdf_simple
+                    
+                    # Get patient email
+                    patient_email = lab_visit.patient.email or lab_visit.patient.user.email
+                    if patient_email:
+                        # Generate PDF attachment
+                        pdf_content = None
+                        if generate_lab_result_pdf:
+                            pdf_content = generate_lab_result_pdf(
+                                patient_name=lab_visit.patient.full_name,
+                                patient_code=lab_visit.patient.patient_code,
+                                lab_type=lab_visit.lab_test_type or 'Laboratory Test',
+                                lab_results=lab_visit.lab_results or 'No results available',
+                                visit_id=lab_visit.id,
+                                completed_at=lab_visit.lab_completed_at.strftime('%Y-%m-%d %H:%M:%S'),
+                                doctor_name=lab_visit.doctor_user.get_full_name() if lab_visit.doctor_user else None
+                            )
+                        
+                        # Fallback to simple PDF if ReportLab PDF fails
+                        if not pdf_content:
+                            pdf_content = generate_lab_result_pdf_simple(
+                                patient_name=lab_visit.patient.full_name,
+                                patient_code=lab_visit.patient.patient_code,
+                                lab_type=lab_visit.lab_test_type or 'Laboratory Test',
+                                lab_results=lab_visit.lab_results or 'No results available',
+                                visit_id=lab_visit.id,
+                                completed_at=lab_visit.lab_completed_at.strftime('%Y-%m-%d %H:%M:%S'),
+                                doctor_name=lab_visit.doctor_user.get_full_name() if lab_visit.doctor_user else None
+                            )
+                        
+                        # Prepare attachment data
+                        attachment_data = None
+                        if pdf_content:
+                            attachment_data = {
+                                'filename': f'lab_result_{lab_visit.id}_{lab_visit.patient.patient_code}.pdf',
+                                'content': pdf_content,
+                                'mimetype': 'application/pdf'
+                            }
+                        
+                        # Send email
+                        email_sent = send_lab_result_email(
+                            patient_name=lab_visit.patient.full_name,
+                            patient_email=patient_email,
+                            lab_type=lab_visit.lab_test_type or 'Laboratory Test',
+                            lab_results=lab_visit.lab_results or 'No results available',
+                            visit_id=lab_visit.id,
+                            completed_at=lab_visit.lab_completed_at.strftime('%Y-%m-%d %H:%M:%S'),
+                            attachment_data=attachment_data
+                        )
+                        
+                        if email_sent:
+                            messages.success(request, 'Lab result saved and email sent to patient.')
+                        else:
+                            messages.warning(request, 'Lab result saved, but failed to send email to patient.')
+                    else:
+                        messages.warning(request, 'Lab result saved, but no patient email found for notification.')
+                except Exception as e:
+                    logger.error(f"Failed to send lab result email: {e}")
+                    messages.warning(request, 'Lab result saved, but failed to send email.')
             elif action == 'not_done':
                 lr.status = 'not_done'
             else:
@@ -866,16 +1411,212 @@ def lab_set_department(request, pk: int):
 
 
 @login_required
+@user_passes_test(lambda u: u.is_superuser or u.groups.filter(name='Pharmacy').exists())
 def pharmacy_dashboard(request):
-    # Show prescriptions from doctor
-    prescriptions = (Visit.objects
-                     .filter(service='doctor')
-                     .exclude(prescription_notes='')
-                     .order_by('-timestamp'))
-    dispensed = (Visit.objects
-                 .filter(service='pharmacy')
-                 .order_by('-timestamp')[:50])
-    return render(request, 'dashboard/pharmacy.html', {'prescriptions': prescriptions, 'dispensed': dispensed})
+    from visits.models import Prescription, PrescriptionMedicine
+    from visits.forms import PrescriptionSearchForm
+    
+    # Get search parameters
+    search_form = PrescriptionSearchForm(request.GET)
+    search_query = request.GET.get('search', '').strip()
+    status_filter = request.GET.get('status', '')
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+    
+    # Base queryset for prescriptions
+    prescriptions_qs = Prescription.objects.select_related(
+        'visit__patient', 'visit__doctor_user', 'doctor'
+    ).prefetch_related('medicines').order_by('-created_at')
+    
+    # Apply filters
+    if search_query:
+        prescriptions_qs = prescriptions_qs.filter(
+            models.Q(visit__patient__full_name__icontains=search_query) |
+            models.Q(doctor__first_name__icontains=search_query) |
+            models.Q(doctor__last_name__icontains=search_query) |
+            models.Q(medicines__drug_name__icontains=search_query)
+        ).distinct()
+    
+    if status_filter:
+        prescriptions_qs = prescriptions_qs.filter(status=status_filter)
+    
+    if date_from:
+        prescriptions_qs = prescriptions_qs.filter(created_at__date__gte=date_from)
+    
+    if date_to:
+        prescriptions_qs = prescriptions_qs.filter(created_at__date__lte=date_to)
+    
+    # Separate pending and dispensed prescriptions
+    pending_prescriptions = prescriptions_qs.filter(status__in=[Prescription.Status.PENDING, Prescription.Status.READY])
+    dispensed_prescriptions = prescriptions_qs.filter(status=Prescription.Status.DISPENSED)[:50]
+    
+    # Statistics
+    stats = {
+        'total_pending': pending_prescriptions.count(),
+        'total_dispensed_today': prescriptions_qs.filter(
+            status=Prescription.Status.DISPENSED,
+            dispensed_at__date=timezone.localdate()
+        ).count(),
+        'total_dispensed_week': prescriptions_qs.filter(
+            status=Prescription.Status.DISPENSED,
+            dispensed_at__date__gte=timezone.localdate() - timezone.timedelta(days=7)
+        ).count(),
+    }
+    
+    context = {
+        'pending_prescriptions': pending_prescriptions,
+        'dispensed_prescriptions': dispensed_prescriptions,
+        'search_form': search_form,
+        'stats': stats,
+        'search_query': search_query,
+        'status_filter': status_filter,
+        'date_from': date_from,
+        'date_to': date_to,
+    }
+    
+    return render(request, 'dashboard/pharmacy.html', context)
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser or u.groups.filter(name='Pharmacy').exists())
+def pharmacy_dispense(request, prescription_id):
+    """View for dispensing a prescription"""
+    from visits.models import Prescription, PrescriptionMedicine
+    from visits.forms import PrescriptionDispenseForm, PrescriptionMedicineDispenseForm
+    
+    prescription = get_object_or_404(Prescription, pk=prescription_id)
+    
+    if request.method == 'POST':
+        form = PrescriptionDispenseForm(request.POST, instance=prescription)
+        
+        if form.is_valid():
+            with transaction.atomic():
+                # Update prescription status
+                prescription.status = Prescription.Status.DISPENSED
+                prescription.dispensed_by = request.user
+                prescription.dispensed_at = timezone.now()
+                prescription.pharmacy_notes = form.cleaned_data['pharmacy_notes']
+                prescription.save()
+                
+                # Update individual medicines
+                for medicine in prescription.medicines.all():
+                    dispensed_qty = request.POST.get(f'medicine_{medicine.id}_dispensed_quantity', '').strip()
+                    substitution_notes = request.POST.get(f'medicine_{medicine.id}_substitution_notes', '').strip()
+                    
+                    if dispensed_qty:
+                        medicine.dispensed_quantity = dispensed_qty
+                    if substitution_notes:
+                        medicine.substitution_notes = substitution_notes
+                    medicine.save()
+                
+                # Send notification email to patient
+                try:
+                    if prescription.visit.patient.email:
+                        from clinic_qr_system.email_utils import send_notification_email
+                        
+                        subject = "Your Prescription is Ready for Pickup"
+                        message = f"""
+Dear {prescription.visit.patient.full_name},
+
+Your prescribed medicines are ready at the Pharmacy. Please proceed to the pharmacy window to collect your medications.
+
+Prescription Details:
+- Prescription ID: {prescription.id}
+- Doctor: {prescription.doctor.get_full_name() if prescription.doctor else 'Dr. Unknown'}
+- Created: {prescription.created_at.strftime('%Y-%m-%d %H:%M')}
+
+Please bring a valid ID when collecting your prescription.
+
+Thank you for choosing our clinic.
+
+Regards,
+Clinic Pharmacy
+                        """.strip()
+                        
+                        send_notification_email(
+                            recipient_list=[prescription.visit.patient.email],
+                            subject=subject,
+                            message=message
+                        )
+                        
+                        messages.success(request, f'Prescription dispensed and notification sent to {prescription.visit.patient.email}.')
+                    else:
+                        messages.success(request, 'Prescription dispensed successfully.')
+                        
+                except Exception as e:
+                    messages.warning(request, f'Prescription dispensed but notification email failed: {e}')
+                
+                return redirect('dashboard_pharmacy')
+    else:
+        form = PrescriptionDispenseForm(instance=prescription)
+    
+    # Create forms for each medicine
+    medicine_forms = []
+    for medicine in prescription.medicines.all():
+        medicine_form = PrescriptionMedicineDispenseForm(instance=medicine)
+        medicine_forms.append((medicine, medicine_form))
+    
+    context = {
+        'prescription': prescription,
+        'form': form,
+        'medicine_forms': medicine_forms,
+    }
+    
+    return render(request, 'dashboard/pharmacy_dispense.html', context)
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser or u.groups.filter(name='Pharmacy').exists())
+def pharmacy_mark_ready(request, prescription_id):
+    """Mark prescription as ready for pickup"""
+    from visits.models import Prescription
+    
+    prescription = get_object_or_404(Prescription, pk=prescription_id)
+    
+    if prescription.status == Prescription.Status.PENDING:
+        prescription.status = Prescription.Status.READY
+        prescription.save()
+        
+        # Send notification email to patient
+        try:
+            if prescription.visit.patient.email:
+                from clinic_qr_system.email_utils import send_notification_email
+                
+                subject = "Your Prescription is Ready for Pickup"
+                message = f"""
+Dear {prescription.visit.patient.full_name},
+
+Your prescribed medicines are ready at the Pharmacy. Please proceed to the pharmacy window to collect your medications.
+
+Prescription Details:
+- Prescription ID: {prescription.id}
+- Doctor: {prescription.doctor.get_full_name() if prescription.doctor else 'Dr. Unknown'}
+- Created: {prescription.created_at.strftime('%Y-%m-%d %H:%M')}
+
+Please bring a valid ID when collecting your prescription.
+
+Thank you for choosing our clinic.
+
+Regards,
+Clinic Pharmacy
+                """.strip()
+                
+                send_notification_email(
+                    recipient_list=[prescription.visit.patient.email],
+                    subject=subject,
+                    message=message
+                )
+                
+                messages.success(request, f'Prescription marked as ready and notification sent to {prescription.visit.patient.email}.')
+            else:
+                messages.success(request, 'Prescription marked as ready.')
+                
+        except Exception as e:
+            messages.warning(request, f'Prescription marked as ready but notification email failed: {e}')
+    else:
+        messages.error(request, 'Only pending prescriptions can be marked as ready.')
+    
+    return redirect('dashboard_pharmacy')
 
 
 @login_required
@@ -1065,8 +1806,131 @@ def vaccination_work(request, pk: int):
         form = VaccinationForm(request.POST, instance=vr, initial={'vaccine_type': vr.vaccine_type})
         if form.is_valid():
             vr.vaccine_type = form.cleaned_data['vaccine_type']
-            vr.details = form.to_details_json()
+            # Prefer structured dose plan JSON when provided; only overwrite if valid
+            updated_details = None
+            dose_plan_raw = request.POST.get('dose_plan_json') or ''
+            if dose_plan_raw:
+                try:
+                    import json
+                    parsed = json.loads(dose_plan_raw)
+                    if isinstance(parsed, dict) and parsed:
+                        updated_details = parsed
+                except Exception:
+                    updated_details = None
+            # If hidden JSON was empty, synthesize plan from checkbox/date fields
+            if updated_details is None:
+                doses = []
+                dose_items = request.POST.getlist('dose_keys[]')  # optional hidden list (not used here)
+                # Reconstruct from naming pattern dose[KEY] and date[KEY]
+                for key in request.POST:
+                    if key.startswith('dose[') and key.endswith(']'):
+                        dkey = key[5:-1]
+                        checked = True
+                        ddate = request.POST.get(f'date[{dkey}]', '')
+                        doses.append({'key': dkey, 'label': dkey.replace('_',' ').title(), 'checked': checked, 'date': ddate})
+                if doses:
+                    updated_details = {
+                        'vaccine': form.cleaned_data['vaccine_type'],
+                        'doses': doses
+                    }
+            if updated_details is None:
+                # Try to parse textarea details as JSON; if not JSON, keep previous
+                try:
+                    import json
+                    parsed_textarea = json.loads(form.cleaned_data.get('details') or '{}')
+                    if isinstance(parsed_textarea, dict) and parsed_textarea:
+                        updated_details = parsed_textarea
+                except Exception:
+                    updated_details = None
+            if updated_details is not None:
+                vr.details = updated_details
             action = request.POST.get('action')
+            # Sync Dose 2/3 into vaccinations app for reminder scheduling
+            try:
+                from vaccinations.models import VaccineType as VxType, PatientVaccination, VaccineDose, VaccinationReminder
+                plan = vr.details if isinstance(vr.details, dict) else {}
+                doses = plan.get('doses', [])
+                # Map visits.VaccinationType string to vaccinations.VaccineType
+                vx = None
+                try:
+                    vx = VxType.objects.filter(name=str(vr.vaccine_type)).first()
+                except Exception:
+                    vx = None
+                # Create vaccine type on-the-fly if missing
+                if not vx:
+                    name = str(vr.vaccine_type)
+                    total = 2
+                    lname = name.lower()
+                    if 'polio' in lname:
+                        total = 4
+                    elif 'hepatitis b' in lname:
+                        total = 3
+                    elif 'hpv' in lname:
+                        total = 3
+                    elif 'tetanus' in lname:
+                        total = 3
+                    vx = VxType.objects.create(name=name, description='', total_doses_required=total, dose_intervals=[])
+                if vx:
+                    pv, _ = PatientVaccination.objects.get_or_create(
+                        patient=vacc_visit.patient,
+                        vaccine_type=vx,
+                        defaults={
+                            'started_date': timezone.localdate(),
+                            'created_by': request.user
+                        }
+                    )
+                    for d in doses:
+                        label = str(d.get('label', ''))
+                        date_str = (d.get('date') or '').strip()
+                        dose_number = None
+                        if 'Dose 1' in label:
+                            dose_number = 1
+                        elif 'Dose 2' in label:
+                            dose_number = 2
+                        elif 'Dose 3' in label:
+                            dose_number = 3
+                        if dose_number is None:
+                            continue
+                        try:
+                            from datetime import date as _date
+                            sched_date = _date.fromisoformat(date_str) if date_str else timezone.localdate()
+                        except Exception:
+                            sched_date = timezone.localdate()
+                        dose_obj, _ = VaccineDose.objects.get_or_create(
+                            vaccination=pv,
+                            dose_number=dose_number,
+                            defaults={'scheduled_date': sched_date, 'administered': False}
+                        )
+                        # If date changed, update
+                        if dose_obj.scheduled_date != sched_date:
+                            dose_obj.scheduled_date = sched_date
+                            dose_obj.administered = bool(d.get('checked')) and (action == 'done')
+                            dose_obj.save(update_fields=['scheduled_date', 'administered'])
+                        # Reflect administered state when the checkbox is checked (counts progress as given)
+                        if d.get('checked'):
+                            if not dose_obj.administered:
+                                dose_obj.administered = True
+                                dose_obj.administered_by = request.user
+                                dose_obj.administered_date = timezone.localdate()
+                                dose_obj.save(update_fields=['administered','administered_by','administered_date'])
+                        # Ensure there is a pending reminder record for tracking (optional)
+                        if not VaccinationReminder.objects.filter(dose=dose_obj, reminder_date=sched_date).exists():
+                            VaccinationReminder.objects.create(dose=dose_obj, reminder_date=sched_date, sent=False)
+                    # After syncing doses, update completion flag
+                    try:
+                        total_required = vx.total_doses_required or 1
+                        administered_count = pv.doses.filter(administered=True).count()
+                        if administered_count >= total_required:
+                            pv.completed = True
+                            pv.completion_date = timezone.localdate()
+                        else:
+                            pv.completed = False
+                            pv.completion_date = None
+                        pv.save(update_fields=['completed', 'completion_date'])
+                    except Exception:
+                        pass
+            except Exception as _sync_err:
+                logger.warning(f"Vaccination reminder sync failed: {_sync_err}")
             if action == 'done':
                 vr.status = 'done'
                 vacc_visit.status = Visit.Status.DONE
@@ -1095,18 +1959,170 @@ def vaccination_work(request, pk: int):
                 vr.status = 'not_done'
                 vacc_visit.status = Visit.Status.IN_PROCESS
                 vacc_visit.save(update_fields=['status'])
+                # Immediately email patient with planned Dose 2/3 dates
+                try:
+                    from clinic_qr_system.email_utils import send_notification_email
+                    patient = vacc_visit.patient
+                    plan = vr.details if isinstance(vr.details, dict) else {}
+                    doses = plan.get('doses', [])
+                    vax_name = str(vr.vaccine_type)
+                    dose2 = next((d for d in doses if str(d.get('label','')).lower().startswith('dose 2')), None)
+                    dose3 = next((d for d in doses if str(d.get('label','')).lower().startswith('dose 3')), None)
+                    boosters = [d for d in doses if str(d.get('label','')).lower().startswith('booster')]
+                    d2_date = (dose2.get('date') if dose2 else '') or '—'
+                    d3_date = (dose3.get('date') if dose3 else '') or '—'
+                    booster_lines = []
+                    for b in boosters:
+                        b_label = str(b.get('label','Booster'))
+                        b_date = (b.get('date') or '—')
+                        booster_lines.append(f"- {b_label} date: {b_date}")
+                    booster_text = ("\n" + "\n".join(booster_lines)) if booster_lines else ''
+                    subject = f"{patient.full_name}: Next doses for {vax_name}"
+                    plain = (
+                        f"Hello {patient.full_name},\n\n"
+                        f"Here are your planned next doses for {vax_name}:\n"
+                        f"- Dose 2 date: {d2_date}\n"
+                        f"- Dose 3 date: {d3_date}{booster_text}\n\n"
+                        f"If these dates need changes, please contact the clinic.\n\n"
+                        f"Regards,\nClinic QR System"
+                    )
+                    html = (
+                        f"<html><body style='font-family: Arial, sans-serif;'>"
+                        f"<h3>Vaccination Plan</h3>"
+                        f"<p>Hello <strong>{patient.full_name}</strong>,</p>"
+                        f"<p>Here are your planned next doses for <strong>{vax_name}</strong>:</p>"
+                        f"<ul>"
+                        f"<li><strong>Dose 2:</strong> {d2_date}</li>"
+                        f"<li><strong>Dose 3:</strong> {d3_date}</li>"
+                        f"{''.join([f'<li><strong>{str(b.get('label','Booster'))}:</strong> {str(b.get('date') or '—')}</li>' for b in boosters])}"
+                        f"</ul>"
+                        f"<p>If these dates need changes, please contact the clinic.</p>"
+                        f"<p>Regards,<br>Clinic QR System</p>"
+                        f"</body></html>"
+                    )
+                    if patient and patient.email:
+                        send_notification_email([patient.email], subject, plain, html)
+                except Exception as e:
+                    logger.warning(f"Failed to send immediate vaccination plan email: {e}")
             else:
                 vr.status = 'in_process'
                 vacc_visit.status = Visit.Status.IN_PROCESS
                 vacc_visit.save(update_fields=['status'])
             vr.administered_by = request.user
             vr.save()
+            # Schedule reminders for Dose 2/3 if dates set
+            try:
+                from vaccinations.models import VaccinationReminder
+                plan = vr.details if isinstance(vr.details, dict) else {}
+                doses = plan.get('doses', [])
+                # Clear existing unsent reminders for this record to avoid duplicates
+                VaccinationReminder.objects.filter(dose__vaccination__patient=vacc_visit.patient).filter(sent=False).delete()
+                for d in doses:
+                    label = str(d.get('label', ''))
+                    date_str = (d.get('date') or '').strip()
+                    if not date_str:
+                        continue
+                    if ('Dose 2' in label) or ('Dose 3' in label):
+                        # Note: Full integration would map to VaccineDose. For now, log intent.
+                        logger.info(f"Reminder scheduled for {vacc_visit.patient.full_name} · {vr.vaccine_type} · {label} on {date_str}")
+            except Exception as e:
+                logger.warning(f"Failed to schedule vaccination reminders: {e}")
             messages.success(request, 'Vaccination record saved.')
-            return redirect('dashboard_vaccination')
+            # On Not Done, go back to vaccination list as requested
+            if action == 'done' or action == 'not_done':
+                return redirect('dashboard_vaccination')
+            return redirect('vaccination_work', pk=vacc_visit.pk)
     else:
         form = VaccinationForm(instance=vr, initial={'vaccine_type': vr.vaccine_type})
+    # Prevent duplicate vaccine type selection for this patient (allow current)
+    try:
+        existing_types = set(VaccinationRecord.objects.filter(patient=vacc_visit.patient).values_list('vaccine_type', flat=True))
+        current = vr.vaccine_type
+        if current in existing_types:
+            existing_types.remove(current)
+        filtered = []
+        for val, label in form.fields['vaccine_type'].choices:
+            if val in (None, '', '---------'):
+                filtered.append((val, label))
+                continue
+            if val in existing_types:
+                continue
+            filtered.append((val, label))
+        form.fields['vaccine_type'].choices = filtered
+    except Exception:
+        pass
     return render(request, 'dashboard/vaccination_work.html', {'visit': vacc_visit, 'form': form, 'vacc_record': vr})
 
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser or u.groups.filter(name='Vaccination').exists())
+@require_POST
+def vaccination_finish(request, pk: int):
+    """Finish a vaccination visit"""
+    vacc_visit = get_object_or_404(Visit, pk=pk, service='vaccination')
+    vr = VaccinationRecord.objects.filter(visit=vacc_visit).order_by('-updated_at').first()
+    if not vr:
+        vr = VaccinationRecord.objects.create(visit=vacc_visit, patient=vacc_visit.patient, vaccine_type=VaccinationType.COVID19)
+    
+    # Mark vaccination as done
+    vr.status = 'done'
+    vr.administered_by = request.user
+    vr.save()
+    
+    # Update visit status
+    vacc_visit.status = Visit.Status.DONE
+    vacc_visit.vaccination_date = timezone.localdate()
+    vacc_visit.save(update_fields=['status', 'vaccination_date'])
+    
+    # Reflect completion on the specific reception ticket that spawned this vaccination visit
+    rec = None
+    try:
+        m = re.search(r"From\s+reception\s+#(\d+)", vacc_visit.notes or '', flags=re.IGNORECASE)
+        if m:
+            rec_id = int(m.group(1))
+            rec = Visit.objects.filter(pk=rec_id, service='reception').first()
+    except Exception:
+        rec = None
+    if not rec:
+        # Fallback: latest today's reception vaccination ticket for this patient
+        rec = (Visit.objects
+               .filter(service='reception', patient=vacc_visit.patient, timestamp__date=timezone.localdate())
+               .filter(Q(service_type__name__iexact='Vaccination') | Q(notes__icontains='[visit: vaccination]'))
+               .order_by('-timestamp')
+               .first())
+    if rec:
+        rec.status = Visit.Status.DONE
+        rec.save(update_fields=['status'])
+    
+    messages.success(request, f'Vaccination completed for {vacc_visit.patient.full_name}.')
+    return redirect('dashboard_vaccination')
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser or u.groups.filter(name='Vaccination').exists())
+def vaccination_autosave(request, pk: int):
+    """Autosave vaccination plan changes (AJAX only)."""
+    if request.method != 'POST' or request.headers.get('X-Requested-With') != 'XMLHttpRequest':
+        return JsonResponse({'success': False, 'message': 'Invalid request'}, status=400)
+    vacc_visit = get_object_or_404(Visit, pk=pk, service='vaccination')
+    vr = VaccinationRecord.objects.filter(visit=vacc_visit).order_by('-updated_at').first()
+    if not vr:
+        vr = VaccinationRecord.objects.create(visit=vacc_visit, patient=vacc_visit.patient, vaccine_type=VaccinationType.COVID19)
+    try:
+        import json
+        payload = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        return JsonResponse({'success': False, 'message': 'Invalid JSON'}, status=400)
+    # Update vaccine type and details
+    vaccine = payload.get('vaccine')
+    if vaccine:
+        vr.vaccine_type = vaccine
+    if isinstance(payload, dict):
+        vr.details = payload
+    vr.status = 'in_process'
+    vr.administered_by = request.user
+    vr.save()
+    return JsonResponse({'success': True})
 
 @login_required
 def reports(request):
@@ -1121,21 +2137,44 @@ def reports(request):
         qs = qs.filter(timestamp__date__lte=end)
     if service:
         qs = qs.filter(service=service)
-    # Enforce per-doctor scoping for non-admin doctors
+    
+    # Role-based filtering
     try:
-        is_doctor = request.user.is_authenticated and request.user.groups.filter(name='Doctor').exists()
+        user_groups = request.user.groups.values_list('name', flat=True)
+        is_pharmacy = 'Pharmacy' in user_groups
+        is_doctor = 'Doctor' in user_groups
+        is_lab = 'Laboratory' in user_groups
+        is_vaccination = 'Vaccination' in user_groups
+        is_reception = 'Reception' in user_groups
+        is_admin = request.user.is_superuser
     except Exception:
-        is_doctor = False
-    if is_doctor and not request.user.is_superuser:
+        is_pharmacy = is_doctor = is_lab = is_vaccination = is_reception = is_admin = False
+    
+    # Apply role-based filtering
+    if is_pharmacy and not is_admin:
+        # Pharmacy users see only pharmacy-related visits
+        qs = qs.filter(service='pharmacy')
+    elif is_doctor and not is_admin:
+        # Doctor users see only their own consultations
         qs = qs.filter(service='doctor', doctor_user=request.user)
+    elif is_lab and not is_admin:
+        # Lab users see only lab-related visits
+        qs = qs.filter(service='laboratory')
+    elif is_vaccination and not is_admin:
+        # Vaccination users see only vaccination-related visits
+        qs = qs.filter(service='vaccination')
+    elif is_reception and not is_admin:
+        # Reception users see all visits (they handle all departments)
+        pass  # No additional filtering needed
+    # Admin/superuser sees all visits (no additional filtering)
     export = request.GET.get('export')
     if export == 'csv':
         resp = HttpResponse(content_type='text/csv')
         resp['Content-Disposition'] = 'attachment; filename="visits.csv"'
         writer = csv.writer(resp)
-        writer.writerow(['Date','Service','Patient','Notes'])
+        writer.writerow(['Date','Service','Patient'])
         for v in qs:
-            writer.writerow([v.timestamp.strftime('%Y-%m-%d %H:%M'), v.get_service_display(), v.patient.full_name, v.notes])
+            writer.writerow([v.timestamp.strftime('%Y-%m-%d %H:%M'), v.get_service_display(), v.patient.full_name])
         return resp
     if export == 'xlsx':
         if not Workbook:
@@ -1144,9 +2183,9 @@ def reports(request):
         wb = Workbook()
         ws = wb.active
         ws.title = 'Visits'
-        ws.append(['Date','Service','Patient','Notes'])
+        ws.append(['Date','Service','Patient'])
         for v in qs:
-            ws.append([v.timestamp.strftime('%Y-%m-%d %H:%M'), v.get_service_display(), v.patient.full_name, v.notes])
+            ws.append([v.timestamp.strftime('%Y-%m-%d %H:%M'), v.get_service_display(), v.patient.full_name])
         resp = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         resp['Content-Disposition'] = 'attachment; filename="visits.xlsx"'
         wb.save(resp)
@@ -1173,7 +2212,6 @@ def reports(request):
         p.drawString(40, y, "Date")
         p.drawString(150, y, "Service")
         p.drawString(230, y, "Patient")
-        p.drawString(380, y, "Notes")
         y -= 14
         p.setFont("Helvetica", 9)
         for v in qs[:500]:
@@ -1183,12 +2221,133 @@ def reports(request):
             p.drawString(40, y, v.timestamp.strftime('%Y-%m-%d %H:%M'))
             p.drawString(150, y, v.get_service_display())
             p.drawString(230, y, v.patient.full_name[:22])
-            p.drawString(380, y, (v.notes or '')[:40])
             y -= 12
         p.showPage()
         p.save()
         return resp
     return render(request, 'dashboard/reports.html', {'visits': qs, 'start': start or '', 'end': end or '', 'service': service or ''})
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser or u.groups.filter(name='Pharmacy').exists())
+def pharmacy_reports(request):
+    """Pharmacy-specific reports for prescriptions"""
+    from visits.models import Prescription, PrescriptionMedicine
+    
+    # Filters
+    start = request.GET.get('start')
+    end = request.GET.get('end')
+    status = request.GET.get('status')
+    doctor = request.GET.get('doctor')
+    # Sanitize dates (handle accidental trailing punctuation like a period)
+    import re
+    def clean_date(value: str) -> str:
+        if not value:
+            return ''
+        value = value.strip()
+        m = re.match(r'^(\d{4}-\d{2}-\d{2})', value)
+        if m:
+            return m.group(1)
+        # Fallback: remove trailing non-date chars
+        return re.sub(r'[^0-9\-]', '', value)[:10]
+    start = clean_date(start)
+    end = clean_date(end)
+    
+    # Base queryset
+    qs = Prescription.objects.select_related(
+        'visit__patient', 'visit__doctor_user', 'doctor', 'dispensed_by'
+    ).prefetch_related('medicines').order_by('-created_at')
+    
+    # Apply filters
+    if start:
+        qs = qs.filter(created_at__date__gte=start)
+    if end:
+        qs = qs.filter(created_at__date__lte=end)
+    if status:
+        qs = qs.filter(status=status)
+    if doctor:
+        qs = qs.filter(doctor__id=doctor)
+    
+    # Export functionality
+    export = request.GET.get('export')
+    if export == 'csv':
+        import csv
+        from django.http import HttpResponse
+        
+        resp = HttpResponse(content_type='text/csv')
+        resp['Content-Disposition'] = 'attachment; filename="pharmacy_prescriptions.csv"'
+        writer = csv.writer(resp)
+        writer.writerow(['Date', 'Patient', 'Doctor', 'Status', 'Medicines', 'Dispensed By', 'Dispensed At'])
+        
+        for p in qs:
+            medicines = ', '.join([f"{m.drug_name} ({m.dosage})" for m in p.medicines.all()])
+            writer.writerow([
+                p.created_at.strftime('%Y-%m-%d %H:%M'),
+                p.visit.patient.full_name,
+                p.doctor.get_full_name() if p.doctor else 'Unknown',
+                p.get_status_display(),
+                medicines,
+                p.dispensed_by.get_full_name() if p.dispensed_by else '',
+                p.dispensed_at.strftime('%Y-%m-%d %H:%M') if p.dispensed_at else ''
+            ])
+        return resp
+    
+    if export == 'xlsx':
+        try:
+            from openpyxl import Workbook
+            from django.http import HttpResponse
+            
+            wb = Workbook()
+            ws = wb.active
+            ws.title = 'Pharmacy Prescriptions'
+            ws.append(['Date', 'Patient', 'Doctor', 'Status', 'Medicines', 'Dispensed By', 'Dispensed At'])
+            
+            for p in qs:
+                medicines = ', '.join([f"{m.drug_name} ({m.dosage})" for m in p.medicines.all()])
+                ws.append([
+                    p.created_at.strftime('%Y-%m-%d %H:%M'),
+                    p.visit.patient.full_name,
+                    p.doctor.get_full_name() if p.doctor else 'Unknown',
+                    p.get_status_display(),
+                    medicines,
+                    p.dispensed_by.get_full_name() if p.dispensed_by else '',
+                    p.dispensed_at.strftime('%Y-%m-%d %H:%M') if p.dispensed_at else ''
+                ])
+            
+            resp = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            resp['Content-Disposition'] = 'attachment; filename="pharmacy_prescriptions.xlsx"'
+            wb.save(resp)
+            return resp
+        except ImportError:
+            messages.error(request, 'XLSX export is unavailable (openpyxl not installed).')
+            return redirect('pharmacy_reports')
+    
+    # Statistics
+    stats = {
+        'total_prescriptions': qs.count(),
+        'pending': qs.filter(status=Prescription.Status.PENDING).count(),
+        'ready': qs.filter(status=Prescription.Status.READY).count(),
+        'dispensed': qs.filter(status=Prescription.Status.DISPENSED).count(),
+        'dispensed_today': qs.filter(
+            status=Prescription.Status.DISPENSED,
+            dispensed_at__date=timezone.localdate()
+        ).count(),
+    }
+    
+    # Get doctors for filter dropdown
+    doctors = User.objects.filter(groups__name='Doctor').order_by('first_name', 'last_name')
+    
+    context = {
+        'prescriptions': qs,
+        'stats': stats,
+        'doctors': doctors,
+        'start': start or '',
+        'end': end or '',
+        'status': status or '',
+        'doctor': doctor or '',
+    }
+    
+    return render(request, 'dashboard/pharmacy_reports.html', context)
 
 
 @login_required
@@ -1238,6 +2397,7 @@ def doctor_create(request):
                 user=user,
                 full_name=form.cleaned_data['full_name'],
                 specialization=form.cleaned_data['specialization'],
+                must_change_password=True  # Force password change on first login
             )
             return redirect('doctor_list')
     else:
@@ -1394,6 +2554,24 @@ def doctor_consult(request, rid: int):
         prescription_notes = request.POST.get('prescription_notes','')
         mark = request.POST.get('status')
         done = (mark == 'done')
+        
+        # Parse prescription medicines from form data
+        medicines_data = []
+        medicine_count = 0
+        while True:
+            drug_name = request.POST.get(f'medicine_{medicine_count}_name', '').strip()
+            if not drug_name:
+                break
+            medicines_data.append({
+                'drug_name': drug_name,
+                'dosage': request.POST.get(f'medicine_{medicine_count}_dosage', '').strip(),
+                'frequency': request.POST.get(f'medicine_{medicine_count}_frequency', '').strip(),
+                'duration': request.POST.get(f'medicine_{medicine_count}_duration', '').strip(),
+                'quantity': request.POST.get(f'medicine_{medicine_count}_quantity', '').strip(),
+                'special_instructions': request.POST.get(f'medicine_{medicine_count}_instructions', '').strip(),
+            })
+            medicine_count += 1
+        
         with transaction.atomic():
             # Upsert today's draft for this doctor and patient
             draft = (Visit.objects
@@ -1424,6 +2602,29 @@ def doctor_consult(request, rid: int):
                     status=Visit.Status.DONE if done else Visit.Status.IN_PROCESS,
                     created_by=request.user,
                 )
+            
+            # Create detailed prescription if medicines are provided
+            if medicines_data and done:
+                from visits.models import Prescription, PrescriptionMedicine
+                
+                # Create or update prescription
+                prescription, created = Prescription.objects.get_or_create(
+                    visit=draft,
+                    defaults={
+                        'doctor': request.user,
+                        'status': Prescription.Status.PENDING
+                    }
+                )
+                
+                # Clear existing medicines and add new ones
+                prescription.medicines.all().delete()
+                
+                for medicine_data in medicines_data:
+                    if medicine_data['drug_name']:  # Only create if drug name is provided
+                        PrescriptionMedicine.objects.create(
+                            prescription=prescription,
+                            **medicine_data
+                        )
         # Update the reception ticket status according to action
         rec.doctor_status = 'finished' if done else 'in_consultation'
         # Also reflect unified status on the reception ticket
@@ -1436,7 +2637,17 @@ def doctor_consult(request, rid: int):
              .filter(service='doctor', doctor_user=request.user, doctor_done=False, patient=rec.patient, timestamp__date=timezone.localdate())
              .order_by('-timestamp')
              .first())
-    return render(request, 'dashboard/doctor_consult.html', {'rec': rec, 'draft': draft})
+    
+    # Load existing prescription medicines if a draft exists
+    prescription_medicines = []
+    if draft and hasattr(draft, 'prescription_records') and draft.prescription_records.exists():
+        prescription_medicines = draft.prescription_records.first().medicines.all()
+    
+    return render(request, 'dashboard/doctor_consult.html', {
+        'rec': rec, 
+        'draft': draft, 
+        'prescription_medicines': prescription_medicines
+    })
 
 
 @login_required
@@ -1491,6 +2702,43 @@ def doctor_consult_edit(request, did: int):
             rec.save(update_fields=['doctor_status'])
         messages.success(request, 'Consultation {}.'.format('completed' if done else 'updated'))
         return redirect('dashboard_doctor')
+    # Load existing prescription medicines if they exist
+    prescription_medicines = []
+    if hasattr(visit, 'prescription_records') and visit.prescription_records.exists():
+        prescription_medicines = visit.prescription_records.first().medicines.all()
+    
     # Reuse consult template
-    return render(request, 'dashboard/doctor_consult.html', {'rec': None, 'draft': visit, 'is_edit': True})
+    return render(request, 'dashboard/doctor_consult.html', {
+        'rec': None, 
+        'draft': visit, 
+        'is_edit': True,
+        'prescription_medicines': prescription_medicines
+    })
+
+
+@login_required
+def change_password(request):
+    """Allow any authenticated user to change their own password."""
+    if request.method == 'POST':
+        form = PasswordChangeForm(request.user, request.POST)
+        if form.is_valid():
+            user = form.save()
+            update_session_auth_hash(request, user)
+            messages.success(request, 'Your password has been updated.')
+            if request.user.is_superuser:
+                return redirect('admin_dashboard')
+            if request.user.groups.filter(name='Reception').exists():
+                return redirect('dashboard_reception')
+            if request.user.groups.filter(name='Doctor').exists():
+                return redirect('dashboard_doctor')
+            if request.user.groups.filter(name='Laboratory').exists():
+                return redirect('dashboard_lab')
+            if request.user.groups.filter(name='Pharmacy').exists():
+                return redirect('dashboard_pharmacy')
+            if request.user.groups.filter(name='Vaccination').exists():
+                return redirect('dashboard_vaccination')
+            return redirect('dashboard_index')
+    else:
+        form = PasswordChangeForm(request.user)
+    return render(request, 'dashboard/change_password.html', {'form': form})
 

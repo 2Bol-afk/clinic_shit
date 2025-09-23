@@ -7,6 +7,30 @@
     <a href="/dashboard/reception/walkin/" class="btn btn-lg btn-outline-success"><i class="bi bi-person-plus me-2"></i>Walk-in Registration</a>
   </div>
 </div>
+
+{% if patient_data %}
+<!-- Scanned Patient Information -->
+<div class="alert alert-success mb-4">
+  <div class="d-flex justify-content-between align-items-center">
+    <div>
+      <h5 class="alert-heading mb-1">
+        <i class="bi bi-check-circle me-2"></i>Patient Scanned Successfully
+      </h5>
+      <p class="mb-0">
+        <strong>{{ patient_data.full_name }}</strong> ({{ patient_data.patient_code }}) - {{ patient_data.email }}
+      </p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="/dashboard/reception/walkin/?patient_id={{ patient_data.id }}" class="btn btn-success">
+        <i class="bi bi-plus-circle me-1"></i>Log Arrival
+      </a>
+      <a href="/patients/{{ patient_data.id }}/" class="btn btn-outline-primary">
+        <i class="bi bi-person me-1"></i>View Profile
+      </a>
+    </div>
+  </div>
+</div>
+{% endif %}
 <div class="card shadow-sm">
   <div class="card-body p-0">
     <table class="table table-hover align-middle mb-0">
@@ -24,12 +48,12 @@
       {% for v in visits %}
         <tr>
           <td>{{ v.timestamp|date:'H:i' }}</td>
-          <td><a href="/patients/{{ v.patient.id }}/">{{ v.patient.full_name }}</a></td>
+          <td>{{ v.patient.full_name }}</td>
           <td>
             {% if v.department %}
               <span class="badge rounded-pill text-bg-primary">Consultation</span>
             {% elif v.notes and 'vaccination' in v.notes|lower %}
-              <span class="badge rounded-pill text-bg-warning">Vaccination</span>
+              <span class="badge rounded-pill" style="background-color: #d8bfd8; color: #4a4a4a;">Vaccination</span>
             {% elif v.notes and 'laboratory' in v.notes|lower %}
               <span class="badge rounded-pill text-bg-info">Laboratory</span>
             {% else %}
@@ -61,7 +85,28 @@
           <td>{{ v.department|default:'—' }}</td>
           <td>
             {% if request.user.is_superuser or request.user.groups.all.0.name == 'Reception' %}
-              <a class="btn btn-sm btn-outline-danger" href="/dashboard/reception/{{ v.id }}/delete/">Delete</a>
+              <div class="btn-group" role="group">
+                {% if v.status == 'claimed' or v.claimed_by %}
+                  <button class="btn btn-sm btn-outline-secondary" disabled title="Cannot edit claimed visits">
+                    <i class="bi bi-pencil me-1"></i>Edit
+                  </button>
+                {% elif v.status == 'done' or v.doctor_status == 'finished' %}
+                  <button class="btn btn-sm btn-outline-secondary" disabled title="Cannot edit done visits">
+                    <i class="bi bi-pencil me-1"></i>Edit
+                  </button>
+                {% elif v.status == 'in_process' or v.doctor_status == 'in_consultation' %}
+                  <button class="btn btn-sm btn-outline-secondary" disabled title="Cannot edit visits in process">
+                    <i class="bi bi-pencil me-1"></i>Edit
+                  </button>
+                {% else %}
+                  <a class="btn btn-sm btn-outline-primary" href="{% url 'reception_visit_edit' v.id %}" title="Edit visit details">
+                    <i class="bi bi-pencil me-1"></i>Edit
+                  </a>
+                {% endif %}
+                <a class="btn btn-sm btn-outline-danger" href="/dashboard/reception/{{ v.id }}/delete/" title="Delete visit">
+                  <i class="bi bi-trash me-1"></i>Delete
+                </a>
+              </div>
             {% endif %}
           </td>
         </tr>

@@ -1,0 +1,288 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dynamic Vaccination Form{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="bi bi-shield-plus text-primary me-2"></i>Dynamic Vaccination Form</h2>
+                <a href="{% url 'vaccinations:patient_vaccination_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i>Back to Vaccinations
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-clipboard-data me-2"></i>Vaccination Administration
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="vaccination-form">
+                        {% csrf_token %}
+                        
+                        <!-- Patient Selection -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.patient.id_for_label }}" class="form-label">
+                                    <i class="bi bi-person me-1"></i>Patient
+                                </label>
+                                {{ form.patient }}
+                                {% if form.patient.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.patient.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">{{ form.patient.help_text }}</div>
+                            </div>
+                        </div>
+
+                        <!-- Vaccine Type Selection -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.vaccine_type.id_for_label }}" class="form-label">
+                                    <i class="bi bi-shield me-1"></i>Vaccine Type
+                                </label>
+                                {{ form.vaccine_type }}
+                                {% if form.vaccine_type.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.vaccine_type.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">{{ form.vaccine_type.help_text }}</div>
+                            </div>
+                        </div>
+
+                        <!-- Vaccine Information Display -->
+                        <div id="vaccine-info" class="alert alert-info d-none">
+                            <h6><i class="bi bi-info-circle me-2"></i>Vaccine Information</h6>
+                            <div id="vaccine-description"></div>
+                            <div id="total-doses-info"></div>
+                        </div>
+
+                        <!-- Dose Number Selection -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.dose_number.id_for_label }}" class="form-label">
+                                    <i class="bi bi-123 me-1"></i>Dose Number
+                                </label>
+                                {{ form.dose_number }}
+                                {% if form.dose_number.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.dose_number.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">{{ form.dose_number.help_text }}</div>
+                            </div>
+                        </div>
+
+                        <!-- Administration Date -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.administered_date.id_for_label }}" class="form-label">
+                                    <i class="bi bi-calendar me-1"></i>Administration Date
+                                </label>
+                                {{ form.administered_date }}
+                                {% if form.administered_date.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.administered_date.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">{{ form.administered_date.help_text }}</div>
+                            </div>
+                        </div>
+
+                        
+
+                        <!-- Injection Site -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.site_of_injection.id_for_label }}" class="form-label">
+                                    <i class="bi bi-geo-alt me-1"></i>Site of Injection
+                                </label>
+                                {{ form.site_of_injection }}
+                                {% if form.site_of_injection.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.site_of_injection.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">{{ form.site_of_injection.help_text }}</div>
+                            </div>
+                        </div>
+
+                        <!-- Adverse Reactions -->
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <label for="{{ form.adverse_reactions.id_for_label }}" class="form-label">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>Adverse Reactions
+                                </label>
+                                {{ form.adverse_reactions }}
+                                {% if form.adverse_reactions.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.adverse_reactions.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">{{ form.adverse_reactions.help_text }}</div>
+                            </div>
+                        </div>
+
+                        <!-- Notes -->
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <label for="{{ form.notes.id_for_label }}" class="form-label">
+                                    <i class="bi bi-sticky me-1"></i>Notes
+                                </label>
+                                {{ form.notes }}
+                                {% if form.notes.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.notes.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">{{ form.notes.help_text }}</div>
+                            </div>
+                        </div>
+
+                        <!-- Form Errors -->
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                {% for error in form.non_field_errors %}
+                                    <i class="bi bi-exclamation-circle me-2"></i>{{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        <!-- Submit Button -->
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{% url 'vaccinations:patient_vaccination_list' %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle me-1"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle me-1"></i>Record Vaccination
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Information Panel -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="bi bi-info-circle me-2"></i>Instructions
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h6><i class="bi bi-lightbulb me-2"></i>How to Use</h6>
+                        <ol class="mb-0">
+                            <li>Select the patient to vaccinate</li>
+                            <li>Choose the vaccine type</li>
+                            <li>Select the appropriate dose number</li>
+                            <li>Verify the administration date</li>
+                            <li>Fill in optional details</li>
+                            <li>Submit the form</li>
+                        </ol>
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <h6><i class="bi bi-shield-exclamation me-2"></i>Important Notes</h6>
+                        <ul class="mb-0">
+                            <li>The system prevents duplicate entries</li>
+                            <li>Dose numbers are automatically validated</li>
+                            <li>Next doses are automatically scheduled</li>
+                            <li>Completion emails are sent automatically</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const patientSelect = document.getElementById('patient-select');
+    const vaccineSelect = document.getElementById('vaccine-type-select');
+    const doseSelect = document.getElementById('dose-number-select');
+    const vaccineInfo = document.getElementById('vaccine-info');
+    const vaccineDescription = document.getElementById('vaccine-description');
+    const totalDosesInfo = document.getElementById('total-doses-info');
+
+    // Function to update dose options
+    function updateDoseOptions(vaccineId, patientId) {
+        if (!vaccineId) {
+            doseSelect.innerHTML = '<option value="">Select vaccine first</option>';
+            vaccineInfo.classList.add('d-none');
+            return;
+        }
+
+        // Show loading state
+        doseSelect.innerHTML = '<option value="">Loading...</option>';
+        doseSelect.disabled = true;
+
+        // Fetch vaccine information
+        fetch(`/vaccinations/get-vaccine-info/?vaccine_id=${vaccineId}&patient_id=${patientId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update vaccine information display
+                    vaccineDescription.textContent = data.description || 'No description available';
+                    totalDosesInfo.innerHTML = `<strong>Total Doses Required:</strong> ${data.total_doses}`;
+                    vaccineInfo.classList.remove('d-none');
+
+                    // Update dose options
+                    doseSelect.innerHTML = '';
+                    if (data.available_doses && data.available_doses.length > 0) {
+                        data.available_doses.forEach(doseNum => {
+                            const option = document.createElement('option');
+                            option.value = doseNum;
+                            option.textContent = `Dose ${doseNum}`;
+                            doseSelect.appendChild(option);
+                        });
+                    } else {
+                        const option = document.createElement('option');
+                        option.value = '';
+                        option.textContent = 'No available doses';
+                        doseSelect.appendChild(option);
+                    }
+                } else {
+                    doseSelect.innerHTML = '<option value="">Error loading doses</option>';
+                    vaccineInfo.classList.add('d-none');
+                }
+                doseSelect.disabled = false;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                doseSelect.innerHTML = '<option value="">Error loading doses</option>';
+                doseSelect.disabled = false;
+                vaccineInfo.classList.add('d-none');
+            });
+    }
+
+    // Event listeners
+    vaccineSelect.addEventListener('change', function() {
+        const vaccineId = this.value;
+        const patientId = patientSelect.value;
+        updateDoseOptions(vaccineId, patientId);
+    });
+
+    patientSelect.addEventListener('change', function() {
+        const vaccineId = vaccineSelect.value;
+        const patientId = this.value;
+        updateDoseOptions(vaccineId, patientId);
+    });
+
+    // Initialize form state
+    updateDoseOptions(vaccineSelect.value, patientSelect.value);
+});
+</script>
+{% endblock %}

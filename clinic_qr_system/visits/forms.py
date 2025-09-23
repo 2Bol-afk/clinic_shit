@@ -1,202 +1,171 @@
 from django import forms
-from .models import LabResult, Laboratory, VaccinationType
+from django.forms import inlineformset_factory
+from .models import Prescription, PrescriptionMedicine, Visit, LabResult, VaccinationRecord
 
 
-LAB_FIELDS = {
-    Laboratory.HEMATOLOGY: [
-        ('hemoglobin', 'Hemoglobin'),
-        ('hematocrit', 'Hematocrit'),
-        ('wbc', 'WBC Count'),
-        ('rbc', 'RBC Count'),
-        ('platelet', 'Platelet Count'),
-        ('remarks', 'Remarks'),
-    ],
-    Laboratory.CLINICAL_MICROSCOPY: [
-        ('color', 'Color'),
-        ('appearance', 'Appearance'),
-        ('sg', 'Specific Gravity'),
-        ('ph', 'pH'),
-        ('protein', 'Protein'),
-        ('glucose', 'Glucose'),
-        ('blood', 'Blood'),
-        ('microscopy', 'Microscopy Findings'),
-    ],
-    Laboratory.CLINICAL_CHEMISTRY: [
-        ('glucose', 'Glucose'),
-        ('cholesterol', 'Cholesterol'),
-        ('triglycerides', 'Triglycerides'),
-        ('ldl', 'LDL'),
-        ('hdl', 'HDL'),
-        ('creatinine', 'Creatinine'),
-        ('uric_acid', 'Uric Acid'),
-        ('remarks', 'Remarks'),
-    ],
-    Laboratory.IMMUNOLOGY: [
-        ('test_type', 'Test Type'),
-        ('result', 'Result'),
-        ('level', 'Antibody/Antigen Level'),
-        ('remarks', 'Remarks'),
-    ],
-    Laboratory.MICROBIOLOGY: [
-        ('specimen', 'Specimen Type'),
-        ('organism', 'Organism Isolated'),
-        ('gram_stain', 'Gram Stain Result'),
-        ('sensitivity', 'Antibiotic Sensitivity'),
-        ('remarks', 'Remarks'),
-    ],
-    Laboratory.PATHOLOGY: [
-        ('specimen', 'Specimen Type'),
-        ('gross', 'Gross Description'),
-        ('microscopic', 'Microscopic Findings'),
-        ('diagnosis', 'Diagnosis/Interpretation'),
-        ('remarks', 'Remarks'),
-    ],
-}
+class PrescriptionMedicineForm(forms.ModelForm):
+    """Form for individual medicine items in a prescription"""
+    
+    class Meta:
+        model = PrescriptionMedicine
+        fields = ['drug_name', 'dosage', 'frequency', 'duration', 'quantity', 'special_instructions']
+        widgets = {
+            'drug_name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., Amoxicillin, Paracetamol'
+            }),
+            'dosage': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., 500mg, 10ml'
+            }),
+            'frequency': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., 3 times daily, every 8 hours'
+            }),
+            'duration': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., 7 days, 2 weeks'
+            }),
+            'quantity': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., 30 tablets, 1 bottle'
+            }),
+            'special_instructions': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 2,
+                'placeholder': 'Special instructions for this medicine'
+            })
+        }
 
 
-class LabResultForm(forms.Form):
-    lab_type = forms.ChoiceField(choices=Laboratory.choices, required=True, label='Laboratory Test Type')
-
-    def __init__(self, *args, **kwargs):
-        self.instance: LabResult | None = kwargs.pop('instance', None)
-        initial = kwargs.get('initial') or {}
-        lab_type_value = initial.get('lab_type') or (self.instance.lab_type if self.instance else None)
-        super().__init__(*args, **kwargs)
-        # Pre-select lab_type in form
-        if lab_type_value:
-            self.fields['lab_type'].initial = lab_type_value
-        # Ensure select styling
-        self.fields['lab_type'].widget.attrs['class'] = (
-            (self.fields['lab_type'].widget.attrs.get('class', '') + ' form-select').strip()
-        )
-        # Build dynamic fields
-        lt = lab_type_value or Laboratory.HEMATOLOGY
-        for name, label in LAB_FIELDS.get(lt, []):
-            self.fields[name] = forms.CharField(label=label, required=False)
-            # Apply consistent control styling
-            self.fields[name].widget.attrs['class'] = (
-                (self.fields[name].widget.attrs.get('class', '') + ' form-control').strip()
-            )
-            # Prefill from instance JSON
-            if self.instance and isinstance(self.instance.results, dict):
-                self.fields[name].initial = self.instance.results.get(name, '')
-
-    def to_results_json(self) -> dict:
-        data = {}
-        for name, field in self.fields.items():
-            if name == 'lab_type':
-                continue
-            val = self.cleaned_data.get(name)
-            if val:
-                data[name] = val
-        return data
+class PrescriptionForm(forms.ModelForm):
+    """Form for creating/editing prescriptions"""
+    
+    class Meta:
+        model = Prescription
+        fields = ['pharmacy_notes']
+        widgets = {
+            'pharmacy_notes': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Notes from pharmacy staff (substitutions, etc.)'
+            })
+        }
 
 
-
-VACC_FIELDS: dict[str, list[tuple[str, str]]] = {
-    VaccinationType.COVID19: [
-        ('brand', 'Vaccine Brand'),
-        ('dose_number', 'Dose Number'),
-        ('batch', 'Batch/Lot Number'),
-        ('expiry', 'Expiry Date'),
-        ('site', 'Site of Injection'),
-        ('date_admin', 'Date of Administration'),
-        ('admin_by', 'Administered By'),
-        ('remarks', 'Remarks'),
-    ],
-    VaccinationType.INFLUENZA: [
-        ('brand', 'Vaccine Brand'),
-        ('strain', 'Yearly Strain/Type'),
-        ('batch', 'Batch/Lot Number'),
-        ('expiry', 'Expiry Date'),
-        ('site', 'Site of Injection'),
-        ('date_admin', 'Date of Administration'),
-        ('admin_by', 'Administered By'),
-        ('remarks', 'Remarks'),
-    ],
-    VaccinationType.HEPATITIS_B: [
-        ('dose_number', 'Dose Number'),
-        ('batch', 'Batch/Lot Number'),
-        ('expiry', 'Expiry Date'),
-        ('site', 'Site of Injection'),
-        ('date_admin', 'Date of Administration'),
-        ('admin_by', 'Administered By'),
-        ('remarks', 'Remarks'),
-    ],
-    VaccinationType.TETANUS: [
-        ('vaccine_type', 'Vaccine Type'),
-        ('dose_number', 'Dose Number'),
-        ('batch', 'Batch/Lot Number'),
-        ('expiry', 'Expiry Date'),
-        ('site', 'Site of Injection'),
-        ('date_admin', 'Date of Administration'),
-        ('admin_by', 'Administered By'),
-        ('remarks', 'Remarks'),
-    ],
-    VaccinationType.MMR: [
-        ('dose_number', 'Dose Number'),
-        ('batch', 'Batch/Lot Number'),
-        ('expiry', 'Expiry Date'),
-        ('site', 'Site of Injection'),
-        ('date_admin', 'Date of Administration'),
-        ('admin_by', 'Administered By'),
-        ('remarks', 'Remarks'),
-    ],
-    VaccinationType.POLIO: [
-        ('vaccine_type', 'Vaccine Type (OPV/IPV)'),
-        ('dose_number', 'Dose Number'),
-        ('batch', 'Batch/Lot Number'),
-        ('expiry', 'Expiry Date'),
-        ('site', 'Site of Injection (if injectable)'),
-        ('date_admin', 'Date of Administration'),
-        ('admin_by', 'Administered By'),
-        ('remarks', 'Remarks'),
-    ],
-    VaccinationType.VARICELLA: [
-        ('dose_number', 'Dose Number'),
-        ('batch', 'Batch/Lot Number'),
-        ('expiry', 'Expiry Date'),
-        ('site', 'Site of Injection'),
-        ('date_admin', 'Date of Administration'),
-        ('admin_by', 'Administered By'),
-        ('remarks', 'Remarks'),
-    ],
-    VaccinationType.HPV: [
-        ('brand', 'Vaccine Brand'),
-        ('dose_number', 'Dose Number'),
-        ('batch', 'Batch/Lot Number'),
-        ('expiry', 'Expiry Date'),
-        ('site', 'Site of Injection'),
-        ('date_admin', 'Date of Administration'),
-        ('admin_by', 'Administered By'),
-        ('remarks', 'Remarks'),
-    ],
-}
+class PrescriptionDispenseForm(forms.ModelForm):
+    """Form for dispensing prescriptions"""
+    
+    class Meta:
+        model = Prescription
+        fields = ['pharmacy_notes']
+        widgets = {
+            'pharmacy_notes': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Notes about dispensing (substitutions, etc.)'
+            })
+        }
 
 
-class VaccinationForm(forms.Form):
-    vaccine_type = forms.ChoiceField(choices=VaccinationType.choices, required=True, label='Vaccine Type')
+class PrescriptionMedicineDispenseForm(forms.ModelForm):
+    """Form for dispensing individual medicines"""
+    
+    class Meta:
+        model = PrescriptionMedicine
+        fields = ['dispensed_quantity', 'substitution_notes']
+        widgets = {
+            'dispensed_quantity': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Actual quantity dispensed'
+            }),
+            'substitution_notes': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 2,
+                'placeholder': 'Notes if medicine was substituted'
+            })
+        }
 
-    def __init__(self, *args, **kwargs):
-        self.instance = kwargs.pop('instance', None)
-        initial = kwargs.get('initial') or {}
-        vt_value = initial.get('vaccine_type') or (getattr(self.instance, 'vaccine_type', None))
-        super().__init__(*args, **kwargs)
-        if vt_value:
-            self.fields['vaccine_type'].initial = vt_value
-        vt = vt_value or VaccinationType.COVID19
-        for name, label in VACC_FIELDS.get(vt, []):
-            self.fields[name] = forms.CharField(label=label, required=False)
-            if self.instance and isinstance(getattr(self.instance, 'details', {}), dict):
-                self.fields[name].initial = getattr(self.instance, 'details', {}).get(name, '')
 
-    def to_details_json(self) -> dict:
-        data = {}
-        for name, field in self.fields.items():
-            if name == 'vaccine_type':
-                continue
-            val = self.cleaned_data.get(name)
-            if val:
-                data[name] = val
-        return data
+# Inline formset for prescription medicines
+PrescriptionMedicineFormSet = inlineformset_factory(
+    Prescription,
+    PrescriptionMedicine,
+    form=PrescriptionMedicineForm,
+    extra=1,
+    can_delete=True,
+    fields=['drug_name', 'dosage', 'frequency', 'duration', 'quantity', 'special_instructions']
+)
 
+
+class PrescriptionSearchForm(forms.Form):
+    """Form for searching prescriptions"""
+    search = forms.CharField(
+        max_length=100,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Search by patient name, doctor name, or medicine'
+        })
+    )
+    
+    status = forms.ChoiceField(
+        choices=[('', 'All Status')] + Prescription.Status.choices,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    date_from = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )
+    
+    date_to = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )
+
+
+class LabResultForm(forms.ModelForm):
+    """Form for lab results"""
+    
+    class Meta:
+        model = LabResult
+        fields = ['lab_type', 'status', 'results']
+        widgets = {
+            'lab_type': forms.Select(attrs={'class': 'form-control'}),
+            'status': forms.Select(attrs={'class': 'form-control'}),
+            'results': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 4,
+                'placeholder': 'Enter lab results here...'
+            })
+        }
+
+
+class VaccinationForm(forms.ModelForm):
+    """Form for vaccination records"""
+    
+    class Meta:
+        model = VaccinationRecord
+        fields = ['vaccine_type', 'status', 'details']
+        widgets = {
+            'vaccine_type': forms.Select(attrs={
+                'class': 'form-control',
+                'id': 'vaccine_type_select'
+            }),
+            'status': forms.Select(attrs={
+                'class': 'form-control'
+            }),
+            'details': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Additional vaccination details...'
+            })
+        }

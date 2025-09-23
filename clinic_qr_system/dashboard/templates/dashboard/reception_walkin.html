@@ -5,6 +5,21 @@
   <a class="btn btn-outline-secondary" href="/dashboard/reception/"><i class="bi bi-arrow-left"></i> Back</a>
 </div>
 
+{% if pre_selected_patient %}
+<!-- Pre-selected Patient Information -->
+<div class="alert alert-info mb-4">
+  <div class="d-flex align-items-center">
+    <i class="bi bi-info-circle me-2"></i>
+    <div>
+      <h6 class="alert-heading mb-1">Patient Selected from QR Scan</h6>
+      <p class="mb-0">
+        <strong>{{ pre_selected_patient.full_name }}</strong> ({{ pre_selected_patient.patient_code }}) - {{ pre_selected_patient.email }}
+      </p>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <div class="card shadow-sm">
   <div class="card-body">
     <form method="post" class="row g-3">

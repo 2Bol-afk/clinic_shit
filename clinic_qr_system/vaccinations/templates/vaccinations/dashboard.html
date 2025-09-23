@@ -1,0 +1,222 @@
+{% extends 'vaccinations/base.html' %}
+{% load static %}
+
+{% block page_title %}Vaccination Dashboard{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <a href="{% url 'vaccinations:vaccination_schedule' %}" class="btn btn-primary">
+        <i class="fas fa-calendar-plus"></i> Schedule Vaccination
+    </a>
+    <a href="{% url 'vaccinations:send_reminders' %}" class="btn btn-warning">
+        <i class="fas fa-bell"></i> Send Reminders
+    </a>
+</div>
+{% endblock %}
+
+{% block page_content %}
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-primary shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                            Total Vaccinations</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_vaccinations }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-syringe fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-success shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                            Completed</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ completed_vaccinations }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-warning shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            In Progress</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ pending_vaccinations }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-clock fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-info shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                            Completion Rate</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {% if total_vaccinations > 0 %}
+                                {{ completed_vaccinations|floatformat:0 }}%
+                            {% else %}
+                                0%
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-percentage fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Upcoming Doses -->
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Upcoming Doses (Next 7 Days)</h6>
+                <span class="badge bg-primary">{{ upcoming_doses.count }}</span>
+            </div>
+            <div class="card-body">
+                {% if upcoming_doses %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Patient</th>
+                                    <th>Vaccine</th>
+                                    <th>Dose</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for dose in upcoming_doses %}
+                                <tr>
+                                    <td>{{ dose.vaccination.patient.full_name }}</td>
+                                    <td>{{ dose.vaccination.vaccine_type.name }}</td>
+                                    <td>{{ dose.dose_number }}</td>
+                                    <td>
+                                        <span class="badge bg-info">{{ dose.scheduled_date }}</span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">No upcoming doses in the next 7 days.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Overdue Doses -->
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-danger">Overdue Doses</h6>
+                <span class="badge bg-danger">{{ overdue_doses.count }}</span>
+            </div>
+            <div class="card-body">
+                {% if overdue_doses %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Patient</th>
+                                    <th>Vaccine</th>
+                                    <th>Dose</th>
+                                    <th>Overdue Since</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for dose in overdue_doses %}
+                                <tr>
+                                    <td>{{ dose.vaccination.patient.full_name }}</td>
+                                    <td>{{ dose.vaccination.vaccine_type.name }}</td>
+                                    <td>{{ dose.dose_number }}</td>
+                                    <td>
+                                        <span class="badge bg-danger">{{ dose.scheduled_date }}</span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">No overdue doses.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vaccine Type Statistics -->
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Vaccine Type Statistics</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Vaccine Type</th>
+                                <th>Total Patients</th>
+                                <th>Completed</th>
+                                <th>Completion Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stat in vaccine_stats %}
+                            <tr>
+                                <td>{{ stat.name }}</td>
+                                <td>{{ stat.total_patients }}</td>
+                                <td>{{ stat.completed_patients }}</td>
+                                <td>
+                                    {% if stat.total_patients > 0 %}
+                                        <div class="progress">
+                                            <div class="progress-bar" role="progressbar" 
+                                                 style="width: {{ stat.completed_patients|floatformat:0 }}%">
+                                                {{ stat.completed_patients|floatformat:0 }}%
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted">No patients</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

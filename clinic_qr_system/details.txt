@@ -1,0 +1,11 @@
+
+
+
+# Created doctor & reception accounts
+Doctor - Pediatrics (Children’s Health): doctor_pediatrics | Pediatrics
+Doctor - Obstetrics and Gynecology (OB-GYN): doctor_ob-gyn | OB-GYN
+Doctor - Cardiology (Heart Care): doctor_cardiology | Cardiology
+Doctor - Radiology: doctor_radiology | Radiology
+Doctor - Surgery: doctor_surgery | Surgery
+Doctor - Dermatology (Skin Care): doctor_dermatology | Dermatology
+Doctor - ENT (Ear, Nose, Throat): doctor_ent | ENT

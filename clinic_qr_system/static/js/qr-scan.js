@@ -21,13 +21,74 @@
   }
 
   async function handleReceptionEmail(email){
+    console.log('handleReceptionEmail called with email:', email);
     const patient = await fetchPatientByEmail(email);
+    console.log('Patient data received:', patient);
     if(patient && patient.patient_code){
-      const codeInput = document.getElementById('patientCodeInput');
-      if(codeInput){ codeInput.value = patient.patient_code; codeInput.focus(); }
-      setInlineMsg('ok', '✅ Patient Found: ' + (patient.email || email));
+      // Show the same patient confirmation modal as QR scanning
+      console.log('Showing patient confirmation modal');
+      showPatientConfirmationModal(patient, email);
     } else {
+      console.log('Patient not found, showing error message');
       setInlineMsg('err', '❌ Patient not found in system.');
+    }
+  }
+
+  function showPatientConfirmationModal(patient, email) {
+    console.log('showPatientConfirmationModal called with:', patient, email);
+    // Update the confirmation modal with patient data
+    const fullNameEl = document.getElementById('patientFullName');
+    const emailEl = document.getElementById('confirmationEmail');
+    const patientCodeEl = document.getElementById('confirmationPatientCode');
+    const statusEl = document.getElementById('verificationStatus');
+    
+    console.log('Elements found:', {fullNameEl, emailEl, patientCodeEl, statusEl});
+    
+    if(fullNameEl) fullNameEl.textContent = patient.full_name || 'N/A';
+    if(emailEl) emailEl.textContent = patient.email || email;
+    if(patientCodeEl) patientCodeEl.textContent = patient.patient_code || 'N/A';
+    if(statusEl) {
+      statusEl.textContent = 'Verified';
+      statusEl.className = 'fw-semibold text-success';
+    }
+    
+    // Handle profile photo
+    const profilePhotoDiv = document.getElementById('patientProfilePhoto');
+    if (profilePhotoDiv) {
+      if (patient.profile_photo_url) {
+        profilePhotoDiv.innerHTML = `
+          <img src="${patient.profile_photo_url}" 
+               class="rounded-circle" 
+               style="width: 80px; height: 80px; object-fit: cover; border: 3px solid #28a745;" 
+               alt="Profile Photo">
+        `;
+      } else {
+        profilePhotoDiv.innerHTML = `
+          <div class="rounded-circle bg-light d-flex align-items-center justify-content-center mx-auto" 
+               style="width: 80px; height: 80px; border: 3px solid #28a745;">
+            <i class="bi bi-person-fill text-muted" style="font-size: 2.5rem;"></i>
+          </div>
+        `;
+      }
+    }
+    
+    // Enable the proceed button
+    const proceedBtn = document.getElementById('qrConfirmProceed');
+    console.log('Proceed button found:', proceedBtn);
+    if (proceedBtn) {
+      proceedBtn.disabled = false;
+      proceedBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Proceed';
+    }
+    
+    // Show the confirmation modal
+    const modalElement = document.getElementById('qrConfirmationModal');
+    console.log('Modal element found:', modalElement);
+    if (modalElement) {
+      const confirmationModal = new bootstrap.Modal(modalElement);
+      console.log('Showing confirmation modal');
+      confirmationModal.show();
+    } else {
+      console.error('qrConfirmationModal element not found!');
     }
   }
 
@@ -81,10 +142,14 @@
   });
 
   // Fallback email submit
-  document.getElementById('qrEmailGo')?.addEventListener('click', function(){
+  document.getElementById('qrEmailGo')?.addEventListener('click', async function(){
     const v = (document.getElementById('qrEmailFallback')||{}).value || '';
+    if(!v.trim()) {
+      setInlineMsg('err', 'Please enter an email address.');
+      return;
+    }
     if(qrModal) qrModal.hide();
-    handleReceptionEmail(v);
+    await handleReceptionEmail(v);
   });
 
   // Refresh camera
@@ -95,10 +160,28 @@
     }).catch(()=> startScanner());
   });
 
-  // Confirmation modal buttons now just close; we don't navigate
+  // Confirmation modal buttons
   document.getElementById('qrConfirmProceed')?.addEventListener('click', function(){
     const m = bootstrap.Modal.getInstance(document.getElementById('qrConfirmationModal'));
     if(m) m.hide();
+    
+    // Get the patient email from the confirmation modal
+    const patientEmail = document.getElementById('confirmationEmail')?.textContent;
+    const patientCode = document.getElementById('confirmationPatientCode')?.textContent;
+    
+    console.log('Proceed clicked - Patient Email:', patientEmail, 'Patient Code:', patientCode);
+    
+    if(patientEmail) {
+      // Navigate to reception dashboard with patient email parameter
+      console.log('Redirecting to reception dashboard with patient email');
+      window.location.href = `/dashboard/reception/?patient_email=${encodeURIComponent(patientEmail)}`;
+    } else if(patientCode) {
+      // Fallback to patient search
+      console.log('Fallback to patient search with patient code');
+      window.location.href = `/patients/?search=${encodeURIComponent(patientCode)}`;
+    } else {
+      console.error('No patient email or code found for redirection');
+    }
   });
   document.getElementById('qrConfirmCancel')?.addEventListener('click', function(){
     const m = bootstrap.Modal.getInstance(document.getElementById('qrConfirmationModal'));

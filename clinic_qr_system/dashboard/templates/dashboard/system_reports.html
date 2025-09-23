@@ -1,0 +1,272 @@
+{% extends 'base.html' %}
+{% block content %}
+<h4 class="d-flex align-items-center mb-3">
+  <i class="bi bi-clipboard-data text-success me-2"></i>System Reports
+</h4>
+
+<!-- Filters -->
+<div class="card mb-4">
+  <div class="card-header">
+    <h5 class="card-title mb-0">
+      <i class="bi bi-funnel me-2"></i>Filter Reports
+    </h5>
+  </div>
+  <div class="card-body">
+    <form method="get" class="row g-3">
+      <div class="col-md-2">
+        <label class="form-label">Start Date</label>
+        <input type="date" class="form-control" name="start_date" value="{{ start_date }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">End Date</label>
+        <input type="date" class="form-control" name="end_date" value="{{ end_date }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Role</label>
+        <select class="form-select" name="role" id="roleSelect" onchange="toggleDepartmentFilter()">
+          <option value="all" {% if role_filter == 'all' %}selected{% endif %}>All</option>
+          <option value="doctor" {% if role_filter == 'doctor' %}selected{% endif %}>Doctor</option>
+          <option value="laboratory" {% if role_filter == 'laboratory' %}selected{% endif %}>Laboratory</option>
+          <option value="pharmacy" {% if role_filter == 'pharmacy' %}selected{% endif %}>Pharmacy</option>
+          <option value="vaccination" {% if role_filter == 'vaccination' %}selected{% endif %}>Vaccination</option>
+        </select>
+      </div>
+      <div class="col-md-2" id="departmentFilter" style="display: none;">
+        <label class="form-label">Department</label>
+        <select class="form-select" name="department">
+          <option value="">All Departments</option>
+          {% for dept_code, dept_name in doctor_departments %}
+            <option value="{{ dept_code }}" {% if department_filter == dept_code %}selected{% endif %}>{{ dept_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="bi bi-search me-1"></i>Filter
+        </button>
+      </div>
+      <div class="col-md-6 d-flex align-items-end gap-2">
+        <a href="?export=csv&role={{ role_filter }}&department={{ department_filter }}&start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-outline-success">
+          <i class="bi bi-filetype-csv me-1"></i>CSV
+        </a>
+        <a href="?export=excel&role={{ role_filter }}&department={{ department_filter }}&start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-outline-primary">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </a>
+        <button type="button" class="btn btn-outline-danger" onclick="printReport(false)">
+          <i class="bi bi-printer me-1"></i>Print
+        </button>
+        <button type="button" class="btn btn-outline-secondary" onclick="printReport(true)">
+          <i class="bi bi-filetype-pdf me-1"></i>PDF
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Summary -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card bg-primary text-white">
+      <div class="card-body text-center">
+        <h3>{{ total_records }}</h3>
+        <p class="mb-0">Total Records</p>
+        <small>{{ start_date }} to {{ end_date }}</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-info text-white">
+      <div class="card-body text-center">
+        <h3>{{ role_filter|title }}</h3>
+        <p class="mb-0">Role Filter</p>
+        {% if department_filter %}
+          <small>{{ department_filter }}</small>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card bg-light">
+      <div class="card-body">
+        <h6 class="card-title">Filter Summary</h6>
+        <p class="mb-0">
+          Showing <strong>{{ total_records }}</strong> records for 
+          <strong>{{ role_filter|title }}</strong>
+          {% if department_filter %} in <strong>{{ department_filter }}</strong>{% endif %}
+          from <strong>{{ start_date }}</strong> to <strong>{{ end_date }}</strong>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Reports Table -->
+<div class="card">
+  <div class="card-header">
+    <h5 class="card-title mb-0">
+      <i class="bi bi-table me-2"></i>Reports Data
+    </h5>
+  </div>
+  <div class="card-body">
+    {% if reports_data %}
+      <div class="table-responsive">
+        <table class="table table-striped table-hover">
+          <thead class="table-dark">
+            <tr>
+              <th>Patient Name</th>
+              <th>Patient ID</th>
+              <th>Patient Email</th>
+              <th>Date & Time</th>
+              <th>Service Type</th>
+              <th>Department</th>
+              <th>Status</th>
+              <th>Created By</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for report in reports_data %}
+              <tr>
+                <td>
+                  <strong>{{ report.patient_name }}</strong>
+                </td>
+                <td>
+                  <span class="badge bg-secondary">{{ report.patient_id }}</span>
+                </td>
+                <td>{{ report.patient_email }}</td>
+                <td>{{ report.date_time|date:"M d, Y H:i" }}</td>
+                <td>
+                  {% if report.service_type == 'Consultation' %}
+                    <span class="badge bg-primary">{{ report.service_type }}</span>
+                  {% elif report.service_type == 'Lab Test' %}
+                    <span class="badge bg-info">{{ report.service_type }}</span>
+                  {% elif report.service_type == 'Prescription' %}
+                    <span class="badge bg-warning">{{ report.service_type }}</span>
+                  {% elif report.service_type == 'Vaccination' %}
+                    <span class="badge bg-success">{{ report.service_type }}</span>
+                  {% else %}
+                    <span class="badge bg-secondary">{{ report.service_type }}</span>
+                  {% endif %}
+                </td>
+                <td>{{ report.department }}</td>
+                <td>
+                  {% if report.status == 'Completed' %}
+                    <span class="badge bg-success">{{ report.status }}</span>
+                  {% elif report.status == 'In Progress' %}
+                    <span class="badge bg-warning">{{ report.status }}</span>
+                  {% elif report.status == 'Queued' %}
+                    <span class="badge bg-info">{{ report.status }}</span>
+                  {% elif report.status == 'Cancelled' %}
+                    <span class="badge bg-danger">{{ report.status }}</span>
+                  {% else %}
+                    <span class="badge bg-secondary">{{ report.status }}</span>
+                  {% endif %}
+                </td>
+                <td>{{ report.created_by }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="text-center py-5">
+        <i class="bi bi-inbox fs-1 text-muted"></i>
+        <h5 class="text-muted mt-3">No Reports Found</h5>
+        <p class="text-muted">Try adjusting your filter criteria to see more results.</p>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row g-3 mt-4">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-lightning me-2"></i>Quick Actions
+        </h5>
+      </div>
+      <div class="card-body">
+        <div class="row g-2">
+          <div class="col-md-2">
+            <a href="{% url 'admin_system_reports' %}?role=all&start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-outline-primary w-100">
+              <i class="bi bi-list me-1"></i>All Reports
+            </a>
+          </div>
+          <div class="col-md-2">
+            <a href="{% url 'admin_system_reports' %}?role=doctor&start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-outline-info w-100">
+              <i class="bi bi-stethoscope me-1"></i>Doctor Reports
+            </a>
+          </div>
+          <div class="col-md-2">
+            <a href="{% url 'admin_system_reports' %}?role=laboratory&start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-outline-warning w-100">
+              <i class="bi bi-flask me-1"></i>Lab Reports
+            </a>
+          </div>
+          <div class="col-md-2">
+            <a href="{% url 'admin_system_reports' %}?role=pharmacy&start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-outline-secondary w-100">
+              <i class="bi bi-capsule me-1"></i>Pharmacy Reports
+            </a>
+          </div>
+          <div class="col-md-2">
+            <a href="{% url 'admin_system_reports' %}?role=vaccination&start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-outline-success w-100">
+              <i class="bi bi-shield-plus me-1"></i>Vaccination Reports
+            </a>
+          </div>
+          <div class="col-md-2">
+            <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-dark w-100">
+              <i class="bi bi-arrow-left me-1"></i>Back to Admin
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleDepartmentFilter() {
+    const roleSelect = document.getElementById('roleSelect');
+    const departmentFilter = document.getElementById('departmentFilter');
+    
+    if (roleSelect.value === 'doctor') {
+        departmentFilter.style.display = 'block';
+    } else {
+        departmentFilter.style.display = 'none';
+        // Clear department selection when not doctor role
+        const departmentSelect = departmentFilter.querySelector('select');
+        if (departmentSelect) {
+            departmentSelect.value = '';
+        }
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    toggleDepartmentFilter();
+});
+</script>
+
+<script>
+// Print or Save-as-PDF the reports table only
+function printReport(asPdf){
+  try{
+    const section = document.querySelector('.card .table-responsive') || document.querySelector('.card-body');
+    if(!section){ window.print(); return; }
+    const printWindow = window.open('', '_blank', 'width=1024,height=768');
+    const styles = document.querySelector('link[href*="bootstrap" ]') ? document.querySelector('link[href*="bootstrap" ]').outerHTML : '';
+    const custom = '<style>table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:6px}thead{background:#f8f9fa;font-weight:600}</style>';
+    printWindow.document.write('<html><head><title>System Reports</title>' + styles + custom + '</head><body>');
+    printWindow.document.write(section.outerHTML);
+    printWindow.document.write('</body></html>');
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.onload = function(){
+      printWindow.print();
+      if(asPdf){ setTimeout(()=>printWindow.close(), 500); }
+    };
+  }catch(_){ window.print(); }
+}
+</script>
+
+{% endblock %}

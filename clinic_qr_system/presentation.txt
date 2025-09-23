@@ -1,0 +1,204 @@
+Clinic Management System – Vaccination Module
+Subtitle: "Streamlining patient vaccination records and reminders"
+Presenter: 
+
+---
+Executive Summary
+- The Vaccination Module digitizes end-to-end vaccination workflows: planning, reminders, administration, and reporting.
+- Auto-save ensures zero data loss and faster throughput. Role-based access safeguards privacy.
+- Clean, dose-based reporting enables decisions by clinicians and administrators.
+
+---
+Agenda
+1) Introduction & Goals
+2) Roles & Permissions
+3) Data Model Overview
+4) Key Functionalities
+5) End-to-End Workflows
+6) Reports & Analytics
+7) Patient Portal & Communications
+8) Admin & Background Jobs
+9) Security, Validation, and Error Handling
+10) Benefits & Roadmap
+
+---
+Introduction
+- Why it matters: Prevents missed doses, improves adherence, supports public health.
+- Pain points addressed: Lost paper records, duplicate entries, unclear schedules, delayed reminders.
+- Objectives: Automation, accuracy, patient safety, and actionable reporting.
+
+Goals
+- Automation: Automatic reminders and instant updates on action.
+- Accuracy: Single source of truth for dose plans and administration dates.
+- Safety: Guardrails to avoid duplicate vaccine selection and maintain privacy.
+
+---
+Roles & Permissions
+- Patient
+  - View: personal vaccination history, upcoming doses, reminders.
+  - No edits to clinical records.
+- Doctor
+  - Prescribe vaccine types; set/adjust schedules; clinical notes.
+- Vaccination Staff
+  - Administer vaccines; update dose status and dates; manage boosters.
+- Pharmacy
+  - Validate vaccine dispensing for audits and reconciliations.
+- Admin
+  - Full access to vaccination reports, configuration, and data maintenance.
+
+Access Control
+- Authentication: Django login; protected dashboard routes.
+- Authorization: Role-based visibility within module pages and reports.
+
+---
+Data Model Overview (Conceptual)
+- VaccineType
+  - Canonical vaccine definitions (e.g., COVID-19, Hepatitis B).
+- Patient
+  - Demographics; profile photo; authentication linkage.
+- PatientVaccination
+  - One record per patient per vaccine type; properties: administered_count, last_administered_date.
+- VaccineDose
+  - Child of PatientVaccination; fields: dose_number (1/2/3/booster), planned_date, administered (bool), administered_date.
+- VaccinationRecord (visit-bound)
+  - JSON details of the working plan; status: In Process / Done / Not Done; synchronization to PatientVaccination/VaccineDose.
+- VaccinationReminder
+  - Email reminders tied to scheduled doses where applicable.
+- Visit, LabResult, Prescription (integration context)
+  - Cross-module reporting and dashboards.
+
+---
+Key Functionalities
+- Dynamic Dose Planning Form
+  - Checkboxes and date pickers for 1st, 2nd, 3rd dose and optional booster.
+  - Always-visible date pickers for Dose 2/3 even if unchecked (planning-first UX).
+- Auto-Save on Change
+  - No Save button; fields persist via AJAX in real-time.
+  - Robust hydration from server JSON or local cache if needed.
+- Mark as Done / Mark as Not Done
+  - Not Done: preserve all data, send immediate email with dose schedule details.
+  - Done: finalize record; close open same-day tickets for Vaccination.
+- Booster Controls
+  - Add booster when needed; Remove Booster to undo accidental selection.
+- Duplicate Vaccine Prevention
+  - Vaccine types already assigned to a patient are hidden or disabled in dropdowns.
+- Email Notifications
+  - Immediate email reminder upon Not Done for Dose 2/3/Booster, including vaccine name and dates.
+
+---
+End-to-End Workflows
+1) Planning
+  - Doctor or Vaccination Staff selects vaccine type and sets dose dates.
+  - Auto-save persists details; duplicate vaccine types are prevented.
+2) Patient Notification
+  - If marked Not Done, patient receives immediate email summarizing scheduled Dose 2/3/Booster dates and vaccine name.
+3) Administration
+  - Staff checks administered dose(s); system marks VaccineDose.administered = true with administered_date.
+  - Status can remain Not Done if future doses remain, while preserving recorded doses.
+4) Completion
+  - Mark as Done when all planned doses are completed for the visit; same-day vaccination tickets are closed.
+5) Reporting
+  - Reports reflect administered_count (e.g., 1/2) and last_administered_date; booster shown conditionally when applicable.
+
+Edge Behaviors
+- Dose 2/3 date pickers visible even if unchecked, enabling schedule-first planning.
+- Booster date can be selected without first checking; remove booster hides it again.
+- Not Done never clears previous entries; the form reloads with sticky values.
+
+---
+Patient Experience (Portal)
+- Latest Updates widget shows the next dose due and pending lab items.
+- Current Prescriptions displays structured prescriptions or recent doctor notes when structures are absent.
+- Vaccination history shows dose counts like “1/2” and last administered date.
+
+---
+Staff Experience (Clinic Dashboard)
+- Vaccination Work Page
+  - Fluid, autosaving form; no explicit save required.
+  - Clear statuses; immediate email on Not Done; duplication prevention.
+- Laboratory
+  - Claiming updates the UI list via AJAX; no manual refresh needed.
+- Pharmacy
+  - Validates dispensing; admin reports reconcile doctor consultations and prescriptions.
+
+---
+Reports & Analytics
+- Role-Based Access
+  - Admin: system-wide, time-bounded reports.
+  - Vaccination Staff: operational vaccination report views for daily work.
+  - Patient: self-only vaccination report.
+- Dose-Based Layout
+  - Columns for 1st, 2nd, 3rd doses; conditional Booster column when present.
+- Simplified Columns
+  - Removed “Given On” and “Certificate” fields to reduce clutter.
+- Filters
+  - By dose (1st/2nd/3rd/booster) and by vaccine type.
+- Accuracy Enhancements
+  - Administered counts and last administered date computed from PatientVaccination/VaccineDose.
+
+---
+Email & Communications
+- Immediate reminder email upon Not Done for planned Dose 2/3/Booster.
+- Messaging includes patient-friendly wording and vaccine names.
+- Fault-tolerant sending: try/except guards for external email backend issues.
+
+---
+Admin & Background Jobs
+- System Accounts
+  - One-click creation of doctors per department and a reception account; passwords set to department names; credentials exported to details.txt.
+- Database Maintenance
+  - Purge command to delete all data except admin superusers (no backup), for testing or reseeding.
+- Vaccination Reminders (optional scheduling)
+  - Management command scaffold to send due reminders on schedule; currently immediate-send on Not Done is primary flow.
+
+---
+Security, Validation, Error Handling
+- Authentication & Authorization
+  - Django session auth; role-based access checks on views.
+- Data Validation
+  - Server-side validation of JSON details; only overwrite if valid and non-empty.
+- Error Handling
+  - Robust try/except around external email services; conservative persistence if JSON invalid.
+- Privacy
+  - Patients see only their own vaccination data and reminders.
+
+---
+Performance & Reliability
+- Auto-save minimizes data loss risk and avoids long forms with explicit saves.
+- Local hydration fallback reduces perceived latency and protects against transient errors.
+- Atomic transactions for multi-step saves ensure consistency.
+
+---
+Benefits
+- Improves patient compliance via timely reminders and clear schedules.
+- Reduces errors: blocks duplicates, preserves data on Not Done, simplifies reporting.
+- Enforces privacy with least-privilege access by role.
+- Provides clean, dose-oriented reports for clinical and managerial insights.
+
+---
+Roadmap (Next Steps)
+- SMS reminders and WhatsApp integration for higher engagement.
+- Analytics dashboard: cohort adherence, dose completion rates, lag analysis.
+- Bulk scheduling and outreach for campaigns.
+- FHIR/HL7 interoperability for public health reporting.
+- Mobile-friendly UI refinements; multilingual templates.
+
+---
+Appendix A: Representative URLs & Endpoints (Conceptual)
+- Vaccination Work: /dashboard/vaccination/work/<record_id>/
+- Vaccination Autosave (AJAX): /dashboard/vaccination/work/<record_id>/autosave/
+- Vaccination Report: /dashboard/admin/vaccination-report/
+- Admin Dashboard: /dashboard/admin/
+- Patient Portal Home: /patients/portal/
+- Registration & QR: /accounts/login/ (modal) and /patients/register/
+
+---
+Appendix B: Sample Email Copy (Immediate Reminder)
+Subject: Your [Vaccine Name] dose schedule update
+Body: Hello [Patient Name], your [Vaccine Name] schedule has been updated. Upcoming dates: Dose 2: [date], Dose 3: [date], Booster: [date if any]. Please follow clinic instructions.
+
+---
+Conclusion
+- The module fuses automation, safety, and clarity into a single workflow.
+- It shortens staff time per patient while lifting adherence and data quality.
+- With the roadmap, it becomes a comprehensive immunization management capability for the clinic.

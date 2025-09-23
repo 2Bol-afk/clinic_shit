@@ -1,0 +1,103 @@
+/* Admin Panel Purple Theme - Replace Yellow with Light Purple */
+
+:root {
+  --bs-warning: #9c88ff; /* Light purple instead of yellow */
+  --bs-warning-rgb: 156, 136, 255;
+  --bs-warning-text: #ffffff; /* White text for better contrast */
+  --bs-warning-bg-subtle: #f0edff; /* Very light purple background */
+  --bs-warning-border-subtle: #d1c7ff; /* Light purple border */
+}
+
+/* Override Bootstrap warning classes */
+.bg-warning {
+  background-color: var(--bs-warning) !important;
+  color: var(--bs-warning-text) !important;
+}
+
+.text-warning {
+  color: var(--bs-warning) !important;
+}
+
+.border-warning {
+  border-color: var(--bs-warning) !important;
+}
+
+.btn-warning {
+  background-color: var(--bs-warning);
+  border-color: var(--bs-warning);
+  color: var(--bs-warning-text);
+}
+
+.btn-warning:hover {
+  background-color: #8b7ae6; /* Slightly darker purple on hover */
+  border-color: #8b7ae6;
+  color: var(--bs-warning-text);
+}
+
+.btn-outline-warning {
+  color: var(--bs-warning);
+  border-color: var(--bs-warning);
+}
+
+.btn-outline-warning:hover {
+  background-color: var(--bs-warning);
+  border-color: var(--bs-warning);
+  color: var(--bs-warning-text);
+}
+
+.badge.bg-warning {
+  background-color: var(--bs-warning) !important;
+  color: var(--bs-warning-text) !important;
+}
+
+.alert-warning {
+  background-color: var(--bs-warning-bg-subtle);
+  border-color: var(--bs-warning-border-subtle);
+  color: #4a3c7a; /* Dark purple text for readability */
+}
+
+.progress-bar.bg-warning {
+  background-color: var(--bs-warning) !important;
+}
+
+/* Card specific overrides */
+.card.bg-warning {
+  background-color: var(--bs-warning) !important;
+  color: var(--bs-warning-text) !important;
+}
+
+.card.border-warning {
+  border-color: var(--bs-warning) !important;
+}
+
+.card-header.bg-warning {
+  background-color: var(--bs-warning) !important;
+  color: var(--bs-warning-text) !important;
+}
+
+/* List group items */
+.list-group-item.border-warning {
+  border-color: var(--bs-warning) !important;
+}
+
+/* Status indicators */
+.status-warning {
+  background: var(--bs-warning-bg-subtle) !important;
+  color: #4a3c7a !important;
+}
+
+/* Custom purple shades for variety */
+.purple-light {
+  background-color: #f0edff;
+  color: #4a3c7a;
+}
+
+.purple-medium {
+  background-color: #d1c7ff;
+  color: #2d1b69;
+}
+
+.purple-dark {
+  background-color: #9c88ff;
+  color: #ffffff;
+}

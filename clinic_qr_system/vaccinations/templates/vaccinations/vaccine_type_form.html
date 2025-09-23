@@ -1,0 +1,193 @@
+{% extends 'vaccinations/base.html' %}
+{% load crispy_forms_tags %}
+
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'vaccinations:vaccine_type_list' %}" class="btn btn-secondary">
+    <i class="fas fa-arrow-left"></i> Back to List
+</a>
+{% endblock %}
+
+{% block page_content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">{{ title }}</h6>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <!-- Basic Information -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="{{ form.name.id_for_label }}" class="form-label">Vaccine Name *</label>
+                            {{ form.name }}
+                            {% if form.name.errors %}
+                                <div class="text-danger">{{ form.name.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mt-4">
+                                {{ form.is_active }}
+                                <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                                    Active
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.description.id_for_label }}" class="form-label">Description</label>
+                        {{ form.description }}
+                        {% if form.description.errors %}
+                            <div class="text-danger">{{ form.description.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Dose Requirements -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="{{ form.total_doses_required.id_for_label }}" class="form-label">Total Doses Required *</label>
+                            {{ form.total_doses_required }}
+                            {% if form.total_doses_required.errors %}
+                                <div class="text-danger">{{ form.total_doses_required.errors }}</div>
+                            {% endif %}
+                            <div class="form-text">Number of doses needed for complete vaccination</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="dose_intervals" class="form-label">Dose Intervals (Days)</label>
+                            <input type="text" id="dose_intervals" name="dose_intervals" class="form-control" 
+                                   placeholder="e.g., 0,28,180" 
+                                   value="{% if form.dose_intervals.value %}{{ form.dose_intervals.value|join:',' }}{% endif %}">
+                            <div class="form-text">Comma-separated intervals in days (e.g., 0,28,180 for immediate, 1 month, 6 months)</div>
+                        </div>
+                    </div>
+
+                    <!-- Age Requirements -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="{{ form.age_minimum.id_for_label }}" class="form-label">Minimum Age (Months) *</label>
+                            {{ form.age_minimum }}
+                            {% if form.age_minimum.errors %}
+                                <div class="text-danger">{{ form.age_minimum.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.age_maximum.id_for_label }}" class="form-label">Maximum Age (Months)</label>
+                            {{ form.age_maximum }}
+                            {% if form.age_maximum.errors %}
+                                <div class="text-danger">{{ form.age_maximum.errors }}</div>
+                            {% endif %}
+                            <div class="form-text">Leave blank for no maximum age limit</div>
+                        </div>
+                    </div>
+
+                    <!-- Dose Schedule Preview -->
+                    <div class="mb-3">
+                        <label class="form-label">Dose Schedule Preview</label>
+                        <div id="schedule-preview" class="alert alert-info">
+                            <strong>Schedule:</strong> <span id="schedule-text">Enter dose intervals to see schedule</span>
+                        </div>
+                    </div>
+
+                    <!-- Form Errors -->
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {{ form.non_field_errors }}
+                        </div>
+                    {% endif %}
+
+                    <!-- Submit Buttons -->
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'vaccinations:vaccine_type_list' %}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Save Vaccine Type
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vaccine Type Examples -->
+<div class="row justify-content-center mt-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-info">Common Vaccine Schedules</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>COVID-19 Vaccine</h6>
+                        <ul class="small">
+                            <li>Doses: 2 (mRNA) or 1 (J&J)</li>
+                            <li>Intervals: 0,21 (Pfizer) or 0,28 (Moderna)</li>
+                            <li>Age: 6+ months</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Hepatitis B</h6>
+                        <ul class="small">
+                            <li>Doses: 3</li>
+                            <li>Intervals: 0,30,180</li>
+                            <li>Age: Birth+</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>MMR Vaccine</h6>
+                        <ul class="small">
+                            <li>Doses: 2</li>
+                            <li>Intervals: 0,1095 (3 years)</li>
+                            <li>Age: 12+ months</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>HPV Vaccine</h6>
+                        <ul class="small">
+                            <li>Doses: 2-3</li>
+                            <li>Intervals: 0,180 (2 doses) or 0,30,180 (3 doses)</li>
+                            <li>Age: 9+ years</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const doseIntervalsInput = document.getElementById('dose_intervals');
+    const schedulePreview = document.getElementById('schedule-text');
+    
+    function updateSchedulePreview() {
+        const intervals = doseIntervalsInput.value.split(',').map(x => parseInt(x.trim())).filter(x => !isNaN(x));
+        
+        if (intervals.length > 0) {
+            const today = new Date();
+            const schedule = intervals.map(interval => {
+                const date = new Date(today);
+                date.setDate(date.getDate() + interval);
+                return date.toLocaleDateString();
+            });
+            
+            schedulePreview.textContent = schedule.join(' → ');
+        } else {
+            schedulePreview.textContent = 'Enter dose intervals to see schedule';
+        }
+    }
+    
+    doseIntervalsInput.addEventListener('input', updateSchedulePreview);
+    updateSchedulePreview();
+});
+</script>
+{% endblock %}

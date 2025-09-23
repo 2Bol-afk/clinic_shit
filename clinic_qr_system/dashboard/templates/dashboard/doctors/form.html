@@ -27,7 +27,12 @@
         </div>
         <div class="col-md-6">
           <label class="form-label">Password</label>
-          <input type="password" class="form-control" name="password" placeholder="{% if is_edit %}Leave blank to keep current{% else %}Set an initial password{% endif %}">
+          <div class="input-group">
+            <input type="password" class="form-control" name="password" id="password" placeholder="{% if is_edit %}Leave blank to keep current{% else %}Set an initial password{% endif %}">
+            <button class="btn btn-outline-secondary" type="button" id="togglePassword" onclick="togglePasswordVisibility()">
+              <i class="bi bi-eye" id="toggleIcon"></i>
+            </button>
+          </div>
           {% if form.password.errors %}<div class="text-danger small">{% for e in form.password.errors %}{{ e }}{% endfor %}</div>{% endif %}
         </div>
       </div>
@@ -38,4 +43,19 @@
     </form>
   </div>
 </div>
+
+<script>
+function togglePasswordVisibility() {
+  const passwordInput = document.getElementById('password');
+  const toggleIcon = document.getElementById('toggleIcon');
+  
+  if (passwordInput.type === 'password') {
+    passwordInput.type = 'text';
+    toggleIcon.className = 'bi bi-eye-slash';
+  } else {
+    passwordInput.type = 'password';
+    toggleIcon.className = 'bi bi-eye';
+  }
+}
+</script>
 {% endblock %}

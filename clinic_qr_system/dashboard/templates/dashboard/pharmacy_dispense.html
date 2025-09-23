@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0 d-flex align-items-center"><i class="bi bi-capsule-pill text-success me-2"></i>Dispense Prescription</h4>
+  <a class="btn btn-outline-secondary" href="{% url 'dashboard_pharmacy' %}"><i class="bi bi-arrow-left"></i> Back to Pharmacy</a>
+</div>
+
+<div class="row g-4">
+  <!-- Patient Information -->
+  <div class="col-lg-4">
+    <div class="card shadow-sm">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-person-circle me-2"></i>Patient Information</h5>
+      </div>
+      <div class="card-body">
+        <div class="text-center mb-3">
+          {% if prescription.visit.patient.profile_photo %}
+            <img src="{{ prescription.visit.patient.profile_photo.url }}" 
+                 class="rounded-circle" 
+                 style="width: 100px; height: 100px; object-fit: cover;" 
+                 alt="Profile Photo">
+          {% else %}
+            <div class="rounded-circle bg-light d-flex align-items-center justify-content-center mx-auto" 
+                 style="width: 100px; height: 100px;">
+              <i class="bi bi-person-fill text-muted fs-1"></i>
+            </div>
+          {% endif %}
+        </div>
+        <div class="text-center">
+          <h5 class="mb-1">{{ prescription.visit.patient.full_name }}</h5>
+          <div class="small text-muted">ID: {{ prescription.visit.patient.id }}</div>
+          <div class="small text-muted">Code: {{ prescription.visit.patient.patient_code }}</div>
+        </div>
+        <hr>
+        <div class="small">
+          <div><strong>Age:</strong> {{ prescription.visit.patient.age }}</div>
+          <div><strong>Email:</strong> {{ prescription.visit.patient.email }}</div>
+          <div><strong>Phone:</strong> {{ prescription.visit.patient.contact }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Prescription Details -->
+    <div class="card shadow-sm mt-3">
+      <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="bi bi-file-medical me-2"></i>Prescription Details</h5>
+      </div>
+      <div class="card-body">
+        <div class="small">
+          <div><strong>Prescription ID:</strong> {{ prescription.id }}</div>
+          <div><strong>Doctor:</strong> {{ prescription.doctor.get_full_name|default:prescription.doctor.username }}</div>
+          <div><strong>Created:</strong> {{ prescription.created_at|date:'M d, Y H:i' }}</div>
+          <div><strong>Status:</strong> 
+            <span class="badge {% if prescription.status == 'pending' %}" style="background-color: #d8bfd8; color: #4a4a4a;"{% elif prescription.status == 'ready' %}bg-info{% else %}bg-success{% endif %}">
+              {{ prescription.get_status_display }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dispensing Form -->
+  <div class="col-lg-8">
+    <form method="post">
+      {% csrf_token %}
+      
+      <!-- Medicines List -->
+      <div class="card shadow-sm mb-3">
+        <div class="card-header bg-success text-white">
+          <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Medicines to Dispense</h5>
+        </div>
+        <div class="card-body">
+          {% for medicine, medicine_form in medicine_forms %}
+            <div class="border rounded p-3 mb-3">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <h6 class="text-primary mb-2">{{ medicine.drug_name }}</h6>
+                  <div class="small text-muted">
+                    <div><strong>Dosage:</strong> {{ medicine.dosage }}</div>
+                    <div><strong>Frequency:</strong> {{ medicine.frequency }}</div>
+                    <div><strong>Duration:</strong> {{ medicine.duration }}</div>
+                    <div><strong>Quantity:</strong> {{ medicine.quantity }}</div>
+                    {% if medicine.special_instructions %}
+                      <div><strong>Instructions:</strong> {{ medicine.special_instructions }}</div>
+                    {% endif %}
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="mb-2">
+                    <label class="form-label small">Dispensed Quantity</label>
+                    {{ medicine_form.dispensed_quantity }}
+                  </div>
+                  <div>
+                    <label class="form-label small">Substitution Notes</label>
+                    {{ medicine_form.substitution_notes }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Pharmacy Notes -->
+      <div class="card shadow-sm mb-3">
+        <div class="card-header" style="background-color: #e6e6fa; color: #4a4a4a;">
+          <h5 class="mb-0"><i class="bi bi-chat-text me-2"></i>Pharmacy Notes</h5>
+        </div>
+        <div class="card-body">
+          {{ form.pharmacy_notes }}
+          <div class="form-text">Add any notes about substitutions, special instructions, or other relevant information.</div>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-success">
+          <i class="bi bi-check-circle me-1"></i>Dispense Prescription
+        </button>
+        <a href="{% url 'dashboard_pharmacy' %}" class="btn btn-outline-secondary">
+          <i class="bi bi-x-circle me-1"></i>Cancel
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Prescription Summary -->
+<div class="row mt-4">
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-clipboard-data me-2"></i>Prescription Summary</h5>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <h6 class="text-primary">Original Prescription</h6>
+            <div class="small">
+              {% if prescription.visit.prescription_notes %}
+                <pre class="bg-light p-2 rounded">{{ prescription.visit.prescription_notes }}</pre>
+              {% else %}
+                <div class="text-muted">No prescription notes available.</div>
+              {% endif %}
+            </div>
+          </div>
+          <div class="col-md-6">
+            <h6 class="text-success">Detailed Medicines</h6>
+            <div class="small">
+              {% for medicine in prescription.medicines.all %}
+                <div class="border-bottom pb-2 mb-2">
+                  <div class="fw-semibold">{{ medicine.drug_name }}</div>
+                  <div class="text-muted">{{ medicine.full_description }}</div>
+                  {% if medicine.special_instructions %}
+                    <div class="text-info"><em>{{ medicine.special_instructions }}</em></div>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

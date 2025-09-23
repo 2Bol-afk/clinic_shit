@@ -173,3 +173,65 @@ class PrescriptionItem(models.Model):
 
     def __str__(self) -> str:
         return self.medicine
+
+
+class Prescription(models.Model):
+    """Model for detailed prescriptions with individual medicines"""
+    visit = models.ForeignKey('visits.Visit', on_delete=models.CASCADE, related_name='prescription_records')
+    doctor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='prescribed_medicines')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        READY = 'ready', 'Ready for Pickup'
+        DISPENSED = 'dispensed', 'Dispensed'
+        CANCELLED = 'cancelled', 'Cancelled'
+    
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    dispensed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='dispensed_prescriptions')
+    dispensed_at = models.DateTimeField(null=True, blank=True)
+    pharmacy_notes = models.TextField(blank=True, help_text='Notes from pharmacy staff (substitutions, etc.)')
+    
+    def __str__(self) -> str:
+        return f"Prescription for {self.visit.patient.full_name} - {self.get_status_display()}"
+    
+    @property
+    def is_dispensed(self):
+        return self.status == self.Status.DISPENSED
+    
+    @property
+    def is_pending(self):
+        return self.status == self.Status.PENDING
+
+
+class PrescriptionMedicine(models.Model):
+    """Individual medicine items within a prescription"""
+    prescription = models.ForeignKey('visits.Prescription', on_delete=models.CASCADE, related_name='medicines')
+    
+    # Medicine details
+    drug_name = models.CharField(max_length=200, help_text='Name of the medicine')
+    dosage = models.CharField(max_length=100, help_text='Dosage strength (e.g., 500mg, 10ml)')
+    frequency = models.CharField(max_length=100, help_text='How often to take (e.g., 3 times daily, every 8 hours)')
+    duration = models.CharField(max_length=100, help_text='How long to take (e.g., 7 days, 2 weeks)')
+    quantity = models.CharField(max_length=50, help_text='Quantity to dispense (e.g., 30 tablets, 1 bottle)')
+    special_instructions = models.TextField(blank=True, help_text='Special instructions for this medicine')
+    
+    # Pharmacy tracking
+    dispensed_quantity = models.CharField(max_length=50, blank=True, help_text='Actual quantity dispensed')
+    substitution_notes = models.TextField(blank=True, help_text='Notes if medicine was substituted')
+    
+    def __str__(self) -> str:
+        return f"{self.drug_name} - {self.dosage} ({self.frequency})"
+    
+    @property
+    def full_description(self):
+        """Get full medicine description"""
+        parts = [self.drug_name]
+        if self.dosage:
+            parts.append(f"{self.dosage}")
+        if self.frequency:
+            parts.append(f"{self.frequency}")
+        if self.duration:
+            parts.append(f"for {self.duration}")
+        return " ".join(parts)

@@ -1,0 +1,708 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row">
+  <!-- Admin Sidebar -->
+  <div class="col-md-3">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-shield-check text-success me-2"></i>Admin Panel
+        </h5>
+      </div>
+      <div class="card-body p-0">
+        <div class="list-group list-group-flush">
+          <a href="{% url 'admin_dashboard' %}" class="list-group-item list-group-item-action active">
+            <i class="bi bi-house me-2"></i>Dashboard
+          </a>
+          <a href="{% url 'admin_patient_management' %}" class="list-group-item list-group-item-action">
+            <i class="bi bi-person-heart me-2"></i>Patient Management
+          </a>
+          <a href="{% url 'admin_system_accounts' %}" class="list-group-item list-group-item-action">
+            <i class="bi bi-gear me-2"></i>System Accounts
+          </a>
+          <a href="{% url 'admin_reports' %}" class="list-group-item list-group-item-action">
+            <i class="bi bi-graph-up me-2"></i>Reports
+          </a>
+          <a href="{% url 'admin_system_reports' %}" class="list-group-item list-group-item-action">
+            <i class="bi bi-clipboard-data me-2"></i>System Reports
+          </a>
+          
+          <a href="/admin/" class="list-group-item list-group-item-action" target="_blank">
+            <i class="bi bi-gear me-2"></i>Django Admin
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Main Content -->
+  <div class="col-md-9">
+    <h4 class="d-flex align-items-center mb-3">
+      <i class="bi bi-speedometer2 text-success me-2"></i>Dashboard Overview
+    </h4>
+
+<!-- Statistics Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card bg-primary text-white">
+      <div class="card-body">
+        <div class="d-flex justify-content-between">
+          <div>
+            <h4 class="card-title">{{ stats.total_patients }}</h4>
+            <p class="card-text">Total Patients</p>
+          </div>
+          <div class="align-self-center">
+            <i class="bi bi-people fs-1"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  
+  
+  <div class="col-md-3">
+    <div class="card bg-info text-white">
+      <div class="card-body">
+        <div class="d-flex justify-content-between">
+          <div>
+            <h4 class="card-title">{{ stats.total_visits_today }}</h4>
+            <p class="card-text">Visits Today</p>
+          </div>
+          <div class="align-self-center">
+            <i class="bi bi-calendar-check fs-1"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-3">
+    <div class="card bg-warning text-white">
+      <div class="card-body">
+        <div class="d-flex justify-content-between">
+          <div>
+            <h4 class="card-title">{{ stats.pending_prescriptions }}</h4>
+            <p class="card-text">Pending Prescriptions</p>
+          </div>
+          <div class="align-self-center">
+            <i class="bi bi-prescription fs-1"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Department Statistics -->
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-graph-up me-2"></i>Department Activity
+        </h5>
+      </div>
+      <div class="card-body">
+        <div class="row g-2">
+          <div class="col-6">
+            <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded">
+              <span>Reception</span>
+              <span class="badge bg-primary">{{ dept_stats.reception }}</span>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded">
+              <span>Doctor</span>
+              <span class="badge bg-success">{{ dept_stats.doctor }}</span>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded">
+              <span>Laboratory</span>
+              <span class="badge bg-info">{{ dept_stats.laboratory }}</span>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded">
+              <span>Pharmacy</span>
+              <span class="badge bg-warning">{{ dept_stats.pharmacy }}</span>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded">
+              <span>Vaccination</span>
+              <span class="badge bg-secondary">{{ dept_stats.vaccination }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-activity me-2"></i>Today's Activity
+        </h5>
+      </div>
+      <div class="card-body">
+        <div class="row g-2">
+          <div class="col-6">
+            <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded">
+              <span>Completed Labs</span>
+              <span class="badge bg-success">{{ stats.completed_labs_today }}</span>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded">
+              <span>Vaccinations</span>
+              <span class="badge bg-info">{{ stats.vaccinations_today }}</span>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded">
+              <span>Total Visits</span>
+              <span class="badge bg-primary">{{ stats.total_visits_today }}</span>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded">
+              <span>This Month</span>
+              <span class="badge bg-warning">{{ stats.total_visits_this_month }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Admin Panel Tabs -->
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <ul class="nav nav-tabs card-header-tabs" id="adminTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">
+              <i class="bi bi-house me-1"></i>Overview
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="patients-tab" data-bs-toggle="tab" data-bs-target="#patients" type="button" role="tab">
+              <i class="bi bi-person-heart me-1"></i>Patients
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="system-accounts-tab" data-bs-toggle="tab" data-bs-target="#system-accounts" type="button" role="tab">
+              <i class="bi bi-gear me-1"></i>System Accounts
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="reports-tab" data-bs-toggle="tab" data-bs-target="#reports" type="button" role="tab">
+              <i class="bi bi-graph-up me-1"></i>Reports
+            </button>
+          </li>
+          
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="system-reports-tab" data-bs-toggle="tab" data-bs-target="#system-reports" type="button" role="tab">
+              <i class="bi bi-clipboard-data me-1"></i>System Reports
+            </button>
+          </li>
+        </ul>
+      </div>
+      <div class="card-body">
+        <div class="tab-content" id="adminTabsContent">
+          <!-- Overview Tab -->
+          <div class="tab-pane fade show active" id="overview" role="tabpanel">
+            <div class="row g-2">
+              <div class="col-md-2">
+                <a href="{% url 'admin_patient_management' %}" class="btn btn-outline-success w-100">
+                  <i class="bi bi-person-heart me-1"></i>Manage Patients
+                </a>
+              </div>
+              <div class="col-md-2">
+                <a href="{% url 'admin_system_accounts' %}" class="btn btn-outline-warning w-100">
+                  <i class="bi bi-gear me-1"></i>System Accounts
+                </a>
+              </div>
+              <div class="col-md-2">
+                <a href="{% url 'admin_reports' %}" class="btn btn-outline-warning w-100">
+                  <i class="bi bi-graph-up me-1"></i>Reports
+                </a>
+              </div>
+              <div class="col-md-2">
+                <a href="/admin/" class="btn btn-outline-secondary w-100" target="_blank">
+                  <i class="bi bi-gear me-1"></i>Django Admin
+                </a>
+              </div>
+              <div class="col-md-2">
+                <a href="{% url 'admin_system_reports' %}" class="btn btn-outline-dark w-100">
+                  <i class="bi bi-file-text me-1"></i>System Reports
+                </a>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Patients Tab -->
+          <div class="tab-pane fade" id="patients" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="mb-0">Patient Management</h5>
+              <a href="{% url 'admin_patient_management' %}" class="btn btn-primary">
+                <i class="bi bi-arrow-right me-1"></i>View All Patients
+              </a>
+            </div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <div class="card bg-light">
+                  <div class="card-body text-center">
+                    <h3 class="text-primary">{{ stats.total_patients }}</h3>
+                    <p class="mb-0">Total Patients</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="card bg-light">
+                  <div class="card-body text-center">
+                    <h3 class="text-success">{{ stats.total_visits_today }}</h3>
+                    <p class="mb-0">Visits Today</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- System Accounts Tab -->
+          <div class="tab-pane fade" id="system-accounts" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="mb-0">System Accounts</h5>
+              <a href="{% url 'admin_system_accounts' %}" class="btn btn-primary">
+                <i class="bi bi-arrow-right me-1"></i>Manage Accounts
+              </a>
+            </div>
+            <div class="row g-3">
+              <div class="col-md-4">
+                <div class="card border-warning">
+                  <div class="card-body text-center">
+                    <i class="bi bi-capsule text-warning fs-1 mb-2"></i>
+                    <h6>Pharmacy Account</h6>
+                    <p class="text-muted small">Manage pharmacy operations</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="card border-info">
+                  <div class="card-body text-center">
+                    <i class="bi bi-flask text-info fs-1 mb-2"></i>
+                    <h6>Laboratory Account</h6>
+                    <p class="text-muted small">Manage lab operations</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="card border-success">
+                  <div class="card-body text-center">
+                    <i class="bi bi-shield-plus text-success fs-1 mb-2"></i>
+                    <h6>Vaccination Account</h6>
+                    <p class="text-muted small">Manage vaccination operations</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Reports Tab -->
+          <div class="tab-pane fade" id="reports" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="mb-0">Reports & Analytics</h5>
+              <a href="{% url 'admin_reports' %}" class="btn btn-primary">
+                <i class="bi bi-arrow-right me-1"></i>View Full Reports
+              </a>
+            </div>
+            
+            <!-- Quick Date Range Filter -->
+            <div class="card mb-4">
+              <div class="card-body">
+                <form method="get" action="{% url 'admin_reports' %}" class="row g-3">
+                  <div class="col-md-3">
+                    <label class="form-label">Start Date</label>
+                    <input type="date" class="form-control" name="start_date" value="{{ start_date|default:'' }}">
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label">End Date</label>
+                    <input type="date" class="form-control" name="end_date" value="{{ end_date|default:'' }}">
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label">Department</label>
+                    <select class="form-select" name="department">
+                      <option value="all">All Reports</option>
+                      <option value="doctor">Doctor Reports</option>
+                      <option value="laboratory">Laboratory Reports</option>
+                      <option value="pharmacy">Pharmacy Reports</option>
+                      <option value="vaccination">Vaccination Reports</option>
+                    </select>
+                  </div>
+                  <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                      <i class="bi bi-search me-1"></i>Generate Report
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+            
+            <!-- Summary Statistics -->
+            <div class="row g-3 mb-4">
+              <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                  <div class="card-body text-center">
+                    <h3>{{ stats.total_visits_today }}</h3>
+                    <p class="mb-0">Visits Today</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="card bg-success text-white">
+                  <div class="card-body text-center">
+                    <h3>{{ stats.total_visits_this_month }}</h3>
+                    <p class="mb-0">This Month</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="card bg-info text-white">
+                  <div class="card-body text-center">
+                    <h3>{{ stats.pending_prescriptions }}</h3>
+                    <p class="mb-0">Pending Prescriptions</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="card bg-warning text-white">
+                  <div class="card-body text-center">
+                    <h3>{{ stats.completed_labs_today }}</h3>
+                    <p class="mb-0">Labs Today</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Department Statistics -->
+            <div class="row g-3">
+              <div class="col-md-6">
+                <div class="card">
+                  <div class="card-header">
+                    <h6 class="card-title mb-0">
+                      <i class="bi bi-graph-up me-2"></i>Department Visits
+                    </h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="row g-2">
+                      <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded mb-2">
+                          <span><i class="bi bi-stethoscope me-2"></i>Doctor</span>
+                          <div class="d-flex align-items-center">
+                            <div class="progress me-2" style="width: 100px; height: 20px;">
+                              <div class="progress-bar bg-success" style="width: {% widthratio dept_stats.doctor stats.total_visits_today 100 %}%"></div>
+                            </div>
+                            <span class="badge bg-success">{{ dept_stats.doctor }}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded mb-2">
+                          <span><i class="bi bi-flask me-2"></i>Laboratory</span>
+                          <div class="d-flex align-items-center">
+                            <div class="progress me-2" style="width: 100px; height: 20px;">
+                              <div class="progress-bar bg-info" style="width: {% widthratio dept_stats.laboratory stats.total_visits_today 100 %}%"></div>
+                            </div>
+                            <span class="badge bg-info">{{ dept_stats.laboratory }}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded mb-2">
+                          <span><i class="bi bi-capsule me-2"></i>Pharmacy</span>
+                          <div class="d-flex align-items-center">
+                            <div class="progress me-2" style="width: 100px; height: 20px;">
+                              <div class="progress-bar bg-warning" style="width: {% widthratio dept_stats.pharmacy stats.total_visits_today 100 %}%"></div>
+                            </div>
+                            <span class="badge bg-warning">{{ dept_stats.pharmacy }}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded mb-2">
+                          <span><i class="bi bi-shield-plus me-2"></i>Vaccination</span>
+                          <div class="d-flex align-items-center">
+                            <div class="progress me-2" style="width: 100px; height: 20px;">
+                              <div class="progress-bar bg-secondary" style="width: {% widthratio dept_stats.vaccination stats.total_visits_today 100 %}%"></div>
+                            </div>
+                            <span class="badge bg-secondary">{{ dept_stats.vaccination }}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="col-md-6">
+                <div class="card">
+                  <div class="card-header">
+                    <h6 class="card-title mb-0">
+                      <i class="bi bi-lightning me-2"></i>Quick Actions
+                    </h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="row g-2">
+                      <div class="col-md-6">
+                        <a href="{% url 'admin_reports' %}?export=csv" class="btn btn-outline-success w-100">
+                          <i class="bi bi-filetype-csv me-1"></i>Export CSV
+                        </a>
+                      </div>
+                      <div class="col-md-6">
+                        <a href="{% url 'admin_system_reports' %}" class="btn btn-outline-primary w-100">
+                          <i class="bi bi-graph-up me-1"></i>System Reports
+                        </a>
+                      </div>
+                      <div class="col-md-6">
+                        <a href="{% url 'admin_reports' %}?department=doctor" class="btn btn-outline-info w-100">
+                          <i class="bi bi-stethoscope me-1"></i>Doctor Reports
+                        </a>
+                      </div>
+                      <div class="col-md-6">
+                        <a href="{% url 'admin_reports' %}?department=laboratory" class="btn btn-outline-warning w-100">
+                          <i class="bi bi-flask me-1"></i>Lab Reports
+                        </a>
+                      </div>
+                      <div class="col-md-6">
+                        <a href="{% url 'admin_reports' %}?department=pharmacy" class="btn btn-outline-secondary w-100">
+                          <i class="bi bi-capsule me-1"></i>Pharmacy Reports
+                        </a>
+                      </div>
+                      <div class="col-md-6">
+                        <a href="{% url 'admin_reports' %}?department=vaccination" class="btn btn-outline-success w-100">
+                          <i class="bi bi-shield-plus me-1"></i>Vaccination Reports
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          
+          
+          <!-- System Reports Tab -->
+          <div class="tab-pane fade" id="system-reports" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="mb-0">System Reports</h5>
+              <a href="{% url 'admin_system_reports' %}" class="btn btn-primary">
+                <i class="bi bi-arrow-right me-1"></i>View Full Reports
+              </a>
+            </div>
+            
+            <!-- Quick Filter Form -->
+            <div class="card mb-4">
+              <div class="card-body">
+                <form method="get" action="{% url 'admin_system_reports' %}" class="row g-3">
+                  <div class="col-md-2">
+                    <label class="form-label">Start Date</label>
+                    <input type="date" class="form-control" name="start_date" value="{{ start_date|default:'' }}">
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label">End Date</label>
+                    <input type="date" class="form-control" name="end_date" value="{{ end_date|default:'' }}">
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label">Role</label>
+                    <select class="form-select" name="role" onchange="toggleDepartmentFilter()">
+                      <option value="all">All</option>
+                      <option value="doctor">Doctor</option>
+                      <option value="laboratory">Laboratory</option>
+                      <option value="pharmacy">Pharmacy</option>
+                      <option value="vaccination">Vaccination</option>
+                    </select>
+                  </div>
+                  <div class="col-md-2" id="departmentFilter" style="display: none;">
+                    <label class="form-label">Department</label>
+                    <select class="form-select" name="department">
+                      <option value="">All Departments</option>
+                      <option value="Pediatrics">Pediatrics (Children's Health)</option>
+                      <option value="OB-GYN">Obstetrics and Gynecology (OB-GYN)</option>
+                      <option value="Cardiology">Cardiology (Heart Care)</option>
+                      <option value="Radiology">Radiology</option>
+                      <option value="Surgery">Surgery</option>
+                      <option value="Dermatology">Dermatology (Skin Care)</option>
+                      <option value="ENT">ENT (Ear, Nose, Throat)</option>
+                    </select>
+                  </div>
+                  <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                      <i class="bi bi-search me-1"></i>Generate Report
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+            
+            <!-- Quick Action Buttons -->
+            <div class="row g-3">
+              <div class="col-md-2">
+                <a href="{% url 'admin_system_reports' %}?role=all" class="btn btn-outline-primary w-100">
+                  <i class="bi bi-list me-1"></i>All Reports
+                </a>
+              </div>
+              <div class="col-md-2">
+                <a href="{% url 'admin_system_reports' %}?role=doctor" class="btn btn-outline-info w-100">
+                  <i class="bi bi-stethoscope me-1"></i>Doctor Reports
+                </a>
+              </div>
+              <div class="col-md-2">
+                <a href="{% url 'admin_system_reports' %}?role=laboratory" class="btn btn-outline-warning w-100">
+                  <i class="bi bi-flask me-1"></i>Lab Reports
+                </a>
+              </div>
+              <div class="col-md-2">
+                <a href="{% url 'admin_system_reports' %}?role=pharmacy" class="btn btn-outline-secondary w-100">
+                  <i class="bi bi-capsule me-1"></i>Pharmacy Reports
+                </a>
+              </div>
+              <div class="col-md-2">
+                <a href="{% url 'admin_system_reports' %}?role=vaccination" class="btn btn-outline-success w-100">
+                  <i class="bi bi-shield-plus me-1"></i>Vaccination Reports
+                </a>
+              </div>
+              <div class="col-md-2">
+                <a href="{% url 'admin_system_reports' %}?export=csv" class="btn btn-outline-dark w-100">
+                  <i class="bi bi-filetype-csv me-1"></i>Export CSV
+                </a>
+              </div>
+            </div>
+            
+            <!-- Information Card -->
+            <div class="card mt-4">
+              <div class="card-header">
+                <h6 class="card-title mb-0">
+                  <i class="bi bi-info-circle me-2"></i>System Reports Information
+                </h6>
+              </div>
+              <div class="card-body">
+                <div class="row">
+                  <div class="col-md-6">
+                    <h6><i class="bi bi-stethoscope text-primary me-2"></i>Doctor Reports</h6>
+                    <p class="text-muted small">Shows consultation records with department filtering options.</p>
+                  </div>
+                  <div class="col-md-6">
+                    <h6><i class="bi bi-flask text-info me-2"></i>Laboratory Reports</h6>
+                    <p class="text-muted small">Shows lab test records and results.</p>
+                  </div>
+                  <div class="col-md-6">
+                    <h6><i class="bi bi-capsule text-warning me-2"></i>Pharmacy Reports</h6>
+                    <p class="text-muted small">Shows prescription and medication records.</p>
+                  </div>
+                  <div class="col-md-6">
+                    <h6><i class="bi bi-shield-plus text-success me-2"></i>Vaccination Reports</h6>
+                    <p class="text-muted small">Shows vaccination records and immunization data.</p>
+                  </div>
+                </div>
+                <div class="alert alert-info mt-3">
+                  <i class="bi bi-lightbulb me-2"></i>
+                  <strong>Note:</strong> System Reports provide detailed patient activity records with filtering by role and department. 
+                  Use the full reports page for advanced filtering and export options.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-clock-history me-2"></i>Recent Visits
+        </h5>
+      </div>
+      <div class="card-body">
+        {% if recent_visits %}
+          <div class="list-group list-group-flush">
+            {% for visit in recent_visits %}
+              <div class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="mb-1">{{ visit.patient.full_name }}</h6>
+                  <small class="text-muted">{{ visit.get_service_display }} • {{ visit.timestamp|date:'M d, Y H:i' }}</small>
+                </div>
+                <span class="badge bg-primary">{{ visit.service }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-muted">No recent visits</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-shield-check me-2"></i>Recent System Activity
+        </h5>
+      </div>
+      <div class="card-body">
+        {% if recent_audit_logs %}
+          <div class="list-group list-group-flush">
+            {% for log in recent_audit_logs %}
+              <div class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="mb-1">{{ log.get_action_display }}</h6>
+                  <small class="text-muted">{{ log.details }} • {{ log.timestamp|date:'M d, Y H:i' }}</small>
+                </div>
+                <span class="badge bg-secondary">{{ log.user.username|default:'System' }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-muted">No recent activity</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+  </div> <!-- Close main content col-md-9 -->
+</div> <!-- Close row -->
+
+<script>
+function toggleDepartmentFilter() {
+    const roleSelect = document.querySelector('select[name="role"]');
+    const departmentFilter = document.getElementById('departmentFilter');
+    
+    if (roleSelect && roleSelect.value === 'doctor') {
+        departmentFilter.style.display = 'block';
+    } else {
+        departmentFilter.style.display = 'none';
+        // Clear department selection when not doctor role
+        const departmentSelect = departmentFilter.querySelector('select');
+        if (departmentSelect) {
+            departmentSelect.value = '';
+        }
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    toggleDepartmentFilter();
+});
+</script>
+{% endblock %}

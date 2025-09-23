@@ -181,7 +181,7 @@
   }
   
   .status-normal { background: #d1edff; color: #0c63e4; }
-  .status-warning { background: #fff3cd; color: #856404; }
+  .status-warning { background: #e6e6fa; color: #4a4a4a; }
   .status-danger { background: #f8d7da; color: #721c24; }
   
   .timeline-item {
@@ -202,6 +202,27 @@
   }
   .timeline-item:last-child {
     border-left: none;
+  }
+  
+  /* Patient details styling */
+  .patient-details {
+    max-width: 500px;
+    margin: 0 auto;
+  }
+  
+  .detail-item {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #f8f9fa;
+  }
+  
+  .detail-item:last-child {
+    border-bottom: none;
+  }
+  
+  .detail-item i {
+    font-size: 1.25rem;
+    width: 24px;
+    text-align: center;
   }
 </style>
 
@@ -267,40 +288,55 @@
 
         <!-- Patient Information Display (Initially Hidden) -->
         <div id="patientInfoCard" class="patient-info-card">
-          <!-- Patient Profile Section -->
-          <div class="dashboard-section">
-            <div class="section-header">
-              <div class="section-icon">
-                <i class="bi bi-person-circle"></i>
-              </div>
-              <h3 class="section-title">Patient Profile</h3>
+          <!-- Profile Picture at Top -->
+          <div class="text-center mb-4">
+            <div id="patientQR" class="mb-3">
+              <!-- Profile photo will be inserted here -->
             </div>
-            <div class="row">
-              <div class="col-md-4 text-center">
-                <div id="patientQR" class="mb-3"></div>
-                <h4 id="patientName" class="fw-bold text-success mb-2"></h4>
-                <p class="text-muted mb-0">Patient ID: <span id="patientCode" class="fw-bold text-primary"></span></p>
+          </div>
+          
+          <!-- Patient Details - Vertical Layout -->
+          <div class="patient-details">
+            <!-- Full Name -->
+            <div class="detail-item mb-3">
+              <div class="d-flex align-items-center">
+                <i class="bi bi-person-circle me-3 text-primary"></i>
+                <div>
+                  <small class="text-muted d-block">Full Name</small>
+                  <span id="patientName" class="fw-bold text-dark">Loading...</span>
+                </div>
               </div>
-              <div class="col-md-8">
-                <div class="row g-3">
-                  <div class="col-sm-6">
-                    <div class="d-flex align-items-center">
-                      <i class="bi bi-calendar3 me-2 text-muted"></i>
-                      <div>
-                        <small class="text-muted d-block">Age</small>
-                        <span id="patientAge" class="fw-semibold"></span>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="col-sm-6">
-                    <div class="d-flex align-items-center">
-                      <i class="bi bi-envelope me-2 text-muted"></i>
-                      <div>
-                        <small class="text-muted d-block">Email</small>
-                        <span id="patientEmail" class="fw-semibold"></span>
-                      </div>
-                    </div>
-                  </div>
+            </div>
+            
+            <!-- Patient ID -->
+            <div class="detail-item mb-3">
+              <div class="d-flex align-items-center">
+                <i class="bi bi-card-text me-3 text-primary"></i>
+                <div>
+                  <small class="text-muted d-block">Patient ID</small>
+                  <span id="patientCode" class="fw-bold text-primary">Loading...</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Email Address -->
+            <div class="detail-item mb-3">
+              <div class="d-flex align-items-center">
+                <i class="bi bi-envelope me-3 text-primary"></i>
+                <div>
+                  <small class="text-muted d-block">Email Address</small>
+                  <span id="patientEmail" class="fw-semibold text-dark">Loading...</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Verification Status -->
+            <div class="detail-item mb-3">
+              <div class="d-flex align-items-center">
+                <i class="bi bi-shield-check me-3 text-primary"></i>
+                <div>
+                  <small class="text-muted d-block">Verification Status</small>
+                  <span class="fw-semibold text-success">Verified Patient</span>
                 </div>
               </div>
             </div>
@@ -467,6 +503,13 @@ let currentPatientData = null;
 
 // Handle form submission
 document.getElementById('qrLoginForm').addEventListener('submit', function(e) {
+  // Check if this is a proceed button submission (allow it to proceed)
+  const proceedButton = document.getElementById('proceedToDashboardBtn');
+  if (proceedButton && proceedButton.disabled) {
+    // This is a proceed submission, allow it to continue
+    return;
+  }
+  
   e.preventDefault();
   const email = this.querySelector('input[name="email"]').value.trim();
   if (!email) return;
@@ -480,24 +523,8 @@ function handleEmailForPatient(email) {
   const e = email.trim();
   if (!e) return;
   
-  // Validate patient exists first
-  fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(e))
-    .then(r => r.json())
-    .then(data => {
-      if (data.success && data.patient) {
-        // Show success message
-        showSuccessMessage('Patient verified! Status updated to Ready to Consult. Redirecting to dashboard...', data.patient.full_name, data.patient.email);
-        
-        // Auto-submit the QR login form
-        const form = document.getElementById('qrLoginForm');
-        form.submit();
-      } else {
-        showError('Patient not found. Please scan a valid QR or use registered email.');
-      }
-    })
-    .catch(() => {
-      showError('Error validating email. Please try again.');
-    });
+  // Load patient data and display info container first
+  loadPatientData(e);
 }
 
 // Global callback for patient QR scans
@@ -559,7 +586,6 @@ function displayPatientInfo(data) {
   
   nameElement.innerHTML = `<span class="text-success fw-bold">${patient.full_name}</span>`;
   document.getElementById('patientCode').textContent = patient.patient_code;
-  document.getElementById('patientAge').textContent = patient.age + ' years';
   emailElement.innerHTML = `<span class="text-primary fw-bold">${patient.email}</span>`;
   
   // Add validation badge
@@ -573,13 +599,49 @@ function displayPatientInfo(data) {
     patientInfoCard.insertBefore(validationBadge, patientInfoCard.firstChild);
   }
   
-  // Show QR code if available
+  // Show profile photo and QR code
   const qrContainer = document.getElementById('patientQR');
-  if (patient.qr_code_url) {
-    qrContainer.innerHTML = `<img src="${patient.qr_code_url}" class="img-fluid" style="max-width: 150px;" alt="Patient QR Code">`;
+  let qrHtml = '';
+  
+  // Always show profile photo if available
+  if (patient.profile_photo_url) {
+    qrHtml = `
+      <div class="d-flex align-items-center justify-content-center mb-3">
+        <img src="${patient.profile_photo_url}" 
+             class="rounded-circle me-3" 
+             style="width: 80px; height: 80px; object-fit: cover; border: 3px solid #28a745;" 
+             alt="Profile Photo">
+        <div class="text-start">
+          <div class="fw-bold text-success">${patient.full_name}</div>
+          <div class="small text-muted">${patient.patient_code}</div>
+          <div class="small text-muted">${patient.age} years old</div>
+        </div>
+      </div>
+    `;
   } else {
-    qrContainer.innerHTML = '<div class="text-muted"><i class="bi bi-qr-code fs-1"></i><br>QR Code not available</div>';
+    qrHtml = `
+      <div class="d-flex align-items-center justify-content-center mb-3">
+        <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3" 
+             style="width: 80px; height: 80px; border: 3px solid #28a745;">
+          <i class="bi bi-person-fill text-muted fs-2"></i>
+        </div>
+        <div class="text-start">
+          <div class="fw-bold text-success">${patient.full_name}</div>
+          <div class="small text-muted">${patient.patient_code}</div>
+          <div class="small text-muted">${patient.age} years old</div>
+        </div>
+      </div>
+    `;
   }
+  
+  // Add QR code if available
+  if (patient.qr_code_url) {
+    qrHtml += `<img src="${patient.qr_code_url}" class="img-fluid" style="max-width: 120px;" alt="Patient QR Code">`;
+  } else {
+    qrHtml += '<div class="text-muted"><i class="bi bi-qr-code fs-4"></i><br><small>QR Code not available</small></div>';
+  }
+  
+  qrContainer.innerHTML = qrHtml;
   
   // Update latest consultation
   const consultationDiv = document.getElementById('latestConsultation');
@@ -643,11 +705,139 @@ function displayPatientInfo(data) {
     prescriptionsListDiv.innerHTML = '<p class="text-muted">No prescriptions available</p>';
   }
   
+  // Add current visit/queue status if available
+  updateCurrentVisitStatus(data);
+  
+  // Add proceed to dashboard button
+  addProceedButton(data);
+  
   // Show the patient info card
   document.getElementById('patientInfoCard').classList.add('show');
   
   // Scroll to patient info
   document.getElementById('patientInfoCard').scrollIntoView({ behavior: 'smooth' });
+}
+
+// Update current visit/queue status
+function updateCurrentVisitStatus(data) {
+  const patient = data.patient;
+  
+  // Check for current visits (not completed)
+  const currentVisits = data.visits.filter(v => v.status !== 'done' && v.status !== 'completed');
+  
+  let statusHtml = '';
+  if (currentVisits.length > 0) {
+    const latestVisit = currentVisits[0];
+    const statusClass = getStatusClass(latestVisit.status);
+    statusHtml = `
+      <div class="alert alert-info mt-3">
+        <h6 class="mb-2"><i class="bi bi-clock-history me-2"></i>Current Visit Status</h6>
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <strong>Service:</strong> ${latestVisit.service}<br>
+            <strong>Status:</strong> <span class="badge ${statusClass}">${getStatusText(latestVisit.status)}</span>
+            ${latestVisit.queue_number ? `<br><strong>Queue #:</strong> ${latestVisit.queue_number}` : ''}
+          </div>
+          <div class="text-end">
+            <small class="text-muted">${new Date(latestVisit.timestamp).toLocaleDateString()}</small>
+          </div>
+        </div>
+      </div>
+    `;
+  } else {
+    statusHtml = `
+      <div class="alert alert-light mt-3">
+        <h6 class="mb-2"><i class="bi bi-check-circle me-2"></i>Current Status</h6>
+        <p class="mb-0">No active visits. Ready for new consultation.</p>
+      </div>
+    `;
+  }
+  
+  // Insert status after patient profile section
+  const patientProfileSection = document.querySelector('.dashboard-section');
+  if (patientProfileSection && !patientProfileSection.querySelector('.alert-info, .alert-light')) {
+    patientProfileSection.insertAdjacentHTML('afterend', statusHtml);
+  }
+}
+
+// Get status class for styling
+function getStatusClass(status) {
+  switch(status) {
+    case 'queued': return 'bg-secondary';
+    case 'claimed': return 'bg-warning text-dark';
+    case 'in_process': return 'bg-info';
+    case 'ready': return 'bg-primary';
+    case 'done': return 'bg-success';
+    default: return 'bg-secondary';
+  }
+}
+
+// Get status text for display
+function getStatusText(status) {
+  switch(status) {
+    case 'queued': return 'Queued';
+    case 'claimed': return 'Claimed';
+    case 'in_process': return 'In Process';
+    case 'ready': return 'Ready';
+    case 'done': return 'Done';
+    default: return status;
+  }
+}
+
+// Add proceed to dashboard button
+function addProceedButton(data) {
+  const patient = data.patient;
+  
+  // Remove existing proceed button if any
+  const existingButton = document.getElementById('proceedToDashboardBtn');
+  if (existingButton) {
+    existingButton.remove();
+  }
+  
+  const buttonHtml = `
+    <div class="text-center mt-4 mb-3">
+      <button id="proceedToDashboardBtn" class="btn btn-success btn-lg px-5" onclick="proceedToDashboard('${patient.email}')">
+        <i class="bi bi-arrow-right-circle me-2"></i>Proceed to Dashboard
+      </button>
+      <div class="mt-2">
+        <small class="text-muted">Click to access your complete medical records and dashboard</small>
+      </div>
+    </div>
+  `;
+  
+  // Insert button at the end of patient info card
+  const patientInfoCard = document.getElementById('patientInfoCard');
+  if (patientInfoCard) {
+    patientInfoCard.insertAdjacentHTML('beforeend', buttonHtml);
+  }
+}
+
+// Proceed to dashboard function
+function proceedToDashboard(email) {
+  // Show loading state
+  const button = document.getElementById('proceedToDashboardBtn');
+  if (button) {
+    button.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Loading Dashboard...';
+    button.disabled = true;
+  }
+  
+  // Ensure the email is set in the form
+  const form = document.getElementById('qrLoginForm');
+  const emailInput = form.querySelector('input[name="email"]');
+  if (emailInput) {
+    emailInput.value = email;
+  }
+  
+  // Submit the form to proceed to dashboard
+  if (form) {
+    // Remove the event listener temporarily to allow form submission
+    const formClone = form.cloneNode(true);
+    form.parentNode.replaceChild(formClone, form);
+    formClone.submit();
+  } else {
+    // Fallback: redirect to dashboard with email
+    window.location.href = `/patients/portal/?email=${encodeURIComponent(email)}`;
+  }
 }
 
 // Login as patient

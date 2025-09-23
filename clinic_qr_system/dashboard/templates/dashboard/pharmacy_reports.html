@@ -1,0 +1,285 @@
+{% extends 'base.html' %}
+{% block content %}
+<h4 class="d-flex align-items-center mb-3"><i class="bi bi-graph-up-arrow text-success me-2"></i>Pharmacy Reports</h4>
+
+<!-- Statistics Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card bg-primary text-white">
+      <div class="card-body">
+        <div class="d-flex align-items-center">
+          <div class="flex-grow-1">
+            <h5 class="mb-0">{{ stats.total_prescriptions }}</h5>
+            <small>Total Prescriptions</small>
+          </div>
+          <i class="bi bi-file-medical fs-1 opacity-50"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card" style="background-color: #e6e6fa; color: #4a4a4a;">
+      <div class="card-body">
+        <div class="d-flex align-items-center">
+          <div class="flex-grow-1">
+            <h5 class="mb-0">{{ stats.pending }}</h5>
+            <small>Pending</small>
+          </div>
+          <i class="bi bi-clock-history fs-1 opacity-50"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-info text-white">
+      <div class="card-body">
+        <div class="d-flex align-items-center">
+          <div class="flex-grow-1">
+            <h5 class="mb-0">{{ stats.ready }}</h5>
+            <small>Ready</small>
+          </div>
+          <i class="bi bi-check-circle fs-1 opacity-50"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-success text-white">
+      <div class="card-body">
+        <div class="d-flex align-items-center">
+          <div class="flex-grow-1">
+            <h5 class="mb-0">{{ stats.dispensed }}</h5>
+            <small>Dispensed</small>
+          </div>
+          <i class="bi bi-check2-square fs-1 opacity-50"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form class="row g-3" method="get">
+      <div class="col-md-3">
+        <label class="form-label">Start Date</label>
+        <input type="date" class="form-control" name="start" value="{{ start }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">End Date</label>
+        <input type="date" class="form-control" name="end" value="{{ end }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Status</label>
+        <select class="form-control" name="status">
+          <option value="">All Status</option>
+          <option value="pending" {% if status == 'pending' %}selected{% endif %}>Pending</option>
+          <option value="ready" {% if status == 'ready' %}selected{% endif %}>Ready</option>
+          <option value="dispensed" {% if status == 'dispensed' %}selected{% endif %}>Dispensed</option>
+          <option value="cancelled" {% if status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+        </select>
+      </div>
+      <div class="col-md-4 d-flex align-items-end gap-2">
+        <button class="btn btn-success" type="submit"><i class="bi bi-funnel me-1"></i>Filter</button>
+        <a class="btn btn-outline-secondary" href="?"><i class="bi bi-arrow-counterclockwise me-1"></i>Reset</a>
+      </div>
+    </form>
+  </div>
+  <div class="card-footer d-flex gap-2">
+    <button class="btn btn-success btn-sm" onclick="printReport()"><i class="bi bi-printer me-1"></i>Print Report</button>
+    <a class="btn btn-outline-primary btn-sm" href="?start={{ start }}&end={{ end }}&status={{ status }}&doctor={{ doctor }}&export=csv">
+      <i class="bi bi-filetype-csv me-1"></i>Export CSV
+    </a>
+    <a class="btn btn-outline-primary btn-sm" href="?start={{ start }}&end={{ end }}&status={{ status }}&doctor={{ doctor }}&export=xlsx">
+      <i class="bi bi-file-earmark-excel me-1"></i>Export XLSX
+    </a>
+  </div>
+</div>
+
+<!-- Prescriptions Table -->
+<div class="card shadow-sm">
+  <div class="card-header">
+    <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Prescription Records</h5>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-striped align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Date</th>
+            <th>Patient</th>
+            <th>Status</th>
+            <th>Medicines</th>
+            <th>Dispensed At</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for prescription in prescriptions %}
+            <tr>
+              <td>{{ prescription.created_at|date:'Y-m-d H:i' }}</td>
+              <td>
+                <div class="d-flex align-items-center">
+                  {% if prescription.visit.patient.profile_photo %}
+                    <img src="{{ prescription.visit.patient.profile_photo.url }}" 
+                         class="rounded-circle me-2" 
+                         style="width: 30px; height: 30px; object-fit: cover;" 
+                         alt="Profile Photo">
+                  {% else %}
+                    <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-2" 
+                         style="width: 30px; height: 30px;">
+                      <i class="bi bi-person-fill text-muted small"></i>
+                    </div>
+                  {% endif %}
+                  <div>
+                    <div class="fw-semibold">{{ prescription.visit.patient.full_name }}</div>
+                    <div class="small text-muted">ID: {{ prescription.visit.patient.id }}</div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span class="badge {% if prescription.status == 'pending' %}" style="background-color: #d8bfd8; color: #4a4a4a;"{% elif prescription.status == 'ready' %}bg-info{% elif prescription.status == 'dispensed' %}bg-success{% else %}bg-secondary{% endif %}">
+                  {{ prescription.get_status_display }}
+                </span>
+              </td>
+              <td>
+                <div class="small">
+                  {% for medicine in prescription.medicines.all %}
+                    <div class="mb-1">
+                      <strong>{{ medicine.drug_name }}</strong>
+                      <div class="text-muted">{{ medicine.dosage }} - {{ medicine.frequency }}</div>
+                    </div>
+                  {% endfor %}
+                </div>
+              </td>
+              <td>
+                {% if prescription.dispensed_at %}
+                  {{ prescription.dispensed_at|date:'Y-m-d H:i' }}
+                {% else %}
+                  <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="d-flex gap-1">
+                  <a href="/patients/{{ prescription.visit.patient.id }}/" 
+                     class="btn btn-outline-secondary btn-sm" 
+                     title="View Patient">
+                    <i class="bi bi-person"></i>
+                  </a>
+                  {% if prescription.status != 'dispensed' %}
+                    <a href="{% url 'pharmacy_dispense' prescription.id %}" 
+                       class="btn btn-success btn-sm" 
+                       title="Dispense">
+                      <i class="bi bi-capsule"></i>
+                    </a>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="text-center text-muted py-4">
+                <i class="bi bi-inbox fs-1 mb-2"></i>
+                <p class="mb-0">No prescriptions found.</p>
+                {% if start or end or status or doctor %}
+                  <small>Try adjusting your filters.</small>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Print-friendly version (hidden by default) -->
+<div id="print-version" style="display: none;">
+  <div class="print-header">
+    <h2>Pharmacy Prescriptions Report</h2>
+    <div class="print-filters">
+      <p><strong>Date Range:</strong> {{ start|default:'All dates' }} to {{ end|default:'All dates' }}</p>
+      <p><strong>Status:</strong> {{ status|default:'All statuses' }}</p>
+      <p><strong>Doctor:</strong> {{ doctor|default:'All doctors' }}</p>
+      <p><strong>Generated:</strong> {% now "Y-m-d H:i" %}</p>
+    </div>
+  </div>
+  
+  <table class="print-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Patient</th>
+        <th>Status</th>
+        <th>Medicines</th>
+        <th>Dispensed At</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for prescription in prescriptions %}
+        <tr>
+          <td>{{ prescription.created_at|date:'Y-m-d H:i' }}</td>
+          <td>{{ prescription.visit.patient.full_name }}</td>
+          <td>{{ prescription.get_status_display }}</td>
+          <td>
+            {% for medicine in prescription.medicines.all %}
+              {{ medicine.drug_name }} ({{ medicine.dosage }}){% if not forloop.last %}, {% endif %}
+            {% endfor %}
+          </td>
+          <td>{{ prescription.dispensed_at|date:'Y-m-d H:i'|default:'-' }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="text-center">No prescriptions found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<style>
+/* Print-specific styles */
+@media print {
+  .no-print { display: none !important; }
+  .print-header {
+    text-align: center;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #000;
+    padding-bottom: 10px;
+  }
+  .print-filters {
+    margin-bottom: 20px;
+    font-size: 12px;
+  }
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10px;
+  }
+  .print-table th,
+  .print-table td {
+    border: 1px solid #000;
+    padding: 4px;
+    text-align: left;
+  }
+  .print-table th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+  }
+}
+</style>
+
+<script>
+function printReport() {
+  const printContent = document.getElementById('print-version').innerHTML;
+  const originalContent = document.body.innerHTML;
+  
+  document.body.innerHTML = printContent;
+  window.print();
+  document.body.innerHTML = originalContent;
+  
+  // Reload the page to restore functionality
+  location.reload();
+}
+</script>
+
+{% endblock %}

@@ -1,3 +1,4 @@
+{% load static %}
 <!doctype html>
 <html lang="en">
   <head>
@@ -6,19 +7,118 @@
     <title>Community Health Clinic</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="{% static 'css/admin-purple.css' %}" rel="stylesheet">
     <style>
       :root {
         --bs-primary: #198754; /* Bootstrap success green as primary */
         --bs-primary-rgb: 25, 135, 84;
+        --bs-warning: #9c88ff; /* Light purple instead of yellow */
+        --bs-warning-rgb: 156, 136, 255;
+        --bs-warning-text: #ffffff; /* White text for better contrast */
+        --bs-warning-bg-subtle: #f0edff; /* Very light purple background */
+        --bs-warning-border-subtle: #d1c7ff; /* Light purple border */
       }
       body { background-color: #f8fbf8; }
       .navbar { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+      
+      /* Purple theme overrides for warning colors */
+      .bg-warning { background-color: var(--bs-warning) !important; color: var(--bs-warning-text) !important; }
+      .text-warning { color: var(--bs-warning) !important; }
+      .border-warning { border-color: var(--bs-warning) !important; }
+      .btn-warning { background-color: var(--bs-warning); border-color: var(--bs-warning); color: var(--bs-warning-text); }
+      .btn-warning:hover { background-color: #8b7ae6; border-color: #8b7ae6; color: var(--bs-warning-text); }
+      .btn-outline-warning { color: var(--bs-warning); border-color: var(--bs-warning); }
+      .btn-outline-warning:hover { background-color: var(--bs-warning); border-color: var(--bs-warning); color: var(--bs-warning-text); }
+      .badge.bg-warning { background-color: var(--bs-warning) !important; color: var(--bs-warning-text) !important; }
+      .alert-warning { background-color: var(--bs-warning-bg-subtle); border-color: var(--bs-warning-border-subtle); color: #4a3c7a; }
+      .progress-bar.bg-warning { background-color: var(--bs-warning) !important; }
+      .card.bg-warning { background-color: var(--bs-warning) !important; color: var(--bs-warning-text) !important; }
+      .card.border-warning { border-color: var(--bs-warning) !important; }
+      .card-header.bg-warning { background-color: var(--bs-warning) !important; color: var(--bs-warning-text) !important; }
+      
+      
+      /* Disabled proceed button styling */
+      #qrConfirmProceed:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+      }
+      
+      /* QR Confirmation Modal styling */
+      #qrConfirmationModal .modal-body {
+        padding: 2rem;
+      }
+      
+      #qrConfirmationModal .modal-header {
+        padding: 1.5rem 2rem 1rem 2rem;
+      }
+      
+      #qrConfirmationModal .modal-footer {
+        padding: 1rem 2rem 2rem 2rem;
+      }
+      
+      /* Patient details styling */
+      .patient-details {
+        max-width: 500px;
+        margin: 0 auto;
+      }
+      
+      .detail-item {
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #f8f9fa;
+      }
+      
+      .detail-item:last-child {
+        border-bottom: none;
+      }
+      
+      .detail-item i {
+        font-size: 1.25rem;
+        width: 24px;
+        text-align: center;
+      }
+      
+      /* Print styles for QR code only */
+      @media print {
+        body * {
+          visibility: hidden;
+        }
+        .qr-code-container, .qr-code-container * {
+          visibility: visible;
+        }
+        .qr-code-container {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background: white;
+        }
+        .qr-code-container img {
+          max-width: 80%;
+          max-height: 80%;
+        }
+        .qr-code-container .text-muted {
+          margin-top: 20px;
+          font-size: 16px;
+          color: #333 !important;
+        }
+        /* Hide buttons in print */
+        .btn {
+          display: none !important;
+        }
+      }
     </style>
   </head>
-  <body>
+  <body data-user-role="{% if request.user.is_authenticated %}{% if request.user.groups.all.0.name == 'Reception' %}reception{% elif request.user.groups.all.0.name == 'Doctor' %}doctor{% elif request.user.groups.all.0.name == 'Laboratory' %}lab{% elif request.user.groups.all.0.name == 'Pharmacy' %}pharmacy{% elif request.user.groups.all.0.name == 'Vaccination' %}vaccination{% elif request.user.groups.all.0.name == 'Patient' %}patient{% else %}staff{% endif %}{% else %}guest{% endif %}">
     <nav class="navbar navbar-expand-lg navbar-dark bg-success">
       <div class="container-fluid">
-        <a class="navbar-brand d-flex align-items-center" href="{% if request.user.is_authenticated %}{% if request.user.is_superuser %}/dashboard/{% elif request.user.groups.all.0.name == 'Reception' %}/dashboard/reception/{% elif request.user.groups.all.0.name == 'Doctor' %}/dashboard/doctor/{% elif request.user.groups.all.0.name == 'Laboratory' %}/dashboard/lab/{% elif request.user.groups.all.0.name == 'Pharmacy' %}/dashboard/pharmacy/{% elif request.user.groups.all.0.name == 'Vaccination' %}/dashboard/vaccination/{% elif request.user.groups.all.0.name == 'Patient' %}/patients/portal/{% else %}/dashboard/{% endif %}{% else %}/accounts/login/{% endif %}">
+        <a class="navbar-brand d-flex align-items-center" href="{% if request.user.is_authenticated %}{% if request.user.is_superuser %}/dashboard/admin/{% elif request.user.groups.all.0.name == 'Reception' %}/dashboard/reception/{% elif request.user.groups.all.0.name == 'Doctor' %}/dashboard/doctor/{% elif request.user.groups.all.0.name == 'Laboratory' %}/dashboard/lab/{% elif request.user.groups.all.0.name == 'Pharmacy' %}/dashboard/pharmacy/{% elif request.user.groups.all.0.name == 'Vaccination' %}/dashboard/vaccination/{% elif request.user.groups.all.0.name == 'Patient' %}/patients/portal/{% else %}/dashboard/{% endif %}{% else %}/accounts/login/{% endif %}">
           <i class="bi bi-hospital me-2"></i>Clinic QR System
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarsMain">
@@ -27,13 +127,55 @@
         <div class="collapse navbar-collapse" id="navbarsMain">
           <ul class="navbar-nav me-auto mb-2 mb-lg-0">
             {% if request.user.is_authenticated %}
+              <!-- Home (always for authenticated) -->
               <li class="nav-item">
-                <a class="nav-link" href="{% if request.user.is_superuser %}/dashboard/{% elif request.user.groups.all.0.name == 'Reception' %}/dashboard/reception/{% elif request.user.groups.all.0.name == 'Doctor' %}/dashboard/doctor/{% elif request.user.groups.all.0.name == 'Laboratory' %}/dashboard/lab/{% elif request.user.groups.all.0.name == 'Pharmacy' %}/dashboard/pharmacy/{% elif request.user.groups.all.0.name == 'Vaccination' %}/dashboard/vaccination/{% elif request.user.groups.all.0.name == 'Patient' %}/patients/portal/{% else %}/dashboard/{% endif %}"><i class="bi bi-house-heart-fill me-1"></i>Home</a>
+                <a class="nav-link" href="{% if request.user.is_superuser %}/dashboard/admin/{% elif request.user.groups.all.0.name == 'Reception' %}/dashboard/reception/{% elif request.user.groups.all.0.name == 'Doctor' %}/dashboard/doctor/{% elif request.user.groups.all.0.name == 'Laboratory' %}/dashboard/lab/{% elif request.user.groups.all.0.name == 'Pharmacy' %}/dashboard/pharmacy/{% elif request.user.groups.all.0.name == 'Vaccination' %}/dashboard/vaccination/{% elif request.user.groups.all.0.name == 'Patient' %}/patients/portal/{% else %}/dashboard/{% endif %}"><i class="bi bi-house-heart-fill me-1"></i>Home</a>
               </li>
-              {% comment %} Scan QR nav link hidden {% endcomment %}
-              {% if request.user.is_authenticated and request.user.groups.all.0.name != 'Patient' %}
+              
+              {# Remove role-specific nav links; keep only Home and Reports #}
+              
+              {# Reports (strictly role-scoped) #}
+              {% if request.user.is_superuser %}
+              <li class="nav-item dropdown">
+                <a class="nav-link dropdown-toggle" href="#" id="adminReportsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                  <i class="bi bi-graph-up me-1"></i>Reports
+                </a>
+                <ul class="dropdown-menu" aria-labelledby="adminReportsDropdown">
+                  <li>
+                    <a class="dropdown-item" href="/dashboard/admin/system-reports/">
+                      <i class="bi bi-clipboard-data me-1"></i>System Reports
+                    </a>
+                  </li>
+                  <li><hr class="dropdown-divider"></li>
+                  <li>
+                    <a class="dropdown-item" href="/dashboard/admin/system-reports/?role=doctor">
+                      <i class="bi bi-stethoscope me-1"></i>Doctor Reports
+                    </a>
+                  </li>
+                  <li>
+                    <a class="dropdown-item" href="/dashboard/admin/system-reports/?role=laboratory">
+                      <i class="bi bi-flask me-1"></i>Laboratory Reports
+                    </a>
+                  </li>
+                  <li>
+                    <a class="dropdown-item" href="/dashboard/admin/system-reports/?role=pharmacy">
+                      <i class="bi bi-capsule me-1"></i>Pharmacy Reports
+                    </a>
+                  </li>
+                  <li>
+                    <a class="dropdown-item" href="/dashboard/admin/system-reports/?role=vaccination">
+                      <i class="bi bi-shield-plus me-1"></i>Vaccination Reports
+                    </a>
+                  </li>
+                </ul>
+              </li>
+              {% else %}
               <li class="nav-item">
-                <a class="nav-link" href="/dashboard/reports/"><i class="bi bi-graph-up-arrow me-1"></i>Reports</a>
+                {% if request.user.groups.all.0.name == 'Patient' %}
+                  <a class="nav-link" href="/patient/report/"><i class="bi bi-graph-up me-1"></i>My Reports</a>
+                {% else %}
+                  <a class="nav-link" href="/dashboard/reports/"><i class="bi bi-graph-up me-1"></i>Reports</a>
+                {% endif %}
               </li>
               {% endif %}
             {% endif %}
@@ -101,32 +243,72 @@
     
     <!-- QR Confirmation Modal -->
     <div class="modal fade" id="qrConfirmationModal" tabindex="-1" aria-labelledby="qrConfirmationModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
-          <div class="modal-header bg-success text-white">
-            <h5 class="modal-title" id="qrConfirmationModalLabel">
-              <i class="bi bi-check-circle me-2"></i>QR Code Detected
+          <div class="modal-header border-0">
+            <h5 class="modal-title text-success" id="qrConfirmationModalLabel">
+              <i class="bi bi-person-check me-2"></i>Patient Found
             </h5>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
-          <div class="modal-body text-center">
-            <div class="mb-3">
-              <i class="bi bi-person-check text-success" style="font-size: 3rem;"></i>
+          <div class="modal-body">
+            <!-- Profile Picture at Top -->
+            <div class="text-center mb-4">
+              <div id="patientProfilePhoto" class="mb-3">
+                <!-- Profile photo will be inserted here -->
+              </div>
             </div>
-            <h6 class="mb-3">Patient Found</h6>
-            <p class="mb-3">
-              <strong>Email:</strong><br>
-              <span id="confirmationEmail" class="text-primary"></span>
-            </p>
-            <p class="text-muted small">Do you want to proceed with this patient?</p>
+            
+            <!-- Patient Details - Vertical Layout -->
+            <div class="patient-details">
+              <!-- Full Name -->
+              <div class="detail-item mb-3">
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-person-circle me-3 text-primary"></i>
+                  <div>
+                    <small class="text-muted d-block">Full Name</small>
+                    <span id="patientFullName" class="fw-bold text-dark">Loading...</span>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Patient ID -->
+              <div class="detail-item mb-3">
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-card-text me-3 text-primary"></i>
+                  <div>
+                    <small class="text-muted d-block">Patient ID</small>
+                    <span id="confirmationPatientCode" class="fw-bold text-primary">Loading...</span>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Email Address -->
+              <div class="detail-item mb-3">
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-envelope me-3 text-primary"></i>
+                  <div>
+                    <small class="text-muted d-block">Email Address</small>
+                    <span id="confirmationEmail" class="fw-semibold text-dark">Loading...</span>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Verification Status -->
+              <div class="detail-item mb-3">
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-shield-check me-3 text-primary"></i>
+                  <div>
+                    <small class="text-muted d-block">Verification Status</small>
+                    <span id="verificationStatus" class="fw-semibold">Loading...</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="modal-footer justify-content-center">
-            <button type="button" class="btn btn-outline-secondary me-2" id="qrConfirmCancel">
-              <i class="bi bi-x-circle me-1"></i>Cancel
-            </button>
-            <button type="button" class="btn btn-success" id="qrConfirmProceed">
-              <i class="bi bi-check-circle me-1"></i>Proceed
-            </button>
+          <div class="modal-footer border-0 justify-content-center">
+            <button type="button" class="btn btn-secondary me-2" id="qrConfirmCancel">Cancel</button>
+            <button type="button" class="btn btn-success" id="qrConfirmProceed">Proceed</button>
           </div>
         </div>
       </div>
@@ -138,6 +320,11 @@
     // Reusable QR scanner handling
     (function(){
       let qrModal, html5Qr, currentIntent = 'staff', lastScanTime = 0, isProcessing = false, pendingEmail = null, scannerReady = false;
+      
+      // Debug function to track pendingEmail changes
+      function setPendingEmail(value) {
+        pendingEmail = value;
+      }
       
       function handleEmail(email){
         const e = (email||'').trim();
@@ -196,47 +383,88 @@
             // Fallback: use the same logic as manual email input
             handleEmailForPatient(e);
           }
+        } else if(currentIntent === 'pharmacy') {
+          // Pharmacy intent: show confirmation modal and load patient prescriptions
+          showQRConfirmation(e);
+        } else if(currentIntent === 'staff') {
+          // Staff intent: show confirmation modal for all staff roles
+          showQRConfirmation(e);
         } else {
-          // Staff intent: redirect based on role
-          // Check if user is reception staff
-          const isReception = document.body.getAttribute('data-user-role') === 'reception' || 
-                             window.location.pathname.includes('/dashboard/reception');
-          
-          if(isReception) {
-            // For reception, do NOT proceed if email is not in database
-            fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(e))
-              .then(r=>r.json())
-              .then(data=>{
-                if(!(data && data.success && data.patient)){
-                  showQRScannerError('Patient not found. Please register the patient first.');
-                  return;
-                }
-                // If on scan page, prefill code; otherwise redirect with email
-                if (window.location.pathname === '/visits/scan/') {
-                  const patientCodeInput = document.getElementById('patientCodeInput');
-                  if (patientCodeInput && data.patient.patient_code) {
-                    patientCodeInput.value = data.patient.patient_code;
-                  }
-                } else {
-                  window.location.href = '/visits/scan/?patient_email=' + encodeURIComponent(e);
-                }
-              })
-              .catch(()=>{
-                showQRScannerError('Error validating patient. Please try again.');
-              });
-          } else {
-            // For other staff, fetch patient by email then redirect to detail
-            fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(e))
-              .then(r=>r.json())
-              .then(data=>{
-                if(data && data.patient && data.patient.id){
-                  window.location.href = '/patients/' + data.patient.id + '/';
-                } else {
-                  alert((data && data.error) || 'Patient not found');
-                }
-              })
-              .catch(()=>alert('Error fetching patient.'));
+          // Default: show confirmation modal for all staff roles
+          showQRConfirmation(e);
+        }
+      }
+      
+      // Handle staff confirmation proceed
+      function handleStaffProceed(email) {
+        
+        // Check if user is reception staff
+        const isReception = document.body.getAttribute('data-user-role') === 'reception' || 
+                           window.location.pathname.includes('/dashboard/reception');
+        
+        // Check if user is pharmacy staff
+        const isPharmacy = document.body.getAttribute('data-user-role') === 'pharmacy' || 
+                          window.location.pathname.includes('/dashboard/pharmacy');
+
+        // Check lab/vaccination pages
+        const isLab = window.location.pathname.includes('/dashboard/lab');
+        const isVaccination = window.location.pathname.includes('/dashboard/vaccination');
+
+        // For lab/vaccination, keep inside page modal flow
+        if (isLab || isVaccination) {
+          if (window.handleVerifyQRCallback) {
+            window.handleVerifyQRCallback(email);
+            return;
           }
+        }
+        
+        if(isReception) {
+          // Show loading message
+          showQRScannerSuccess('Processing patient... Redirecting to scan page...');
+          
+          // For reception, do NOT proceed if email is not in database
+          fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(email))
+            .then(r=>r.json())
+            .then(data=>{
+              if(!(data && data.success && data.patient)){
+                showQRScannerError('Patient not found. Please register the patient first.');
+                return;
+              }
+              // If on scan page, prefill code; otherwise redirect with email
+              if (window.location.pathname === '/visits/scan/') {
+                const patientCodeInput = document.getElementById('patientCodeInput');
+                if (patientCodeInput && data.patient.patient_code) {
+                  patientCodeInput.value = data.patient.patient_code;
+                  showQRScannerSuccess('Patient code prefilled successfully!');
+                }
+              } else {
+                // Redirect to patient log visit page with patient email
+                showQRScannerSuccess('Redirecting to patient log visit page...');
+                setTimeout(() => {
+                  const redirectUrl = '/visits/scan/?patient_email=' + encodeURIComponent(email);
+                  window.location.href = redirectUrl;
+                }, 500);
+              }
+            })
+            .catch(()=>{
+              showQRScannerError('Error validating patient. Please try again.');
+            });
+        } else if(isPharmacy) {
+          // For pharmacy, redirect to pharmacy dashboard with patient filter
+          fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(email))
+            .then(r=>r.json())
+            .then(data=>{
+              if(data && data.patient && data.patient.id){
+                // Redirect to pharmacy dashboard with patient search
+                window.location.href = '/dashboard/pharmacy/?search=' + encodeURIComponent(data.patient.full_name);
+              } else {
+                showQRScannerError((data && data.error) || 'Patient not found');
+              }
+            })
+            .catch(()=>showQRScannerError('Error fetching patient.'));
+        } else {
+          // For other staff, do nothing by default to avoid unintended redirects
+          showQRScannerSuccess('Patient verified. Continue in your current workflow.');
         }
       }
       
@@ -271,6 +499,87 @@
           });
       };
 
+      // Handle doctor QR scans directly
+      function handleDoctorQRScan(email) {
+        
+        // First, find the patient
+        fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(email))
+          .then(r => r.json())
+          .then(data => {
+            if (data.success && data.patient) {
+              const patient = data.patient;
+              
+              // Look for a claimed visit for this patient
+              const claimedVisits = document.querySelectorAll('[data-container="claimed"] [data-card]');
+              let foundVisit = null;
+              
+              for (let visit of claimedVisits) {
+                const patientCode = visit.getAttribute('data-patient-code');
+                if (patientCode === patient.patient_code) {
+                  foundVisit = visit;
+                  break;
+                }
+              }
+              
+              if (foundVisit) {
+                // Found a claimed visit for this patient - verify them
+                const visitId = foundVisit.getAttribute('data-visit-id');
+                
+                // Submit verification via AJAX
+                submitDoctorVerification(visitId, email);
+              } else {
+                // No claimed visit found - show message
+                showQRScannerError('No claimed visit found for this patient. Please first claim the patient from the waiting list.');
+              }
+            } else {
+              showQRScannerError('Patient not found. Please scan a valid QR code.');
+            }
+          })
+          .catch(error => {
+            console.error('Error finding patient:', error);
+            showQRScannerError('Error validating QR code. Please try again.');
+          });
+      }
+      
+      // Submit verification via AJAX for doctor
+      function submitDoctorVerification(visitId, email) {
+        
+        const formData = new FormData();
+        formData.append('reception_visit_id', visitId);
+        formData.append('patient_email', email);
+        
+        // Add CSRF token
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (csrfToken) {
+          formData.append('csrfmiddlewaretoken', csrfToken.value);
+        }
+        
+        fetch('/dashboard/doctors/verify/', {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          
+          if (data.success) {
+            showQRScannerSuccess('Patient verified successfully! Moving to Ready to Consult.');
+            // Reload the page to update the UI
+            setTimeout(() => {
+              window.location.reload();
+            }, 1000);
+          } else {
+            showQRScannerError(data.message || 'Verification failed. Please try again.');
+          }
+        })
+        .catch(error => {
+          console.error('Doctor verification error:', error);
+          showQRScannerError('Error verifying patient. Please try again.');
+        });
+      }
+
       // Global function for handling verification QR scans
       window.handleVerifyQR = function(email) {
         const e = email.trim();
@@ -279,22 +588,29 @@
         // Show loading message
         showQRScannerSuccess('Validating patient...');
         
-        // Validate patient exists first
+        // Check if we're on the doctor dashboard
+        if (window.location.pathname.includes('/dashboard/doctor')) {
+          
+          // Don't clear pendingEmail for doctor dashboard
+          handleDoctorQRScan(e);
+          return; // Exit early
+        }
+        
+        // If there's a callback, let it handle everything
+        if (window.handleVerifyQRCallback) {
+          
+          window.handleVerifyQRCallback(e);
+          return; // Exit early, let the callback handle everything
+        } else {
+        }
+        
+        // Fallback: validate patient exists first
         fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(e))
           .then(r => r.json())
           .then(data => {
             if (data.success && data.patient) {
               // Show success message
-              showQRScannerSuccess('Patient found! Processing verification...');
-              
-              // Trigger the verification process
-              // This will be handled by the specific page's verification logic
-              if (window.handleVerifyQRCallback) {
-                window.handleVerifyQRCallback(e);
-              } else {
-                // Fallback: show success and let user proceed manually
-                showQRScannerSuccess('Patient verified: ' + data.patient.full_name);
-              }
+              showQRScannerSuccess('Patient verified: ' + data.patient.full_name);
             } else {
               showQRScannerError('Patient not found. Please scan a valid QR or enter the registered Gmail.');
             }
@@ -305,30 +621,29 @@
       };
       
       function onScanSuccess(decodedText){
-        console.log('QR Code detected:', decodedText);
         
         // Check if scanner is ready
         if (!scannerReady) {
-          console.log('Ignoring scan - scanner not ready yet');
+          
           return;
         }
         
         // Validate that we actually have meaningful content
         if (!decodedText || decodedText.trim().length < 10) {
-          console.log('Ignoring scan - content too short or empty');
+          
           return;
         }
         
         // Additional validation - must contain email-like content
         if (!decodedText.includes('@') && !decodedText.includes('email:')) {
-          console.log('Ignoring scan - no email-like content detected');
+          
           return;
         }
         
         // Prevent multiple rapid scans (debounce)
         const now = Date.now();
         if (now - lastScanTime < 2000 || isProcessing) {
-          console.log('Ignoring rapid scan or already processing');
+          
           return;
         }
         lastScanTime = now;
@@ -356,7 +671,7 @@
         
         // Additional validation - check if it looks like a valid patient QR
         if (!email || email.length < 5 || !email.includes('@')) {
-          console.log('Invalid QR content detected:', decodedText);
+          
           showQRScannerError('Unable to read QR, please try again.');
           // Auto-restart scanner after error
           setTimeout(() => {
@@ -368,7 +683,7 @@
         // Validate email format
         const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
         if (!emailPattern.test(email)) {
-          console.log('Invalid email format detected:', email);
+          
           showQRScannerError('Unable to read QR, please try again.');
           // Auto-restart scanner after error
           setTimeout(() => {
@@ -377,7 +692,6 @@
           return;
         }
         
-        console.log('Valid QR code detected, showing confirmation for:', email);
         
         // Show success message
         showQRScannerSuccess('QR scanned successfully! Ready to scan another.');
@@ -386,11 +700,114 @@
         showQRConfirmation(email);
       }
       
-      function showQRConfirmation(email) {
-        pendingEmail = email;
+      async function showQRConfirmation(email) {
+        
+        setPendingEmail(email);
+        
+        // Show loading state
+        document.getElementById('patientFullName').textContent = 'Loading...';
         document.getElementById('confirmationEmail').textContent = email;
+        document.getElementById('confirmationPatientCode').textContent = '';
+        document.getElementById('verificationStatus').textContent = 'Loading...';
+        document.getElementById('verificationStatus').className = 'fw-semibold text-muted';
+        document.getElementById('patientProfilePhoto').innerHTML = '<i class="bi bi-hourglass-split text-muted" style="font-size: 3rem;"></i>';
+        
+        // Disable proceed button during loading
+        const proceedBtn = document.getElementById('qrConfirmProceed');
+        if (proceedBtn) {
+          proceedBtn.disabled = true;
+          proceedBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
+        }
+        
+        // Show modal immediately with loading state
         const confirmationModal = new bootstrap.Modal(document.getElementById('qrConfirmationModal'));
         confirmationModal.show();
+        
+        try {
+          // Fetch patient data
+          const response = await fetch('/patients/api/qr-scan/?email=' + encodeURIComponent(email));
+          const data = await response.json();
+          
+          if (data.success && data.patient) {
+            const patient = data.patient;
+            
+            // Update patient name
+            document.getElementById('patientFullName').textContent = patient.full_name || 'Unknown Patient';
+            
+            // Update patient code
+            document.getElementById('confirmationPatientCode').textContent = patient.patient_code || 'N/A';
+            
+            // Update verification status
+            document.getElementById('verificationStatus').textContent = 'Verified Patient';
+            document.getElementById('verificationStatus').className = 'fw-semibold text-success';
+            
+            // Enable proceed button for verified patient
+            const proceedBtn = document.getElementById('qrConfirmProceed');
+            if (proceedBtn) {
+              proceedBtn.disabled = false;
+              proceedBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Proceed';
+            }
+            
+            // Update profile photo
+            const profilePhotoDiv = document.getElementById('patientProfilePhoto');
+            if (patient.profile_photo_url) {
+              profilePhotoDiv.innerHTML = `
+                <img src="${patient.profile_photo_url}" 
+                     class="rounded-circle" 
+                     style="width: 80px; height: 80px; object-fit: cover; border: 3px solid #28a745;" 
+                     alt="Profile Photo">
+              `;
+            } else {
+              profilePhotoDiv.innerHTML = `
+                <div class="rounded-circle bg-light d-flex align-items-center justify-content-center mx-auto" 
+                     style="width: 80px; height: 80px; border: 3px solid #28a745;">
+                  <i class="bi bi-person-fill text-muted" style="font-size: 2.5rem;"></i>
+                </div>
+              `;
+            }
+          } else {
+            // Patient not found - show error state
+            document.getElementById('patientFullName').textContent = 'Patient Not Found';
+            document.getElementById('confirmationEmail').textContent = email;
+            document.getElementById('confirmationPatientCode').textContent = 'N/A';
+            document.getElementById('verificationStatus').textContent = 'Not Found';
+            document.getElementById('verificationStatus').className = 'fw-semibold text-danger';
+            document.getElementById('patientProfilePhoto').innerHTML = `
+              <div class="rounded-circle bg-danger d-flex align-items-center justify-content-center mx-auto" 
+                   style="width: 80px; height: 80px; border: 3px solid #dc3545;">
+                <i class="bi bi-exclamation-triangle text-white" style="font-size: 2rem;"></i>
+              </div>
+            `;
+            
+            // Keep proceed button disabled for patient not found
+            const proceedBtn = document.getElementById('qrConfirmProceed');
+            if (proceedBtn) {
+              proceedBtn.disabled = true;
+              proceedBtn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Cannot Proceed';
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching patient data:', error);
+          // Show error state
+          document.getElementById('patientFullName').textContent = 'Error Loading Patient';
+          document.getElementById('confirmationEmail').textContent = email;
+          document.getElementById('confirmationPatientCode').textContent = 'N/A';
+          document.getElementById('verificationStatus').textContent = 'Error';
+          document.getElementById('verificationStatus').className = 'fw-semibold text-warning';
+          document.getElementById('patientProfilePhoto').innerHTML = `
+            <div class="rounded-circle bg-warning d-flex align-items-center justify-content-center mx-auto" 
+                 style="width: 80px; height: 80px; border: 3px solid #9c88ff;">
+              <i class="bi bi-exclamation-triangle text-dark" style="font-size: 2rem;"></i>
+            </div>
+          `;
+          
+          // Keep proceed button disabled for error state
+          const proceedBtn = document.getElementById('qrConfirmProceed');
+          if (proceedBtn) {
+            proceedBtn.disabled = true;
+            proceedBtn.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Cannot Proceed';
+          }
+        }
       }
       
       function onScanFailure(_){ /* ignore continuous failures */ }
@@ -431,7 +848,6 @@
           return;
         }
         
-        console.log('Starting scanner with camera:', targetCamId);
         
         // Start with better configuration for DroidCam - less sensitive to reduce false positives
         html5Qr.start(targetCamId, { 
@@ -440,17 +856,17 @@
           aspectRatio: 1.0,
           supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
         }, onScanSuccess, onScanFailure).then(() => {
-          console.log('Camera started successfully');
+          
           const statusEl = document.getElementById('scanner-status');
           if (statusEl) statusEl.textContent = 'Point camera at QR code to scan';
           
           // Add a small delay before allowing scans to prevent immediate false detection
           setTimeout(() => {
             scannerReady = true;
-            console.log('Scanner is now ready for QR detection');
+            
           }, 1500);
         }).catch(err => {
-          console.log('Failed to start camera:', err);
+          
           const statusEl = document.getElementById('scanner-status');
           if (statusEl) statusEl.textContent = 'Camera failed to start';
           // Show error modal instead of alert
@@ -463,9 +879,9 @@
           try{ 
             html5Qr.stop().then(() => {
               html5Qr.clear();
-              console.log('Camera stopped and cleared');
+              
             }).catch(err => {
-              console.log('Error stopping camera:', err);
+              
               // Force clear even if stop fails
               if(html5Qr) {
                 html5Qr.clear();
@@ -544,9 +960,6 @@
       
       // Restart scanner after error
       function restartScannerAfterError() {
-        console.log('Restarting scanner after error...');
-        isProcessing = false;
-        lastScanTime = 0;
         
         // Complete reset
         resetScannerCompletely();
@@ -561,7 +974,7 @@
               startScanner();
             }
           }).catch(err => {
-            console.log('Camera detection failed on restart:', err);
+            
             startScanner();
           });
         }, 500);
@@ -569,7 +982,6 @@
       
       // Function to completely reset scanner and clear all cache
       function resetScannerCompletely() {
-        console.log('Completely resetting scanner...');
         
         // Stop and clear scanner
         if(html5Qr){ 
@@ -584,7 +996,7 @@
         // Reset ALL variables and flags
         isProcessing = false;
         lastScanTime = 0;
-        pendingEmail = null;
+        setPendingEmail(null);
         availableCameras = [];
         scannerReady = false;
         
@@ -616,37 +1028,13 @@
       
       // Function to refresh camera
       function refreshCamera() {
-        console.log('Refreshing camera...');
         
-        // Show refreshing status
-        const statusEl = document.getElementById('scanner-status');
-        if (statusEl) statusEl.textContent = 'Refreshing camera...';
+        // Set a flag in sessionStorage to indicate we should auto-open QR modal
+        sessionStorage.setItem('autoOpenQRModal', 'true');
+        sessionStorage.setItem('qrModalIntent', currentIntent || 'staff');
         
-        // Complete reset
-        resetScannerCompletely();
-        
-        // Wait a moment for complete cleanup
-        setTimeout(() => {
-          Html5Qrcode.getCameras().then(cams => {
-            console.log('Available cameras:', cams);
-            availableCameras = cams || [];
-            
-            // Update status
-            if (statusEl) statusEl.textContent = 'Starting camera...';
-            
-            // Auto-start with first available camera
-            if (availableCameras.length > 0) {
-              startScanner(availableCameras[0].id);
-            } else {
-              startScanner(); // Try auto-detect
-            }
-          }).catch(err => {
-            console.log('Camera detection failed:', err);
-            availableCameras = [];
-            if (statusEl) statusEl.textContent = 'Camera detection failed';
-            startScanner(); // Try auto-detect anyway
-          });
-        }, 500);
+        // Reload the page
+        window.location.reload();
       }
       
       // Auto-start camera when modal opens
@@ -656,7 +1044,7 @@
         // Wait longer for complete cleanup and to prevent auto-detection
         setTimeout(() => {
           Html5Qrcode.getCameras().then(cams => {
-            console.log('Available cameras:', cams);
+            
             availableCameras = cams || [];
             
             // Update status to show we're ready
@@ -670,7 +1058,7 @@
               startScanner(); // Try auto-detect
             }
           }).catch(err => {
-            console.log('Camera detection failed:', err);
+            
             availableCameras = [];
             startScanner(); // Try auto-detect anyway
           });
@@ -709,7 +1097,7 @@
         // Reset ALL variables
         isProcessing = false;
         lastScanTime = 0;
-        pendingEmail = null;
+        setPendingEmail(null);
         availableCameras = [];
         
         // Clear any cached data
@@ -731,6 +1119,8 @@
       document.getElementById('qrEmailGo')?.addEventListener('click', function(){
         const v = document.getElementById('qrEmailFallback').value;
         if(qrModal) qrModal.hide();
+        // Set currentIntent to staff for email fallback
+        currentIntent = 'staff';
         handleEmail(v);
       });
       
@@ -739,24 +1129,92 @@
         refreshCamera();
       });
       
-      // Handle QR confirmation modal buttons
-      document.getElementById('qrConfirmProceed')?.addEventListener('click', function(){
+      // Handle QR confirmation modal buttons using event delegation
+      document.addEventListener('click', function(e) {
+        // Check if the clicked element or its parent is the proceed button
+        const proceedBtn = e.target.closest('#qrConfirmProceed');
+        if (proceedBtn) {
+        
+        // Check if pendingEmail is null and try to get it from the modal
+        if (!pendingEmail) {
+          
+          const emailFromModal = document.getElementById('confirmationEmail')?.textContent;
+          if (emailFromModal) {
+            
+            setPendingEmail(emailFromModal);
+          }
+        }
+        
+        // If still no pendingEmail, try to get it from the modal and redirect directly
+        if (!pendingEmail) {
+          const emailFromModal = document.getElementById('confirmationEmail')?.textContent;
+          if (emailFromModal) {
+            
+            // Only auto-redirect for Reception flow
+            const isReception = document.body.getAttribute('data-user-role') === 'reception' || window.location.pathname.includes('/dashboard/reception');
+            if (isReception) {
+              // Close modals
+              const confirmationModal = bootstrap.Modal.getInstance(document.getElementById('qrConfirmationModal'));
+              if (confirmationModal) confirmationModal.hide();
+              if (qrModal) qrModal.hide();
+              // Redirect to log visit
+              window.location.href = '/visits/scan/?patient_email=' + encodeURIComponent(emailFromModal);
+              return;
+            }
+          }
+        }
+        
+        // Check if button is disabled
+        if (proceedBtn.disabled) {
+          
+          return;
+        }
+        
+        // Prevent default behavior
+        e.preventDefault();
+        e.stopPropagation();
+        
         const confirmationModal = bootstrap.Modal.getInstance(document.getElementById('qrConfirmationModal'));
         if (confirmationModal) confirmationModal.hide();
         if (qrModal) qrModal.hide();
         if (pendingEmail) {
-          handleEmail(pendingEmail);
-          pendingEmail = null;
+          // Handle based on intent
+          if (currentIntent === 'patient') {
+            
+            handleEmail(pendingEmail);
+          } else if (window.location.pathname.includes('/dashboard/lab') || window.location.pathname.includes('/dashboard/vaccination')) {
+            // Lab/Vaccination dashboards: keep in modal-only flow
+            if (window.handleVerifyQRCallback) {
+              // Prevent accidental navigation to patient profile briefly
+              window._blockPatientLinkUntil = Date.now() + 3000;
+              window.handleVerifyQRCallback(pendingEmail);
+              // Do not clear pendingEmail here to keep state
+              return;
+            }
+          } else if (window.location.pathname.includes('/dashboard/doctor')) {
+            // Doctor dashboard - handle QR scan directly
+            
+            handleDoctorQRScan(pendingEmail);
+            // Don't clear pendingEmail for doctor dashboard
+          } else {
+            // Staff intent - proceed with staff logic
+            
+            handleStaffProceed(pendingEmail);
+            // Clear pendingEmail after processing
+            setPendingEmail(null);
+          }
+        } else {
+          
         }
         // Auto-restart scanner after successful processing
         setTimeout(() => {
           restartScannerAfterSuccess();
         }, 500);
+        }
       });
       
       // Restart scanner after successful QR processing
       function restartScannerAfterSuccess() {
-        console.log('Restarting scanner after successful processing...');
         
         // Complete reset
         resetScannerCompletely();
@@ -771,7 +1229,7 @@
               startScanner();
             }
           }).catch(err => {
-            console.log('Camera detection failed on restart:', err);
+            
             startScanner();
           });
         }, 1000);
@@ -785,9 +1243,43 @@
         setTimeout(() => {
           restartScannerAfterSuccess();
         }, 300);
-        pendingEmail = null;
+        setPendingEmail(null);
+      });
+      
+      // Auto-open QR modal after page refresh if refresh camera was clicked
+      document.addEventListener('DOMContentLoaded', function() {
+        if (sessionStorage.getItem('autoOpenQRModal') === 'true') {
+          // Clear the flag
+          sessionStorage.removeItem('autoOpenQRModal');
+          
+          // Get the stored intent
+          const storedIntent = sessionStorage.getItem('qrModalIntent') || 'staff';
+          sessionStorage.removeItem('qrModalIntent');
+          
+          // Set the current intent
+          currentIntent = storedIntent;
+          
+          // Open the QR modal after a short delay to ensure page is fully loaded
+          setTimeout(() => {
+            const qrModal = new bootstrap.Modal(document.getElementById('qrScannerModal'));
+            qrModal.show();
+          }, 500);
+        }
       });
     })();
+    // Temporary guard: block patient profile link clicks for a short window after Proceed
+    (function(){
+      document.addEventListener('click', function(e){
+        const a = e.target.closest && e.target.closest('a[href^="/patients/"]');
+        if(!a) return;
+        if(window._blockPatientLinkUntil && Date.now() < window._blockPatientLinkUntil){
+          e.preventDefault(); e.stopPropagation();
+        }
+      }, true);
+    })();
     </script>
+    
+    <!-- Camera Capture Script -->
+    <script src="{% static 'js/camera-capture.js' %}"></script>
   </body>
 </html>

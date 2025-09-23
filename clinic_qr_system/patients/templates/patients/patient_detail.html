@@ -8,9 +8,7 @@
         <h5 class="mb-1">{{ patient.full_name }}</h5>
         <div class="small text-muted">ID: {{ patient.id }} · Code: <strong>{{ patient.patient_code }}</strong></div>
         <div class="mt-2">Age: {{ patient.age }}</div>
-        <div>Gender: —</div>
         <div class="mt-2">Allergies: <span class="{% if patient.allergies %}text-danger{% else %}text-muted{% endif %}">{{ patient.allergies|default:'None reported' }}</span></div>
-        <div>Chronic Conditions: —</div>
         {% if patient.qr_code %}
           <img src="{{ patient.qr_code.url }}" class="img-fluid mt-3 rounded" alt="QR">
         {% endif %}
@@ -62,12 +60,85 @@
             {% for v in lab_visits %}
               <tr>
                 <td>{{ v.timestamp|date:'Y-m-d H:i' }}</td>
-                <td>{{ v.lab_tests|default:'—' }}</td>
+                <td>{{ v.lab_test_type|default:v.lab_tests|default:'—' }}</td>
                 <td class="small">{{ v.lab_results|linebreaksbr|default:'—' }}</td>
               </tr>
             {% empty %}
               <tr><td colspan="3" class="text-center text-muted">No lab results.</td></tr>
             {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-shield-check me-1"></i>Vaccination History</span>
+        <a href="{% url 'vaccinations:patient_vaccination_timeline' patient.id %}" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-eye me-1"></i>View Timeline
+        </a>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-striped align-middle mb-0">
+          <thead class="table-light"><tr><th>Vaccine</th><th>Doses</th><th>Status</th><th>Last Dose</th></tr></thead>
+          <tbody>
+            {% if patient_vaccinations %}
+            {% for vaccination in patient_vaccinations %}
+              <tr>
+                <td>
+                  <div class="fw-semibold">{{ vaccination.vaccine_type.name }}</div>
+                  <div class="small text-muted">{{ vaccination.vaccine_type.description|truncatechars:50 }}</div>
+                </td>
+                <td>
+                  {% with total=vaccination.vaccine_type.total_doses_required %}
+                    {% with done=vaccination.administered_count %}
+                      <span class="badge bg-info">{{ done }}/{{ total }}</span>
+                    {% endwith %}
+                  {% endwith %}
+                </td>
+                <td>
+                  {% if vaccination.completed %}
+                    <span class="badge bg-success">Completed</span>
+                  {% elif vaccination.is_overdue %}
+                    <span class="badge bg-danger">Overdue</span>
+                  {% else %}
+                    <span class="badge bg-warning">In Progress</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if vaccination.last_administered_date %}
+                    {{ vaccination.last_administered_date|date:"M d, Y" }}
+                  {% else %}
+                    <span class="text-muted">Not administered</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}{% endfor %}
+            {% else %}
+            {% for rec in vaccination_records %}
+              <tr>
+                <td>
+                  <div class="fw-semibold">{{ rec.vaccine_type }}</div>
+                  <div class="small text-muted">Visit #{{ rec.visit_id }}</div>
+                </td>
+                <td>—</td>
+                <td>
+                  <span class="badge {% if rec.status == 'done' %}bg-success{% elif rec.status == 'in_process' %}bg-warning{% else %}bg-secondary{% endif %}">
+                    {{ rec.get_status_display|default:rec.status }}
+                  </span>
+                </td>
+                <td>
+                  {% if rec.visit.vaccination_date %}
+                    {{ rec.visit.vaccination_date|date:'M d, Y' }}
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="4" class="text-center text-muted">No vaccination records.</td></tr>
+            {% endfor %}
+            {% endif %}
           </tbody>
         </table>
       </div>

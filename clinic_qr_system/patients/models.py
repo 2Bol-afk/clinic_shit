@@ -22,6 +22,7 @@ class Patient(models.Model):
     email = models.EmailField(unique=True)
     patient_code = models.CharField(max_length=20, unique=True)
     qr_code = models.ImageField(upload_to='qr_codes/', blank=True, null=True)
+    profile_photo = models.ImageField(upload_to='profile_photos/', blank=True, null=True, help_text='Patient profile photo')
     must_change_password = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -49,6 +50,7 @@ class Doctor(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='doctor_profile')
     full_name = models.CharField(max_length=255)
     specialization = models.CharField('Department', max_length=100, choices=DEPARTMENT_CHOICES)
+    must_change_password = models.BooleanField(default=True, help_text='Doctor must change password on first login')
 
     def __str__(self) -> str:
         return f"Dr. {self.full_name} ({self.specialization})"

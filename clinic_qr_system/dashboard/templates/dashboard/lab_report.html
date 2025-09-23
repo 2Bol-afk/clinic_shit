@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% block content %}
+<h4 class="d-flex align-items-center mb-3"><i class="bi bi-flask text-success me-2"></i>Laboratory Reports</h4>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="get" class="row g-3">
+      <div class="col-md-3">
+        <label class="form-label">Start Date</label>
+        <input type="date" class="form-control" name="start_date" value="{{ start_date }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">End Date</label>
+        <input type="date" class="form-control" name="end_date" value="{{ end_date }}">
+      </div>
+      <div class="col-md-3 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search me-1"></i>Filter</button>
+      </div>
+      <div class="col-md-6 d-flex align-items-end gap-2">
+        <a href="?start_date={{ start_date }}&end_date={{ end_date }}&export=csv" class="btn btn-outline-success">
+          <i class="bi bi-filetype-csv me-1"></i>CSV
+        </a>
+        <a href="?start_date={{ start_date }}&end_date={{ end_date }}&export=excel" class="btn btn-outline-primary">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </a>
+        <button type="button" class="btn btn-outline-danger" onclick="printLabReport(false)">
+          <i class="bi bi-printer me-1"></i>Print
+        </button>
+        <button type="button" class="btn btn-outline-secondary" onclick="printLabReport(true)">
+          <i class="bi bi-filetype-pdf me-1"></i>PDF
+        </button>
+      </div>
+    </form>
+  </div>
+  </div>
+
+<div class="row g-3">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-clipboard2-pulse me-2"></i>Completed Lab Results</span>
+        <span class="badge bg-success">{{ completed|length }}</span>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped mb-0">
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Patient ID</th>
+                <th>Email</th>
+                <th>Date</th>
+                <th>Test Type</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in completed %}
+                <tr>
+                  <td>{{ r.visit.patient.full_name }}</td>
+                  <td>{{ r.visit.patient.patient_code }}</td>
+                  <td>{{ r.visit.patient.email }}</td>
+                  <td>{{ r.created_at|date:'M d, Y H:i' }}</td>
+                  <td>{{ r.lab_type|default:r.visit.lab_test_type|default:'Lab Test' }}</td>
+                  <td><span class="badge bg-success">Done</span></td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="6" class="text-center text-muted">No completed lab results</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-hourglass-split me-2"></i>Verified / In Process</span>
+        <span class="badge bg-info">{{ verified|length }}</span>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped mb-0">
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Patient ID</th>
+                <th>Email</th>
+                <th>Verified At</th>
+                <th>Test Type</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for v in verified %}
+                <tr>
+                  <td>{{ v.patient.full_name }}</td>
+                  <td>{{ v.patient.patient_code }}</td>
+                  <td>{{ v.patient.email }}</td>
+                  <td>{{ v.timestamp|date:'M d, Y H:i' }}</td>
+                  <td>{{ v.lab_test_type|default:'Lab Test' }}</td>
+                  <td><span class="badge bg-info">In Process</span></td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="6" class="text-center text-muted">No in-process items</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+<script>
+function printLabReport(asPdf){
+  try{
+    // Prefer the completed table; if not present, use the entire card body
+    const table = document.querySelector('.card .table-responsive') || document.querySelector('.card-body');
+    if(!table){ window.print(); return; }
+    const w = window.open('', '_blank', 'width=1024,height=768');
+    const styles = document.querySelector('link[href*="bootstrap" ]') ? document.querySelector('link[href*="bootstrap" ]').outerHTML : '';
+    const custom = '<style>table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:6px}thead{background:#f8f9fa;font-weight:600}</style>';
+    w.document.write('<html><head><title>Laboratory Reports</title>' + styles + custom + '</head><body>');
+    // Clone both sections: completed and verified
+    const cards = document.querySelectorAll('.card');
+    cards.forEach(c => { if(c.querySelector('table')){ w.document.write(c.outerHTML); } });
+    w.document.write('</body></html>');
+    w.document.close();
+    w.focus();
+    w.onload = function(){
+      w.print();
+      if(asPdf){ setTimeout(()=>w.close(), 500); }
+    };
+  }catch(_){ window.print(); }
+}
+</script>

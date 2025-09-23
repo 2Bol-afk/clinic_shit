@@ -12,6 +12,17 @@
         {% elif is_doctor and not allow_doctor_scan %}
           <div class="alert alert-info">This page is for Reception scanning. Please use your dashboard.</div>
         {% else %}
+        {% if patient_data %}
+        <div class="alert alert-success mb-3">
+          <div class="d-flex align-items-center">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            <div>
+              <strong>Patient Found:</strong> {{ patient_data.full_name }}<br>
+              <small class="text-muted">Email: {{ patient_data.email }} | Code: {{ patient_data.patient_code }}</small>
+            </div>
+          </div>
+        </div>
+        {% endif %}
         <form method="post" class="row g-3">
           {% csrf_token %}
           <div class="col-12">
@@ -32,7 +43,6 @@
             <select class="form-select" name="service" required id="serviceSelect">
               <option value="reception">Doctor Consultation</option>
               <option value="lab">Laboratory</option>
-              <option value="pharmacy">Pharmacy</option>
               <option value="vaccination">Vaccination/Immunization</option>
             </select>
           </div>
@@ -70,14 +80,7 @@
             <div data-svc="lab" class="svc d-none">
               <!-- Laboratory selection here should not capture request tests or completion at Reception -->
             </div>
-            <div data-svc="pharmacy" class="svc d-none">
-              <label class="form-label">Medicines Dispensed</label>
-              <textarea name="medicines" class="form-control" rows="2"></textarea>
-              <div class="form-check mt-2">
-                <input class="form-check-input" type="checkbox" name="dispensed" id="dispensed">
-                <label class="form-check-label" for="dispensed">Dispensed</label>
-              </div>
-            </div>
+            <div data-svc="pharmacy" class="svc d-none"></div>
             <div data-svc="vaccination" class="svc d-none">
               <!-- Vaccination fields removed - will be handled in vaccination dashboard -->
             </div>

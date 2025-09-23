@@ -1,0 +1,194 @@
+{% extends 'base.html' %}
+{% block content %}
+<h4 class="d-flex align-items-center mb-3">
+  <i class="bi bi-person-heart text-success me-2"></i>Patient Management
+</h4>
+
+<!-- Search and Filters -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">Search Patients</label>
+        <input type="text" class="form-control" name="search" value="{{ search_query }}" placeholder="Search by name, email, patient code, or contact">
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="bi bi-search me-1"></i>Search
+        </button>
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <a href="{% url 'admin_patient_management' %}" class="btn btn-outline-secondary w-100">
+          <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Patients Table -->
+<div class="card">
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>Profile</th>
+            <th>Name</th>
+            <th>Patient ID</th>
+            <th>Email</th>
+            <th>Contact</th>
+            <th>Age</th>
+            <th>Created</th>
+            <th>QR Code</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for patient in patients %}
+            <tr>
+              <td>
+                {% if patient.profile_photo %}
+                  <img src="{{ patient.profile_photo.url }}" alt="Profile" class="rounded-circle" width="40" height="40">
+                {% else %}
+                  <div class="bg-secondary rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                    <i class="bi bi-person text-white"></i>
+                  </div>
+                {% endif %}
+              </td>
+              <td>
+                <strong>{{ patient.full_name }}</strong>
+                {% if patient.must_change_password %}
+                  <span class="badge bg-warning ms-1">Must Change Password</span>
+                {% endif %}
+              </td>
+              <td>
+                <code>{{ patient.patient_code }}</code>
+              </td>
+              <td>{{ patient.email }}</td>
+              <td>{{ patient.contact }}</td>
+              <td>{{ patient.age }}</td>
+              <td>{{ patient.created_at|date:"M d, Y" }}</td>
+              <td>
+                {% if patient.qr_code %}
+                  <span class="badge bg-success">Generated</span>
+                {% else %}
+                  <span class="badge bg-danger">Missing</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="btn-group btn-group-sm" role="group">
+                  <a href="/admin/patients/patient/{{ patient.id }}/change/" class="btn btn-outline-primary" target="_blank">
+                    <i class="bi bi-pencil"></i>
+                  </a>
+                  <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#resendQRModal{{ patient.id }}">
+                    <i class="bi bi-qr-code"></i>
+                  </button>
+                  <a href="/patients/{{ patient.id }}/" class="btn btn-outline-info" target="_blank">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                </div>
+              </td>
+            </tr>
+            
+            <!-- Resend QR Code Modal -->
+            <div class="modal fade" id="resendQRModal{{ patient.id }}" tabindex="-1">
+              <div class="modal-dialog">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title">Resend QR Code</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                  </div>
+                  <div class="modal-body">
+                    <p>Are you sure you want to resend the QR code to <strong>{{ patient.full_name }}</strong>?</p>
+                    <p class="text-muted">Email: {{ patient.email }}</p>
+                    <p class="text-muted">A new QR code will be generated and sent to the patient's email address.</p>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <form method="post" action="{% url 'admin_resend_qr_code' patient.id %}" class="d-inline">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-success">Resend QR Code</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% empty %}
+            <tr>
+              <td colspan="9" class="text-center text-muted py-4">No patients found</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- Pagination -->
+    {% if patients.has_other_pages %}
+      <nav aria-label="Patient pagination">
+        <ul class="pagination justify-content-center">
+          {% if patients.has_previous %}
+            <li class="page-item">
+              <a class="page-link" href="?page={{ patients.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}">Previous</a>
+            </li>
+          {% endif %}
+          
+          {% for num in patients.paginator.page_range %}
+            {% if patients.number == num %}
+              <li class="page-item active">
+                <span class="page-link">{{ num }}</span>
+              </li>
+            {% elif num > patients.number|add:'-3' and num < patients.number|add:'3' %}
+              <li class="page-item">
+                <a class="page-link" href="?page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}">{{ num }}</a>
+              </li>
+            {% endif %}
+          {% endfor %}
+          
+          {% if patients.has_next %}
+            <li class="page-item">
+              <a class="page-link" href="?page={{ patients.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}">Next</a>
+            </li>
+          {% endif %}
+        </ul>
+      </nav>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="row g-3 mt-4">
+  <div class="col-md-3">
+    <div class="card bg-primary text-white">
+      <div class="card-body text-center">
+        <h4>{{ patients.paginator.count }}</h4>
+        <p class="mb-0">Total Patients</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-success text-white">
+      <div class="card-body text-center">
+        <h4>{{ patients|length }}</h4>
+        <p class="mb-0">Showing</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-info text-white">
+      <div class="card-body text-center">
+        <h4>{{ patients|length }}</h4>
+        <p class="mb-0">With QR Codes</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-warning text-white">
+      <div class="card-body text-center">
+        <h4>0</h4>
+        <p class="mb-0">Missing QR Codes</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

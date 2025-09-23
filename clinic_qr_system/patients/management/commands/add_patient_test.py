@@ -96,7 +96,43 @@ class Command(BaseCommand):
             svc = ServiceType.objects.filter(name__iexact=tag).first()
             if svc:
                 kwargs['service_type'] = svc
-        Visit.objects.create(**kwargs)
+        visit = Visit.objects.create(**kwargs)
+        
+        # Send queue notification email
+        try:
+            from clinic_qr_system.email_utils import send_queue_notification_email_html
+            
+            # Determine service type for email
+            if visit_type == 'consultation':
+                service_type = 'consultation'
+                department = department
+            elif visit_type == 'laboratory':
+                service_type = 'laboratory'
+                department = None
+            elif visit_type == 'vaccination':
+                service_type = 'vaccination'
+                department = None
+            else:
+                service_type = visit_type
+                department = department
+            
+            # Send queue notification email
+            email_sent = send_queue_notification_email_html(
+                patient_name=patient.full_name,
+                patient_email=patient.email,
+                queue_number=visit.queue_number,
+                service_type=service_type,
+                department=department,
+                visit_id=visit.id
+            )
+            
+            if email_sent:
+                self.stdout.write(self.style.SUCCESS(f"Queue notification email sent to {patient.email}."))
+            else:
+                self.stdout.write(self.style.WARNING(f"Queue notification email failed to send to {patient.email}."))
+                
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f"Queue notification email failed: {e}"))
 
         self.stdout.write(self.style.SUCCESS("Patient created successfully."))
         if patient.qr_code:

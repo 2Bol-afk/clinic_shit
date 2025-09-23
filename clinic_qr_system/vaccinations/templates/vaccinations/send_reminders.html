@@ -1,0 +1,76 @@
+{% extends 'vaccinations/base.html' %}
+
+{% block page_title %}Send Vaccination Reminders{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'vaccinations:dashboard' %}" class="btn btn-secondary">
+    <i class="fas fa-arrow-left"></i> Back to Dashboard
+</a>
+{% endblock %}
+
+{% block page_content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Send Vaccination Reminders</h6>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Automatic Reminders:</strong> This will send email reminders to patients who have vaccination appointments scheduled for tomorrow.
+                </div>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="text-center">
+                        <button type="submit" class="btn btn-warning btn-lg">
+                            <i class="fas fa-bell"></i> Send Reminders
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reminder Information -->
+<div class="row justify-content-center mt-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-info">Reminder System Information</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>What happens when you send reminders:</h6>
+                        <ul class="small">
+                            <li>Patients with appointments tomorrow will receive email reminders</li>
+                            <li>Reminders include vaccination details and instructions</li>
+                            <li>System tracks which reminders have been sent</li>
+                            <li>Patients can contact the clinic to reschedule if needed</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Reminder content includes:</h6>
+                        <ul class="small">
+                            <li>Patient name and vaccination details</li>
+                            <li>Appointment date and time</li>
+                            <li>Vaccine type and dose number</li>
+                            <li>Important instructions and preparation tips</li>
+                            <li>Contact information for rescheduling</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="alert alert-warning mt-3">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Note:</strong> Reminders are only sent to patients who have valid email addresses and upcoming appointments.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

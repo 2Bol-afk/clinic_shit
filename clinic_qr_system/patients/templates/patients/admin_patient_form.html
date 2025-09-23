@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3><i class="bi bi-person-plus text-primary me-2"></i>{{ title }}</h3>
+  <a href="{% url 'admin_patient_list' %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back to Patients
+  </a>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">
+            {% for error in form.non_field_errors %}
+              {{ error }}
+            {% endfor %}
+          </div>
+        {% endif %}
+        
+        <form method="post">
+          {% csrf_token %}
+          
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label for="{{ form.full_name.id_for_label }}" class="form-label">
+                {{ form.full_name.label }}
+                <span class="text-danger">*</span>
+              </label>
+              {{ form.full_name }}
+              {% if form.full_name.errors %}
+                <div class="text-danger small">
+                  {% for error in form.full_name.errors %}
+                    {{ error }}
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-6">
+              <label for="{{ form.age.id_for_label }}" class="form-label">
+                {{ form.age.label }}
+                <span class="text-danger">*</span>
+              </label>
+              {{ form.age }}
+              {% if form.age.errors %}
+                <div class="text-danger small">
+                  {% for error in form.age.errors %}
+                    {{ error }}
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-12">
+              <label for="{{ form.email.id_for_label }}" class="form-label">
+                {{ form.email.label }}
+                <span class="text-danger">*</span>
+              </label>
+              {{ form.email }}
+              {% if form.email.errors %}
+                <div class="text-danger small">
+                  {% for error in form.email.errors %}
+                    {{ error }}
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-6">
+              <label for="{{ form.contact.id_for_label }}" class="form-label">
+                {{ form.contact.label }}
+                <span class="text-danger">*</span>
+              </label>
+              {{ form.contact }}
+              {% if form.contact.errors %}
+                <div class="text-danger small">
+                  {% for error in form.contact.errors %}
+                    {{ error }}
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-6">
+              <label for="{{ form.password.id_for_label }}" class="form-label">
+                {{ form.password.label }}
+              </label>
+              {{ form.password }}
+              {% if form.password.help_text %}
+                <div class="form-text">{{ form.password.help_text }}</div>
+              {% endif %}
+              {% if form.password.errors %}
+                <div class="text-danger small">
+                  {% for error in form.password.errors %}
+                    {{ error }}
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-6">
+              <label for="{{ form.password_confirm.id_for_label }}" class="form-label">
+                {{ form.password_confirm.label }}
+              </label>
+              {{ form.password_confirm }}
+              {% if form.password_confirm.errors %}
+                <div class="text-danger small">
+                  {% for error in form.password_confirm.errors %}
+                    {{ error }}
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-12">
+              <label for="{{ form.address.id_for_label }}" class="form-label">
+                {{ form.address.label }}
+                <span class="text-danger">*</span>
+              </label>
+              {{ form.address }}
+              {% if form.address.errors %}
+                <div class="text-danger small">
+                  {% for error in form.address.errors %}
+                    {{ error }}
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-12">
+              <label for="{{ form.profile_photo.id_for_label }}" class="form-label">
+                {{ form.profile_photo.label }}
+                {% if not patient %}<span class="text-danger">*</span>{% endif %}
+              </label>
+              {{ form.profile_photo }}
+              <div class="form-text">
+                <i class="bi bi-info-circle me-1"></i>
+                Upload a clear photo of the patient. You can take a photo using the camera button or select from files.
+              </div>
+              {% if form.profile_photo.errors %}
+                <div class="text-danger small">
+                  {% for error in form.profile_photo.errors %}
+                    {{ error }}
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="mt-4">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg me-1"></i>{{ action }} Patient
+            </button>
+            <a href="{% url 'admin_patient_list' %}" class="btn btn-outline-secondary ms-2">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

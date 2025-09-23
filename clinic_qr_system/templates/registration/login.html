@@ -109,7 +109,7 @@
             {% for e in signup_form.non_field_errors %}{{ e }}{% endfor %}
           </div>
         {% endif %}
-        <form id="signupForm" method="post" action="/patients/signup/" class="row g-2 needs-validation" novalidate>
+        <form id="signupForm" method="post" action="/patients/signup/" enctype="multipart/form-data" class="row g-2 needs-validation" novalidate>
           {% csrf_token %}
           <div class="col-12">
             <label class="form-label">Full Name</label>
@@ -138,6 +138,12 @@
             <label class="form-label">Email</label>
             <input type="email" name="email" class="form-control" required value="{{ signup_form.email.value|default:'' }}">
             <div class="invalid-feedback">Valid email is required.</div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Profile Photo</label>
+            <input type="file" name="profile_photo" class="form-control" accept="image/*" capture="environment" required>
+            <div class="form-text">Take a photo or choose from files.</div>
+            <div class="invalid-feedback">Profile photo is required.</div>
           </div>
           <div class="col-md-6">
             <label class="form-label">Password</label>
