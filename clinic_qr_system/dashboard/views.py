@@ -338,7 +338,7 @@ def reception_walkin(request):
             pass
     
     if request.method == 'POST':
-        form = WalkInForm(request.POST)
+        form = WalkInForm(request.POST, request.FILES)
         if form.is_valid():
             data = form.cleaned_data
             # If patient was pre-selected, use that patient
@@ -353,84 +353,89 @@ def reception_walkin(request):
                     import uuid
                     patient_code = uuid.uuid4().hex[:10].upper()
                     patient = Patient.objects.create(
-                    full_name=data['full_name'],
-                    age=data['age'],
-                    address=data['address'],
-                    contact=data['contact'],
-                    email=data['email'],
-                    patient_code=patient_code,
-                )
-                # Generate QR with email + patient id
-                try:
-                    qr_payload = f"email:{patient.email};id:{patient.id}"
-                    qr_img = qrcode.make(qr_payload)
-                    buffer = BytesIO()
-                    qr_img.save(buffer, format='PNG')
-                    file_name = f"qr_{patient.patient_code}.png"
-                    patient.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=False)
-                    patient.save(update_fields=['qr_code'])
-                except Exception:
-                    buffer = None
-                    file_name = None
-                # Create portal user with temp password and force change
-                try:
-                    temp_password = uuid.uuid4().hex[:12]
-                    # Generate username from full name, ensure uniqueness
-                    base_username = slugify(patient.full_name) or 'user'
-                    candidate = base_username[:150]
-                    i = 1
-                    while User.objects.filter(username=candidate).exists():
-                        suffix = str(i)
-                        candidate = (base_username[: max(1, 150 - len(suffix))] + suffix)
-                        i += 1
-                    username = candidate
-                    user = User.objects.create_user(username=username, email=patient.email, password=temp_password)
-                    patient.user = user
-                    patient.must_change_password = True
-                    patient.save(update_fields=['user','must_change_password'])
-                    group, _ = Group.objects.get_or_create(name='Patient')
-                    user.groups.add(group)
-                except Exception:
-                    temp_password = None
-                else:
-                    # Ensure existing patient has a QR; generate if missing
-                    buffer = None
-                    file_name = None
-                    if not existing.qr_code:
-                        try:
-                            qr_payload = f"email:{existing.email};id:{existing.id}"
-                            qr_img = qrcode.make(qr_payload)
-                            buffer = BytesIO()
-                            qr_img.save(buffer, format='PNG')
-                            file_name = f"qr_{existing.patient_code}.png"
-                            existing.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=False)
-                            existing.save(update_fields=['qr_code'])
-                        except Exception:
-                            buffer = None
-                            file_name = None
-                    # If existing patient has no portal user, create temp credentials
-                    temp_password = None
-                    if not existing.user:
-                        try:
-                            import uuid as _uuid
-                            temp_password = _uuid.uuid4().hex[:12]
-                            # Generate username from full name, ensure uniqueness
-                            base_username = slugify(existing.full_name) or 'user'
-                            candidate = base_username[:150]
-                            i = 1
-                            while User.objects.filter(username=candidate).exists():
-                                suffix = str(i)
-                                candidate = (base_username[: max(1, 150 - len(suffix))] + suffix)
-                                i += 1
-                            username = candidate
-                            user = User.objects.create_user(username=username, email=existing.email, password=temp_password)
-                            existing.user = user
-                            existing.must_change_password = True
-                            existing.save(update_fields=['user','must_change_password'])
-                            group, _ = Group.objects.get_or_create(name='Patient')
-                            user.groups.add(group)
-                        except Exception:
-                            temp_password = None
+                        full_name=data['full_name'],
+                        age=data['age'],
+                        address=data['address'],
+                        contact=data['contact'],
+                        email=data['email'],
+                        patient_code=patient_code,
+                    )
+                    # Save uploaded profile photo if provided
+                    uploaded_photo = data.get('profile_photo')
+                    if uploaded_photo:
+                        patient.profile_photo = uploaded_photo
+                        patient.save(update_fields=['profile_photo'])
+                    # Generate QR with email + patient id
+                    try:
+                        qr_payload = f"email:{patient.email};id:{patient.id}"
+                        qr_img = qrcode.make(qr_payload)
+                        buffer = BytesIO()
+                        qr_img.save(buffer, format='PNG')
+                        file_name = f"qr_{patient.patient_code}.png"
+                        patient.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=False)
+                        patient.save(update_fields=['qr_code'])
+                    except Exception:
+                        buffer = None
+                        file_name = None
+                    # Create portal user with temp password and force change
+                    try:
+                        temp_password = uuid.uuid4().hex[:12]
+                        # Generate username from full name, ensure uniqueness
+                        base_username = slugify(patient.full_name) or 'user'
+                        candidate = base_username[:150]
+                        i = 1
+                        while User.objects.filter(username=candidate).exists():
+                            suffix = str(i)
+                            candidate = (base_username[: max(1, 150 - len(suffix))] + suffix)
+                            i += 1
+                        username = candidate
+                        user = User.objects.create_user(username=username, email=patient.email, password=temp_password)
+                        patient.user = user
+                        patient.must_change_password = True
+                        patient.save(update_fields=['user','must_change_password'])
+                        group, _ = Group.objects.get_or_create(name='Patient')
+                        user.groups.add(group)
+                    except Exception:
+                        temp_password = None
+                    else:
+                        # Ensure existing patient has a QR; generate if missing
+                        buffer = None
+                        file_name = None
+                        if not existing.qr_code:
+                            try:
+                                qr_payload = f"email:{existing.email};id:{existing.id}"
+                                qr_img = qrcode.make(qr_payload)
+                                buffer = BytesIO()
+                                qr_img.save(buffer, format='PNG')
+                                file_name = f"qr_{existing.patient_code}.png"
+                                existing.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=False)
+                                existing.save(update_fields=['qr_code'])
+                            except Exception:
+                                buffer = None
+                                file_name = None
+                        # If existing patient has no portal user, create temp credentials
+                        temp_password = None
+                        if not existing.user:
+                            try:
+                                import uuid as _uuid
+                                temp_password = _uuid.uuid4().hex[:12]
+                                # Generate username from full name, ensure uniqueness
+                                base_username = slugify(existing.full_name) or 'user'
+                                candidate = base_username[:150]
+                                i = 1
+                                while User.objects.filter(username=candidate).exists():
+                                    suffix = str(i)
+                                    candidate = (base_username[: max(1, 150 - len(suffix))] + suffix)
+                                    i += 1
+                                username = candidate
+                                user = User.objects.create_user(username=username, email=existing.email, password=temp_password)
+                                existing.user = user
+                                existing.must_change_password = True
+                                existing.save(update_fields=['user','must_change_password'])
+                                group, _ = Group.objects.get_or_create(name='Patient')
+                                user.groups.add(group)
+                            except Exception:
+                                temp_password = None
             # Create reception visit
             visit_type = data['reception_visit_type']
             kwargs = {

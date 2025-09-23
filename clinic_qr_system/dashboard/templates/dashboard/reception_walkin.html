@@ -22,35 +22,52 @@
 
 <div class="card shadow-sm">
   <div class="card-body">
-    <form method="post" class="row g-3">
+    <form method="post" enctype="multipart/form-data" class="row g-3">
       {% csrf_token %}
+      {% if form.non_field_errors %}
+      <div class="col-12">
+        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+      </div>
+      {% endif %}
       <div class="col-md-6">
         <label class="form-label">Full Name</label>
         {{ form.full_name }}
+        {{ form.full_name.errors }}
       </div>
       <div class="col-md-3">
         <label class="form-label">Age</label>
         {{ form.age }}
+        {{ form.age.errors }}
       </div>
       <div class="col-md-3">
         <label class="form-label">Contact</label>
         {{ form.contact }}
+        {{ form.contact.errors }}
       </div>
       <div class="col-12">
         <label class="form-label">Address</label>
         {{ form.address }}
+        {{ form.address.errors }}
       </div>
       <div class="col-md-6">
         <label class="form-label">Email</label>
         {{ form.email }}
+        {{ form.email.errors }}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Profile Photo</label>
+        {{ form.profile_photo }}
+        {{ form.profile_photo.errors }}
       </div>
       <div class="col-md-6">
         <label class="form-label">Visit Type</label>
         {{ form.reception_visit_type }}
+        {{ form.reception_visit_type.errors }}
       </div>
       <div class="col-md-6" id="deptWrap">
         <label class="form-label">Department</label>
         {{ form.department }}
+        {{ form.department.errors }}
       </div>
       <div class="col-12">
         <button class="btn btn-success" type="submit"><i class="bi bi-check2-circle me-1"></i>Register & Queue</button>
