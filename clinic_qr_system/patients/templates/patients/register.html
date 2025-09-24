@@ -7,14 +7,65 @@
     <div class="card">
       <div class="card-header bg-primary text-white">Patient Registration</div>
       <div class="card-body">
-        <form method="post" enctype="multipart/form-data">
+        <form method="post" enctype="multipart/form-data" id="signupForm">
           {% csrf_token %}
           {{ form|crispy }}
-          <button class="btn btn-success" type="submit">Register</button>
+          <button class="btn btn-success" type="submit" id="signupBtn" disabled>Register & Get QR</button>
         </form>
       </div>
     </div>
   </div>
+  <script>
+  (function(){
+    const form = document.getElementById('signupForm');
+    const btn = document.getElementById('signupBtn');
+    const pwd = document.getElementById('{{ form.password.id_for_label }}');
+    const pwd2 = document.getElementById('{{ form.password_confirm.id_for_label }}');
+
+    function addToggle(input){
+      if(!input) return;
+      const wrapper = document.createElement('div');
+      wrapper.style.position = 'relative';
+      input.parentNode.insertBefore(wrapper, input);
+      wrapper.appendChild(input);
+
+      const toggleBtn = document.createElement('button');
+      toggleBtn.type = 'button';
+      toggleBtn.className = 'btn btn-outline-secondary btn-sm';
+      toggleBtn.style.position = 'absolute';
+      toggleBtn.style.right = '6px';
+      toggleBtn.style.top = '50%';
+      toggleBtn.style.transform = 'translateY(-50%)';
+      toggleBtn.style.padding = '2px 6px';
+      toggleBtn.style.zIndex = '2';
+      toggleBtn.innerHTML = '<i class="bi bi-eye"></i>';
+      toggleBtn.addEventListener('click', function(){
+        const isPwd = input.getAttribute('type') === 'password';
+        input.setAttribute('type', isPwd ? 'text' : 'password');
+        toggleBtn.innerHTML = isPwd ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
+      });
+      wrapper.appendChild(toggleBtn);
+      // Add right padding so text does not underlap button
+      input.style.paddingRight = '2.2rem';
+    }
+
+    addToggle(pwd);
+    addToggle(pwd2);
+    function validate(){
+      const p = pwd ? pwd.value : '';
+      const c = pwd2 ? pwd2.value : '';
+      const longEnough = p && p.length >= 8;
+      const match = p && c && p === c;
+      if(pwd){ pwd.classList.toggle('is-invalid', !longEnough); }
+      if(pwd2){ pwd2.classList.toggle('is-invalid', !(match && longEnough)); }
+      if(btn){ btn.disabled = !(longEnough && match); }
+    }
+    if(pwd){ pwd.addEventListener('input', validate); }
+    if(pwd2){ pwd2.addEventListener('input', validate); }
+    if(form){ form.addEventListener('submit', function(){ btn.disabled = true; btn.innerHTML = 'Submitting...'; }); }
+    validate();
+  })();
+  </script>
 {% endblock %}
 
 

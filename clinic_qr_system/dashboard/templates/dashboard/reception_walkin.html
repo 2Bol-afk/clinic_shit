@@ -22,7 +22,7 @@
 
 <div class="card shadow-sm">
   <div class="card-body">
-    <form method="post" enctype="multipart/form-data" class="row g-3">
+    <form method="post" enctype="multipart/form-data" class="row g-3" id="walkinForm">
       {% csrf_token %}
       {% if form.non_field_errors %}
       <div class="col-12">
@@ -52,6 +52,7 @@
       <div class="col-md-6">
         <label class="form-label">Email</label>
         {{ form.email }}
+        <div class="form-text">We’ll email the QR + credentials.</div>
         {{ form.email.errors }}
       </div>
       <div class="col-md-6">
@@ -70,7 +71,7 @@
         {{ form.department.errors }}
       </div>
       <div class="col-12">
-        <button class="btn btn-success" type="submit"><i class="bi bi-check2-circle me-1"></i>Register & Queue</button>
+        <button class="btn btn-success" type="submit" id="submitBtn"><i class="bi bi-check2-circle me-1"></i>Register & Queue</button>
         <a href="/dashboard/reception/" class="btn btn-secondary">Cancel</a>
       </div>
     </form>
@@ -82,6 +83,16 @@
   const dept = document.getElementById('deptWrap');
   function sync(){ const isConsult = typeSel && typeSel.value === 'consultation'; if(dept) dept.style.display = isConsult ? '' : 'none'; }
   if(typeSel){ typeSel.addEventListener('change', sync); sync(); }
+
+  // Double-submit protection
+  const form = document.getElementById('walkinForm');
+  const btn = document.getElementById('submitBtn');
+  if(form && btn){
+    form.addEventListener('submit', function(){
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Submitting...';
+    });
+  }
 })();
 </script>
 {% endblock %}

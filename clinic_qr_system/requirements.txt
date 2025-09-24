@@ -6,6 +6,7 @@ crispy-bootstrap5==2024.2
 Django==5.1.1
 django-crispy-forms==2.3
 django-storages==1.14.6
+django-cloudinary-storage==0.3.0
 et_xmlfile==2.0.0
 gunicorn==23.0.0
 numpy==2.3.3
@@ -27,3 +28,5 @@ tzdata==2025.2
 wheel==0.45.1
 boto3
 sib-api-v3-sdk
+cloudinary==1.41.0
+reportlab

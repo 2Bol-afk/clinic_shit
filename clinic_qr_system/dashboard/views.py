@@ -302,9 +302,9 @@ class WalkInForm(forms.Form):
             'class': 'form-control',
             'accept': 'image/*',
             'capture': 'environment',
-            'required': True
+            'required': False
         }),
-        required=True
+        required=False
     )
     reception_visit_type = forms.ChoiceField(
         choices=[('consultation','Consultation'),('laboratory','Laboratory'),('vaccination','Vaccination')],
@@ -340,87 +340,60 @@ def reception_walkin(request):
     if request.method == 'POST':
         form = WalkInForm(request.POST, request.FILES)
         if form.is_valid():
-            data = form.cleaned_data
-            # If patient was pre-selected, use that patient
-            if pre_selected_patient:
-                patient = pre_selected_patient
-            else:
-                # Reuse existing patient by email if exists
-                existing = Patient.objects.filter(email__iexact=data['email']).first()
-                patient = existing
-                if not existing:
-                    # Create patient with generated patient_code and minimal fields
-                    import uuid
-                    patient_code = uuid.uuid4().hex[:10].upper()
-                    patient = Patient.objects.create(
-                        full_name=data['full_name'],
-                        age=data['age'],
-                        address=data['address'],
-                        contact=data['contact'],
-                        email=data['email'],
-                        patient_code=patient_code,
-                    )
-                    # Save uploaded profile photo if provided
-                    uploaded_photo = data.get('profile_photo')
-                    if uploaded_photo:
-                        patient.profile_photo = uploaded_photo
-                        patient.save(update_fields=['profile_photo'])
-                    # Generate QR with email + patient id
-                    try:
-                        qr_payload = f"email:{patient.email};id:{patient.id}"
-                        qr_img = qrcode.make(qr_payload)
-                        buffer = BytesIO()
-                        qr_img.save(buffer, format='PNG')
-                        file_name = f"qr_{patient.patient_code}.png"
-                        patient.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=False)
-                        patient.save(update_fields=['qr_code'])
-                    except Exception:
-                        buffer = None
-                        file_name = None
-                    # Create portal user with temp password and force change
-                    try:
-                        temp_password = uuid.uuid4().hex[:12]
-                        # Generate username from full name, ensure uniqueness
-                        base_username = slugify(patient.full_name) or 'user'
-                        candidate = base_username[:150]
-                        i = 1
-                        while User.objects.filter(username=candidate).exists():
-                            suffix = str(i)
-                            candidate = (base_username[: max(1, 150 - len(suffix))] + suffix)
-                            i += 1
-                        username = candidate
-                        user = User.objects.create_user(username=username, email=patient.email, password=temp_password)
-                        patient.user = user
-                        patient.must_change_password = True
-                        patient.save(update_fields=['user','must_change_password'])
-                        group, _ = Group.objects.get_or_create(name='Patient')
-                        user.groups.add(group)
-                    except Exception:
-                        temp_password = None
+            with transaction.atomic():
+                    data = form.cleaned_data
+                    # If patient was pre-selected, use that patient
+                    if pre_selected_patient:
+                        patient = pre_selected_patient
                     else:
-                        # Ensure existing patient has a QR; generate if missing
-                        buffer = None
-                        file_name = None
-                        if not existing.qr_code:
+                        # Reuse existing patient by email if exists
+                        existing = Patient.objects.filter(email__iexact=data['email']).first()
+                        patient = existing
+                        if not existing:
+                            # Create patient with generated patient_code and minimal fields
+                            import uuid
+                            patient_code = uuid.uuid4().hex[:10].upper()
+                            patient = Patient.objects.create(
+                                full_name=data['full_name'],
+                                age=data['age'],
+                                address=data['address'],
+                                contact=data['contact'],
+                                email=data['email'],
+                                patient_code=patient_code,
+                            )
+                            # Save uploaded profile photo if provided, else set default
+                            uploaded_photo = data.get('profile_photo')
+                            if uploaded_photo:
+                                patient.profile_photo = uploaded_photo
+                                patient.save(update_fields=['profile_photo'])
+                            else:
+                                # Assign default profile photo URL stored on Cloudinary
+                                try:
+                                    from django.core.files.base import ContentFile
+                                    import requests
+                                    default_url = 'https://res.cloudinary.com/dkuzneqb8/image/upload/v1758734296/Generated_Image_September_25_2025_-_1_16AM_znxhv6.png'
+                                    resp = requests.get(default_url, timeout=10)
+                                    if resp.ok:
+                                        patient.profile_photo.save('default_profile.png', ContentFile(resp.content), save=True)
+                                except Exception:
+                                    pass
+                            # Generate QR with email + patient id
                             try:
-                                qr_payload = f"email:{existing.email};id:{existing.id}"
+                                qr_payload = f"email:{patient.email};id:{patient.id}"
                                 qr_img = qrcode.make(qr_payload)
                                 buffer = BytesIO()
                                 qr_img.save(buffer, format='PNG')
-                                file_name = f"qr_{existing.patient_code}.png"
-                                existing.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=False)
-                                existing.save(update_fields=['qr_code'])
+                                file_name = f"qr_{patient.patient_code}.png"
+                                patient.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=False)
+                                patient.save(update_fields=['qr_code'])
                             except Exception:
                                 buffer = None
                                 file_name = None
-                        # If existing patient has no portal user, create temp credentials
-                        temp_password = None
-                        if not existing.user:
+                            # Create portal user with temp password and force change
                             try:
-                                import uuid as _uuid
-                                temp_password = _uuid.uuid4().hex[:12]
+                                temp_password = uuid.uuid4().hex[:12]
                                 # Generate username from full name, ensure uniqueness
-                                base_username = slugify(existing.full_name) or 'user'
+                                base_username = slugify(patient.full_name) or 'user'
                                 candidate = base_username[:150]
                                 i = 1
                                 while User.objects.filter(username=candidate).exists():
@@ -428,50 +401,108 @@ def reception_walkin(request):
                                     candidate = (base_username[: max(1, 150 - len(suffix))] + suffix)
                                     i += 1
                                 username = candidate
-                                user = User.objects.create_user(username=username, email=existing.email, password=temp_password)
-                                existing.user = user
-                                existing.must_change_password = True
-                                existing.save(update_fields=['user','must_change_password'])
+                                user = User.objects.create_user(username=username, email=patient.email, password=temp_password)
+                                # Ensure email is set for email/username auth
+                                if user.email != patient.email:
+                                    user.email = patient.email
+                                    user.save(update_fields=['email'])
+                                patient.user = user
+                                # Flag for force password change if model supports it
+                                if hasattr(patient, 'must_change_password'):
+                                    patient.must_change_password = True
+                                    patient.save(update_fields=['user','must_change_password'])
+                                else:
+                                    patient.save(update_fields=['user'])
                                 group, _ = Group.objects.get_or_create(name='Patient')
                                 user.groups.add(group)
                             except Exception:
                                 temp_password = None
-            # Create reception visit
-            visit_type = data['reception_visit_type']
-            kwargs = {
-                'patient': patient,
-                'service': 'reception',
-                'created_by': request.user,
-                'status': Visit.Status.QUEUED,
-                'department': '',
-            }
-            today = timezone.localdate()
-            if visit_type == 'consultation':
-                dept = data.get('department') or ''
-                kwargs['department'] = dept
-                last = (Visit.objects
-                        .filter(service='reception', timestamp__date=today, department=dept)
-                        .order_by('-queue_number')
-                        .first())
-                next_q = (last.queue_number + 1) if last and last.queue_number else 1
-                kwargs['queue_number'] = next_q
-            else:
-                tag = 'Laboratory' if visit_type == 'laboratory' else 'Vaccination'
-                last = (Visit.objects
-                        .filter(service='reception', timestamp__date=today, department='')
-                        .filter(notes__icontains=f'[visit: {tag.lower()}]')
-                        .order_by('-queue_number')
-                        .first())
-                next_q = (last.queue_number + 1) if last and last.queue_number else 1
-                kwargs['queue_number'] = next_q
-                prefix = '[Visit: Laboratory]' if visit_type == 'laboratory' else '[Visit: Vaccination]'
-                kwargs['notes'] = prefix
-                # Set service_type as hint
-                svc_name = 'Laboratory' if visit_type == 'laboratory' else 'Vaccination'
-                svc = ServiceType.objects.filter(name__iexact=svc_name).first()
-                if svc:
-                    kwargs['service_type'] = svc
-            visit = Visit.objects.create(**kwargs)
+                        else:
+                            # Existing patient path: ensure linked user has correct email for email-based login
+                            if patient and patient.user:
+                                try:
+                                    if patient.user.email != (patient.email or ''):
+                                        patient.user.email = patient.email or ''
+                                        patient.user.save(update_fields=['email'])
+                                except Exception:
+                                    pass
+                            # Ensure existing patient has a QR; generate if missing
+                            buffer = None
+                            file_name = None
+                            if not existing.qr_code:
+                                try:
+                                    qr_payload = f"email:{existing.email};id:{existing.id}"
+                                    qr_img = qrcode.make(qr_payload)
+                                    buffer = BytesIO()
+                                    qr_img.save(buffer, format='PNG')
+                                    file_name = f"qr_{existing.patient_code}.png"
+                                    existing.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=False)
+                                    existing.save(update_fields=['qr_code'])
+                                except Exception:
+                                    buffer = None
+                                    file_name = None
+                            # If existing patient has no portal user, create temp credentials
+                            temp_password = None
+                            if not existing.user:
+                                try:
+                                    import uuid as _uuid
+                                    temp_password = _uuid.uuid4().hex[:12]
+                                    # Generate username from full name, ensure uniqueness
+                                    base_username = slugify(existing.full_name) or 'user'
+                                    candidate = base_username[:150]
+                                    i = 1
+                                    while User.objects.filter(username=candidate).exists():
+                                        suffix = str(i)
+                                        candidate = (base_username[: max(1, 150 - len(suffix))] + suffix)
+                                        i += 1
+                                    username = candidate
+                                    user = User.objects.create_user(username=username, email=existing.email, password=temp_password)
+                                    existing.user = user
+                                    if hasattr(existing, 'must_change_password'):
+                                        existing.must_change_password = True
+                                        existing.save(update_fields=['user','must_change_password'])
+                                    else:
+                                        existing.save(update_fields=['user'])
+                                    group, _ = Group.objects.get_or_create(name='Patient')
+                                    user.groups.add(group)
+                                except Exception:
+                                    temp_password = None
+                    # Create reception visit
+                    visit_type = data['reception_visit_type']
+                    kwargs = {
+                        'patient': patient,
+                        'service': 'reception',
+                        'created_by': request.user,
+                        'status': Visit.Status.QUEUED,
+                        'department': '',
+                    }
+                    today = timezone.localdate()
+                    if visit_type == 'consultation':
+                        dept = data.get('department') or ''
+                        kwargs['department'] = dept
+                        last = (Visit.objects
+                                .filter(service='reception', timestamp__date=today, department=dept)
+                                .order_by('-queue_number')
+                                .first())
+                        next_q = (last.queue_number + 1) if last and last.queue_number else 1
+                        kwargs['queue_number'] = next_q
+                    else:
+                        tag = 'Laboratory' if visit_type == 'laboratory' else 'Vaccination'
+                        last = (Visit.objects
+                                .filter(service='reception', timestamp__date=today, department='')
+                                .filter(notes__icontains=f'[visit: {tag.lower()}]')
+                                .order_by('-queue_number')
+                                .first())
+                        next_q = (last.queue_number + 1) if last and last.queue_number else 1
+                        kwargs['queue_number'] = next_q
+                        prefix = '[Visit: Laboratory]' if visit_type == 'laboratory' else '[Visit: Vaccination]'
+                        kwargs['notes'] = prefix
+                        # Set service_type as hint
+                        svc_name = 'Laboratory' if visit_type == 'laboratory' else 'Vaccination'
+                        svc = ServiceType.objects.filter(name__iexact=svc_name).first()
+                        if svc:
+                            kwargs['service_type'] = svc
+                    visit = Visit.objects.create(**kwargs)
             
             # Send queue notification email
             try:
@@ -517,14 +548,14 @@ def reception_walkin(request):
                     qr_data = None
                     qr_filename = f"qr_{patient.patient_code}.png"
                     
-                    qr_path_val = getattr(patient.qr_code, 'path', None)
-                    if qr_path_val:
-                        try:
-                            with open(qr_path_val, 'rb') as f:
+                    # Open via storage (Cloudinary/local) to avoid absolute path usage
+                    try:
+                        if patient.qr_code:
+                            with patient.qr_code.open('rb') as f:
                                 qr_data = f.read()
-                        except Exception:
-                            pass
-                    elif buffer:
+                    except Exception:
+                        qr_data = None
+                    if not qr_data and buffer:
                         qr_data = buffer.getvalue() if buffer else None
                     
                     # Send email using Brevo utility
@@ -588,11 +619,32 @@ def reception_edit(request, pk: int):
 @user_passes_test(is_reception)
 def reception_delete(request, pk: int):
     visit = get_object_or_404(Visit, pk=pk, service='reception')
+    # Prevent deleting if any related queue already marked done (same patient, same day)
+    same_day = visit.timestamp.date()
+    any_done = (Visit.objects
+                .filter(patient=visit.patient, timestamp__date=same_day)
+                .filter(status=Visit.Status.DONE)
+                .exists())
     if request.method == 'POST':
-        visit.delete()
-        messages.success(request, 'Reception entry deleted.')
+        if any_done or visit.status == Visit.Status.DONE:
+            messages.error(request, "This patient's queue has already been marked as done and cannot be deleted.")
+            return redirect('dashboard_reception')
+        # Cascade delete related, non-done queues across modules for the same day
+        from django.db import transaction as _tx
+        with _tx.atomic():
+            related_qs = (Visit.objects
+                          .filter(patient=visit.patient, timestamp__date=same_day)
+                          .exclude(pk=visit.pk)
+                          .exclude(status=Visit.Status.DONE))
+            # Deleting visits will cascade to dependent records via FK on_delete=CASCADE
+            related_qs.delete()
+            visit.delete()
+        messages.success(request, 'Reception entry and related queue entries deleted.')
         return redirect('dashboard_reception')
-    return render(request, 'dashboard/reception_delete_confirm.html', {'visit': visit})
+    return render(request, 'dashboard/reception_delete_confirm.html', {
+        'visit': visit,
+        'any_done': any_done,
+    })
 
 
 @login_required
@@ -1117,7 +1169,13 @@ def lab_verify_email(request):
         return JsonResponse({'success': False, 'message': 'Reception visit not found.'}, status=404)
     if not visit.patient or visit.patient.email.strip().lower() != email.strip().lower():
         return JsonResponse({'success': False, 'message': 'Email does not match this patient.'}, status=400)
-    return JsonResponse({'success': True})
+    p = visit.patient
+    return JsonResponse({'success': True, 'patient': {
+        'full_name': p.full_name,
+        'patient_code': p.patient_code,
+        'email': p.email,
+        'profile_photo_url': (p.profile_photo.url if p.profile_photo else ''),
+    }})
 
 
 @login_required
@@ -1514,42 +1572,8 @@ def pharmacy_dispense(request, prescription_id):
                         medicine.substitution_notes = substitution_notes
                     medicine.save()
                 
-                # Send notification email to patient
-                try:
-                    if prescription.visit.patient.email:
-                        from clinic_qr_system.email_utils import send_notification_email
-                        
-                        subject = "Your Prescription is Ready for Pickup"
-                        message = f"""
-Dear {prescription.visit.patient.full_name},
-
-Your prescribed medicines are ready at the Pharmacy. Please proceed to the pharmacy window to collect your medications.
-
-Prescription Details:
-- Prescription ID: {prescription.id}
-- Doctor: {prescription.doctor.get_full_name() if prescription.doctor else 'Dr. Unknown'}
-- Created: {prescription.created_at.strftime('%Y-%m-%d %H:%M')}
-
-Please bring a valid ID when collecting your prescription.
-
-Thank you for choosing our clinic.
-
-Regards,
-Clinic Pharmacy
-                        """.strip()
-                        
-                        send_notification_email(
-                            recipient_list=[prescription.visit.patient.email],
-                            subject=subject,
-                            message=message
-                        )
-                        
-                        messages.success(request, f'Prescription dispensed and notification sent to {prescription.visit.patient.email}.')
-                    else:
-                        messages.success(request, 'Prescription dispensed successfully.')
-                        
-                except Exception as e:
-                    messages.warning(request, f'Prescription dispensed but notification email failed: {e}')
+                # Do not send email on dispense; just confirm action
+                messages.success(request, 'Prescription dispensed successfully.')
                 
                 return redirect('dashboard_pharmacy')
     else:
@@ -1797,7 +1821,13 @@ def vaccination_verify_email(request):
         return JsonResponse({'success': False, 'message': 'Reception visit not found.'}, status=404)
     if not visit.patient or visit.patient.email.strip().lower() != email.strip().lower():
         return JsonResponse({'success': False, 'message': 'Email does not match this patient.'}, status=400)
-    return JsonResponse({'success': True})
+    p = visit.patient
+    return JsonResponse({'success': True, 'patient': {
+        'full_name': p.full_name,
+        'patient_code': p.patient_code,
+        'email': p.email,
+        'profile_photo_url': (p.profile_photo.url if p.profile_photo else ''),
+    }})
 
 
 @login_required
@@ -2278,17 +2308,16 @@ def pharmacy_reports(request):
     if export == 'csv':
         import csv
         from django.http import HttpResponse
-        
         resp = HttpResponse(content_type='text/csv')
-        resp['Content-Disposition'] = 'attachment; filename="pharmacy_prescriptions.csv"'
+        filename = f"pharmacy_{start or 'all'}_to_{end or 'all'}.csv"
+        resp['Content-Disposition'] = f'attachment; filename="{filename}"'
         writer = csv.writer(resp)
         writer.writerow(['Date', 'Patient', 'Doctor', 'Status', 'Medicines', 'Dispensed By', 'Dispensed At'])
-        
         for p in qs:
             medicines = ', '.join([f"{m.drug_name} ({m.dosage})" for m in p.medicines.all()])
             writer.writerow([
                 p.created_at.strftime('%Y-%m-%d %H:%M'),
-                p.visit.patient.full_name,
+                p.visit.patient.full_name if (p.visit and p.visit.patient) else 'Unknown',
                 p.doctor.get_full_name() if p.doctor else 'Unknown',
                 p.get_status_display(),
                 medicines,
@@ -2301,31 +2330,82 @@ def pharmacy_reports(request):
         try:
             from openpyxl import Workbook
             from django.http import HttpResponse
-            
             wb = Workbook()
             ws = wb.active
             ws.title = 'Pharmacy Prescriptions'
             ws.append(['Date', 'Patient', 'Doctor', 'Status', 'Medicines', 'Dispensed By', 'Dispensed At'])
-            
             for p in qs:
                 medicines = ', '.join([f"{m.drug_name} ({m.dosage})" for m in p.medicines.all()])
                 ws.append([
                     p.created_at.strftime('%Y-%m-%d %H:%M'),
-                    p.visit.patient.full_name,
+                    p.visit.patient.full_name if (p.visit and p.visit.patient) else 'Unknown',
                     p.doctor.get_full_name() if p.doctor else 'Unknown',
                     p.get_status_display(),
                     medicines,
                     p.dispensed_by.get_full_name() if p.dispensed_by else '',
                     p.dispensed_at.strftime('%Y-%m-%d %H:%M') if p.dispensed_at else ''
                 ])
-            
             resp = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-            resp['Content-Disposition'] = 'attachment; filename="pharmacy_prescriptions.xlsx"'
+            filename = f"pharmacy_{start or 'all'}_to_{end or 'all'}.xlsx"
+            resp['Content-Disposition'] = f'attachment; filename="{filename}"'
             wb.save(resp)
             return resp
         except ImportError:
             messages.error(request, 'XLSX export is unavailable (openpyxl not installed).')
             return redirect('pharmacy_reports')
+    
+    if export == 'pdf':
+        try:
+            from reportlab.lib.pagesizes import A4, landscape
+            from reportlab.pdfgen import canvas
+            from django.http import HttpResponse
+        except Exception:
+            messages.error(request, 'PDF export is unavailable (reportlab not installed).')
+            return redirect('pharmacy_reports')
+        resp = HttpResponse(content_type='application/pdf')
+        filename = f"pharmacy_{start or 'all'}_to_{end or 'all'}.pdf"
+        resp['Content-Disposition'] = f'attachment; filename="{filename}"'
+        p = canvas.Canvas(resp, pagesize=landscape(A4))
+        width, height = landscape(A4)
+        y = height - 40
+        p.setFont("Helvetica-Bold", 14)
+        p.drawString(40, y, "Pharmacy Prescriptions Report")
+        y -= 18
+        p.setFont("Helvetica", 9)
+        p.drawString(40, y, f"Date Range: {start or 'All'} to {end or 'All'}  |  Status: {status or 'All'}  |  Doctor: {doctor or 'All'}")
+        y -= 20
+        # Headers
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(40, y, "Date")
+        p.drawString(140, y, "Patient")
+        p.drawString(300, y, "Status")
+        p.drawString(360, y, "Medicines")
+        p.drawString(650, y, "Dispensed At")
+        y -= 14
+        p.setFont("Helvetica", 9)
+        for rx in qs:
+            if y < 40:
+                p.showPage()
+                width, height = landscape(A4)
+                y = height - 40
+                p.setFont("Helvetica-Bold", 10)
+                p.drawString(40, y, "Date")
+                p.drawString(140, y, "Patient")
+                p.drawString(300, y, "Status")
+                p.drawString(360, y, "Medicines")
+                p.drawString(650, y, "Dispensed At")
+                y -= 14
+                p.setFont("Helvetica", 9)
+            meds = ', '.join([f"{m.drug_name} ({m.dosage})" for m in rx.medicines.all()])[:1000]
+            p.drawString(40, y, rx.created_at.strftime('%Y-%m-%d %H:%M'))
+            p.drawString(140, y, (rx.visit.patient.full_name if (rx.visit and rx.visit.patient) else 'Unknown')[:24])
+            p.drawString(300, y, rx.get_status_display())
+            p.drawString(360, y, meds[:280])
+            p.drawString(650, y, rx.dispensed_at.strftime('%Y-%m-%d %H:%M') if rx.dispensed_at else '-')
+            y -= 12
+        p.showPage()
+        p.save()
+        return resp
     
     # Statistics
     stats = {
@@ -2375,6 +2455,7 @@ def api_patient_by_code(request, code: str):
         'patient_code': p.patient_code,
         'allergies': getattr(p, 'allergies', ''),
         'last_prescription': last_rx,
+        'profile_photo_url': (p.profile_photo.url if p.profile_photo else ''),
     })
 
 @login_required

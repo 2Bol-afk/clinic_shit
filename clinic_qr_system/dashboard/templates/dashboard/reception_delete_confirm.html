@@ -5,10 +5,19 @@
 <div class="alert" style="background-color: #e6e6fa; border-color: #d8bfd8; color: #4a4a4a;">
   Are you sure you want to delete this reception entry for <strong>{{ visit.patient.full_name }}</strong> ({{ visit.timestamp|date:'Y-m-d H:i' }})?
 </div>
+{% if any_done %}
+  <div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle me-1"></i>
+    This patient’s queue has already been marked as done and cannot be deleted.
+  </div>
+{% endif %}
 <form method="post">
   {% csrf_token %}
-  <button class="btn btn-danger" type="submit"><i class="bi bi-trash3 me-1"></i>Delete</button>
+  <button class="btn btn-danger" type="submit" {% if any_done %}disabled title="Already done; cannot delete"{% endif %}>
+    <i class="bi bi-trash3 me-1"></i>Delete
+  </button>
   <a class="btn btn-secondary" href="/dashboard/reception/">Cancel</a>
+  
 </form>
 {% endblock %}
 

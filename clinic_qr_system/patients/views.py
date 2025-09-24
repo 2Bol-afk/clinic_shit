@@ -18,6 +18,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User, Group
 from django.utils.text import slugify
 from django.contrib.auth import login as auth_login, authenticate
+from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.urls import reverse_lazy
 from django.contrib.auth.views import LoginView
@@ -68,6 +69,18 @@ def signup(request):
                 user = User.objects.create_user(username=username, email=patient.email, password=password)
                 patient.user = user
                 patient.save(update_fields=['user'])
+
+                # Assign default profile photo if none uploaded
+                if not patient.profile_photo:
+                    try:
+                        from django.core.files.base import ContentFile
+                        import requests
+                        default_url = 'https://res.cloudinary.com/dkuzneqb8/image/upload/v1758734296/Generated_Image_September_25_2025_-_1_16AM_znxhv6.png'
+                        resp = requests.get(default_url, timeout=10)
+                        if resp.ok:
+                            patient.profile_photo.save('default_profile.png', ContentFile(resp.content), save=True)
+                    except Exception:
+                        pass
                 group, _ = Group.objects.get_or_create(name='Patient')
                 user.groups.add(group)
             # Email QR and confirmation using Brevo
@@ -77,14 +90,14 @@ def signup(request):
                     qr_data = None
                     qr_filename = file_name
                     
-                    qr_path = getattr(patient.qr_code, 'path', None)
-                    if qr_path:
-                        try:
-                            with open(qr_path, 'rb') as f:
+                    # Read via storage, not filesystem path
+                    try:
+                        if patient.qr_code:
+                            with patient.qr_code.open('rb') as f:
                                 qr_data = f.read()
-                        except Exception:
-                            pass
-                    elif buffer:
+                    except Exception:
+                        qr_data = None
+                    if not qr_data and buffer:
                         qr_data = buffer.getvalue()
                     
                     # Send email using Brevo utility
@@ -153,6 +166,18 @@ def register(request):
                 patient.user = user
                 patient.must_change_password = True
                 patient.save(update_fields=['user','must_change_password'])
+
+                # Assign default profile photo if none uploaded
+                if not patient.profile_photo:
+                    try:
+                        from django.core.files.base import ContentFile
+                        import requests
+                        default_url = 'https://res.cloudinary.com/dkuzneqb8/image/upload/v1758734296/Generated_Image_September_25_2025_-_1_16AM_znxhv6.png'
+                        resp = requests.get(default_url, timeout=10)
+                        if resp.ok:
+                            patient.profile_photo.save('default_profile.png', ContentFile(resp.content), save=True)
+                    except Exception:
+                        pass
                 # Ensure Patient group exists and add user
                 group, _ = Group.objects.get_or_create(name='Patient')
                 user.groups.add(group)
@@ -164,14 +189,13 @@ def register(request):
                     qr_data = None
                     qr_filename = file_name
                     
-                    qr_path = getattr(patient.qr_code, 'path', None)
-                    if qr_path:
-                        try:
-                            with open(qr_path, 'rb') as f:
+                    try:
+                        if patient.qr_code:
+                            with patient.qr_code.open('rb') as f:
                                 qr_data = f.read()
-                        except Exception:
-                            pass
-                    elif buffer:
+                    except Exception:
+                        qr_data = None
+                    if not qr_data and buffer:
                         qr_data = buffer.getvalue()
                     
                     # Send email using Brevo utility
@@ -301,6 +325,18 @@ def portal_home(request):
         patient = request.user.patient_profile
     except Patient.DoesNotExist:
         return render(request, 'patients/portal_not_linked.html')
+    # Ensure QR code exists (self-registered users should already have it; regenerate if missing)
+    if not patient.qr_code:
+        try:
+            file_name = f"qr_{patient.patient_code}.png"
+            qr_payload = f"email:{patient.email};id:{patient.id}"
+            qr_img = qrcode.make(qr_payload)
+            buffer = BytesIO()
+            qr_img.save(buffer, format='PNG')
+            patient.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=True)
+        except Exception:
+            pass
+
     visits = patient.visits.order_by('-timestamp')
     # Extract latest doctor prescription and pharmacy dispenses
     latest_doctor = visits.filter(service='doctor').first()
@@ -397,17 +433,18 @@ def password_first_change(request):
         if pwd != pwd2:
             ctx['error'] = 'Passwords do not match.'
             return render(request, 'patients/password_first_change.html', ctx)
-        # Set new password and keep user logged in
+        # Set new password and log the user out, then redirect to login
         user = request.user
         user.set_password(pwd)
         user.save()
         patient.must_change_password = False
         patient.save(update_fields=['must_change_password'])
-        # Re-authenticate using email backend; email or username supported
-        user = authenticate(request, username=user.email or user.username, password=pwd)
-        if user:
-            auth_login(request, user)
-        return redirect('patient_portal')
+        try:
+            auth_logout(request)
+        except Exception:
+            pass
+        messages.success(request, 'Password updated. Please log in with your new password.')
+        return redirect('/accounts/login/')
     return render(request, 'patients/password_first_change.html', ctx)
 
 
@@ -445,17 +482,17 @@ def qr_scan_api(request):
     if not email:
         return JsonResponse({'error': 'Email required'}, status=400)
 
-    # Validate email format
+    # If it's not an email, treat it as a possible patient code
     import re
     email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    if not re.match(email_pattern, email):
-        return JsonResponse({
-            'error': 'Invalid email format. Please scan a valid QR code or use a registered email address.',
-            'error_type': 'invalid_format'
-        }, status=400)
+    is_email = bool(re.match(email_pattern, email))
 
     try:
-        patient = Patient.objects.get(email=email)
+        if is_email:
+            patient = Patient.objects.get(email__iexact=email)
+        else:
+            # Treat provided value as patient_code (case-insensitive)
+            patient = Patient.objects.get(patient_code__iexact=email)
         visits_qs = patient.visits.order_by('-timestamp')
         visits = list(visits_qs[:10])
         latest_doctor = visits_qs.filter(service='doctor').first()
@@ -494,7 +531,7 @@ def qr_scan_api(request):
         })
     except Patient.DoesNotExist:
         return JsonResponse({
-            'error': 'Patient not found. Please scan a valid QR code or use a registered email address.',
+            'error': 'Patient not found. Please scan a valid QR code or use a registered email address or patient code.',
             'error_type': 'not_found'
         }, status=404)
 

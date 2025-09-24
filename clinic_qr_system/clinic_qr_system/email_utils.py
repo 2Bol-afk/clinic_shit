@@ -1,3 +1,4 @@
+import os
 """
 Email utility functions for Brevo integration.
 Provides convenient functions for sending common types of emails.
@@ -105,29 +106,34 @@ def send_patient_registration_email(
     Returns:
         bool: True if email was sent successfully
     """
-    # Prepare email content
-    subject = "Your Patient QR Code and Registration Details"
-    
-    message_parts = [
-        f"Dear {patient_name},\n",
-        "\nThank you for registering with Clinic QR System.\n",
-        f"Your Patient Code is: {patient_code}\n",
+    # Prepare email content (clear login + reset instructions)
+    subject = "Your Patient Portal Access and QR Code"
+
+    login_url = os.getenv('PUBLIC_APP_URL', '') or 'http://127.0.0.1:8000/accounts/login/'
+    message_lines = [
+        f"Dear {patient_name},",
+        "",
+        "Welcome to Clinic QR System. Your account has been created.",
+        f"Patient Code: {patient_code}",
     ]
-    
     if username:
-        message_parts.append(f"Portal Username: {username}\n")
-    
+        message_lines.append(f"Portal Username (email): {username}")
     if temp_password:
-        message_parts.append(f"Temporary Password: {temp_password}\n")
-        message_parts.append("\nPlease log in using the temporary password and change it on your first login.\n")
-    
-    message_parts.extend([
-        "\nPlease keep this email for future reference.\n",
-        "You can use the attached QR code for faster check-in at the reception.\n\n",
-        "Regards,\nClinic QR System"
+        message_lines.append(f"Temporary Password: {temp_password}")
+    message_lines.append("")
+    message_lines.append(f"1) Go to: {login_url}")
+    message_lines.append("2) Log in with the credentials above.")
+    # Only include forced password-change note when a temp password is issued (walk-in)
+    if temp_password:
+        message_lines.append("3) You will be prompted to change your password immediately.")
+    message_lines.extend([
+        "",
+        "Keep this email for your records. Your QR code is attached for faster check-in.",
+        "",
+        "Regards,",
+        "Clinic QR System",
     ])
-    
-    message = ''.join(message_parts)
+    message = "\n".join(message_lines)
     
     # Prepare attachment data
     attachment_data = None

@@ -16,11 +16,9 @@
           {% if rec %}
             <div class="fw-semibold">{{ rec.patient.full_name }}</div>
             <div>Age: {{ rec.patient.age }} · ID: {{ rec.patient.id }}</div>
-            <div>Allergies: {{ rec.patient.allergies|default:'—' }}</div>
           {% elif draft %}
             <div class="fw-semibold">{{ draft.patient.full_name }}</div>
             <div>Age: {{ draft.patient.age }} · ID: {{ draft.patient.id }}</div>
-            <div>Allergies: {{ draft.patient.allergies|default:'—' }}</div>
           {% else %}
             Scan a QR to load patient...
           {% endif %}
@@ -36,14 +34,7 @@
           <h6 class="mb-2 d-flex align-items-center">Patient Symptoms & History <span id="sStep" class="ms-2 small text-success d-none"><i class="bi bi-check-circle-fill"></i></span></h6>
           <label class="form-label">Symptoms</label>
           <textarea name="symptoms" id="symptoms" class="form-control" rows="2">{{ draft.symptoms|default:'' }}</textarea>
-          <div class="mt-2">
-            <label class="form-label">History</label>
-            <div class="row g-2">
-              <div class="col-md-4"><div class="form-check"><input class="form-check-input" type="checkbox" id="h_allergy"><label class="form-check-label" for="h_allergy">Allergies</label></div></div>
-              <div class="col-md-4"><div class="form-check"><input class="form-check-input" type="checkbox" id="h_illness"><label class="form-check-label" for="h_illness">Past Illness</label></div></div>
-              <div class="col-md-4"><div class="form-check"><input class="form-check-input" type="checkbox" id="h_meds"><label class="form-check-label" for="h_meds">Medications</label></div></div>
-            </div>
-          </div>
+          
         </div>
       </div>
 

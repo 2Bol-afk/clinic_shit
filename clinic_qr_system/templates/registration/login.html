@@ -140,19 +140,24 @@
             <div class="invalid-feedback">Valid email is required.</div>
           </div>
           <div class="col-12">
-            <label class="form-label">Profile Photo</label>
-            <input type="file" name="profile_photo" class="form-control" accept="image/*" capture="environment" required>
-            <div class="form-text">Take a photo or choose from files.</div>
-            <div class="invalid-feedback">Profile photo is required.</div>
+            <label class="form-label">Profile Photo (optional)</label>
+            <input type="file" name="profile_photo" class="form-control" accept="image/*" capture="environment">
+            <div class="form-text">Take a photo or choose from files (optional).</div>
           </div>
           <div class="col-md-6">
             <label class="form-label">Password</label>
-            <input type="password" name="password" class="form-control" required>
+            <div class="position-relative">
+              <input type="password" name="password" class="form-control" required id="inlineSignupPassword">
+              <button type="button" class="btn btn-outline-secondary btn-sm" style="position:absolute; right:6px; top:50%; transform: translateY(-50%); padding:2px 6px; z-index:2" id="toggleInlinePwd"><i class="bi bi-eye"></i></button>
+            </div>
             <div class="invalid-feedback">Password is required.</div>
           </div>
           <div class="col-md-6">
             <label class="form-label">Confirm Password</label>
-            <input type="password" name="password_confirm" class="form-control" required>
+            <div class="position-relative">
+              <input type="password" name="password_confirm" class="form-control" required id="inlineSignupPassword2">
+              <button type="button" class="btn btn-outline-secondary btn-sm" style="position:absolute; right:6px; top:50%; transform: translateY(-50%); padding:2px 6px; z-index:2" id="toggleInlinePwd2"><i class="bi bi-eye"></i></button>
+            </div>
             <div class="invalid-feedback">Please confirm your password.</div>
           </div>
           <div class="col-12">
@@ -190,6 +195,14 @@
       toggle.querySelector('i').classList.toggle('bi-eye-slash');
     });
   }
+  // Toggle password visibility for inline signup
+  const pwdIn = document.getElementById('inlineSignupPassword');
+  const pwdIn2 = document.getElementById('inlineSignupPassword2');
+  const t1 = document.getElementById('toggleInlinePwd');
+  const t2 = document.getElementById('toggleInlinePwd2');
+  function wire(btn, input){ if(!btn || !input) return; btn.addEventListener('click', function(){ const isPwd = input.getAttribute('type') === 'password'; input.setAttribute('type', isPwd ? 'text' : 'password'); btn.innerHTML = isPwd ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>'; }); }
+  wire(t1, pwdIn);
+  wire(t2, pwdIn2);
   // Auto open signup modal on hash or server-side errors
   const hasErrors = {% if signup_form and signup_form.errors %}true{% elif signup_form and signup_form.non_field_errors %}true{% else %}false{% endif %};
   const hasQuery = '{{ request.GET.signup|default:"" }}' !== '';

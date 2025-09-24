@@ -60,8 +60,7 @@ class PatientRegistrationForm(PhotoValidationMixin, forms.ModelForm):
             'profile_photo': forms.FileInput(attrs={
                 'class': 'form-control',
                 'accept': 'image/*',
-                'capture': 'environment',
-                'required': True
+                'capture': 'environment'
             })
         }
 
@@ -70,6 +69,8 @@ class PatientRegistrationForm(PhotoValidationMixin, forms.ModelForm):
         # Set required fields
         for field_name in ['full_name', 'age', 'address', 'contact', 'email']:
             self.fields[field_name].required = True
+        # Make profile photo optional
+        self.fields['profile_photo'].required = False
 
     def clean_email(self):
         email = self.cleaned_data.get('email')
@@ -141,8 +142,7 @@ class PatientSignupForm(PhotoValidationMixin, forms.ModelForm):
             'profile_photo': forms.FileInput(attrs={
                 'class': 'form-control',
                 'accept': 'image/*',
-                'capture': 'environment',
-                'required': True
+                'capture': 'environment'
             })
         }
 
@@ -151,6 +151,8 @@ class PatientSignupForm(PhotoValidationMixin, forms.ModelForm):
         # Set required fields
         for field_name in ['full_name', 'age', 'address', 'contact', 'email']:
             self.fields[field_name].required = True
+        # Make profile photo optional
+        self.fields['profile_photo'].required = False
 
     def clean_password(self):
         password = self.cleaned_data.get('password')

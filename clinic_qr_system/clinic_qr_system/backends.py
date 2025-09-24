@@ -6,21 +6,27 @@ class EmailOrUsernameModelBackend(ModelBackend):
         UserModel = get_user_model()
         if username is None:
             username = kwargs.get(UserModel.USERNAME_FIELD)
-        
-        # Try email first
+        if not username or not password:
+            return None
+
+        # Normalize input
+        lookup_value = (username or '').strip()
+
+        # 1) Try by email: check all users with this email and return the one whose password matches
         try:
-            # Use filter().first() to handle multiple users with same email
-            user = UserModel.objects.filter(email__iexact=username).first()
-            if user is None:
-                # Fallback to username
-                user = UserModel.objects.filter(**{UserModel.USERNAME_FIELD: username}).first()
+            email_candidates = list(UserModel.objects.filter(email__iexact=lookup_value))
+            for candidate in email_candidates:
+                if candidate.check_password(password) and self.user_can_authenticate(candidate):
+                    return candidate
         except Exception:
-            # If any error occurs, try username fallback
-            try:
-                user = UserModel.objects.filter(**{UserModel.USERNAME_FIELD: username}).first()
-            except Exception:
-                return None
-        
-        if user and user.check_password(password) and self.user_can_authenticate(user):
-            return user
+            pass
+
+        # 2) Fallback: try username
+        try:
+            user = UserModel.objects.filter(**{UserModel.USERNAME_FIELD: lookup_value}).first()
+            if user and user.check_password(password) and self.user_can_authenticate(user):
+                return user
+        except Exception:
+            return None
+
         return None

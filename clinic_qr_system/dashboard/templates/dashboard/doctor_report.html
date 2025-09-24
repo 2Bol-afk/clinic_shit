@@ -1,0 +1,212 @@
+{% extends 'base.html' %}
+{% block content %}
+<h4 class="d-flex align-items-center mb-3"><i class="bi bi-clipboard2-pulse text-success me-2"></i>Doctor Report</h4>
+
+<div class="card shadow-sm mb-3">
+  <div class="card-body">
+    <form class="row g-3" method="get">
+      <div class="col-md-4">
+        <label class="form-label">Start Date</label>
+        <input type="date" class="form-control" name="start_date" value="{{ start_date }}">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">End Date</label>
+        <input type="date" class="form-control" name="end_date" value="{{ end_date }}">
+      </div>
+      <div class="col-md-4 d-flex align-items-end">
+        <button class="btn btn-success" type="submit"><i class="bi bi-funnel me-1"></i>Filter</button>
+      </div>
+    </form>
+  </div>
+  <div class="card-footer d-flex gap-2">
+    <button class="btn btn-success btn-sm" onclick="printReport()"><i class="bi bi-printer me-1"></i>Print Report</button>
+    <a class="btn btn-outline-danger btn-sm" href="?start_date={{ start_date }}&end_date={{ end_date }}&export=pdf">
+      <i class="bi bi-file-earmark-pdf me-1"></i>Export PDF
+    </a>
+    <a class="btn btn-outline-primary btn-sm" href="?start_date={{ start_date }}&end_date={{ end_date }}&export=csv">
+      <i class="bi bi-filetype-csv me-1"></i>Export CSV
+    </a>
+    <a class="btn btn-outline-primary btn-sm" href="?start_date={{ start_date }}&end_date={{ end_date }}&export=xlsx">
+      <i class="bi bi-file-earmark-excel me-1"></i>Export XLSX
+    </a>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-primary text-white"><i class="bi bi-person-video2 me-2"></i>Consultations</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Date/Time</th>
+                <th>Patient</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for v in visits %}
+                <tr>
+                  <td>{{ v.timestamp|date:'Y-m-d H:i' }}</td>
+                  <td>{{ v.patient.full_name }}</td>
+                  <td>{{ v.get_status_display }}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="3" class="text-center text-muted py-3">No consultations</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-success text-white"><i class="bi bi-capsule me-2"></i>Prescriptions</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Date/Time</th>
+                <th>Patient</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in prescriptions %}
+                <tr>
+                  <td>{{ p.created_at|date:'Y-m-d H:i' }}</td>
+                  <td>{{ p.visit.patient.full_name }}</td>
+                  <td>{{ p.get_status_display }}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="3" class="text-center text-muted py-3">No prescriptions</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-info text-white"><i class="bi bi-flask me-2"></i>Lab Requests</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Date/Time</th>
+                <th>Patient</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for l in lab_requests %}
+                <tr>
+                  <td>{{ l.timestamp|date:'Y-m-d H:i' }}</td>
+                  <td>{{ l.patient.full_name }}</td>
+                  <td>{{ l.get_status_display }}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="3" class="text-center text-muted py-3">No lab requests</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header" style="background-color:#d8bfd8; color:#4a4a4a;"><i class="bi bi-syringe me-2"></i>Vaccination Requests</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Date/Time</th>
+                <th>Patient</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for v in vacc_requests %}
+                <tr>
+                  <td>{{ v.timestamp|date:'Y-m-d H:i' }}</td>
+                  <td>{{ v.patient.full_name }}</td>
+                  <td>{{ v.get_status_display }}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="3" class="text-center text-muted py-3">No vaccination requests</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="print-version" style="display:none;">
+  <h2>Doctor Report</h2>
+  <p><strong>Date Range:</strong> {{ start_date }} to {{ end_date }}</p>
+  <h3>Consultations</h3>
+  <table class="print-table">
+    <thead><tr><th>Date/Time</th><th>Patient</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for v in visits %}<tr><td>{{ v.timestamp|date:'Y-m-d H:i' }}</td><td>{{ v.patient.full_name }}</td><td>{{ v.get_status_display }}</td></tr>{% empty %}<tr><td colspan="3">No consultations</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  <h3>Prescriptions</h3>
+  <table class="print-table">
+    <thead><tr><th>Date/Time</th><th>Patient</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for p in prescriptions %}<tr><td>{{ p.created_at|date:'Y-m-d H:i' }}</td><td>{{ p.visit.patient.full_name }}</td><td>{{ p.get_status_display }}</td></tr>{% empty %}<tr><td colspan="3">No prescriptions</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  <h3>Lab Requests</h3>
+  <table class="print-table">
+    <thead><tr><th>Date/Time</th><th>Patient</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for l in lab_requests %}<tr><td>{{ l.timestamp|date:'Y-m-d H:i' }}</td><td>{{ l.patient.full_name }}</td><td>{{ l.get_status_display }}</td></tr>{% empty %}<tr><td colspan="3">No lab requests</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  <h3>Vaccination Requests</h3>
+  <table class="print-table">
+    <thead><tr><th>Date/Time</th><th>Patient</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for v in vacc_requests %}<tr><td>{{ v.timestamp|date:'Y-m-d H:i' }}</td><td>{{ v.patient.full_name }}</td><td>{{ v.get_status_display }}</td></tr>{% empty %}<tr><td colspan="3">No vaccination requests</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+function buildPrintableHtml(inner){
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Doctor Report</title><style>body{font-family:Arial} .print-table{width:100%;border-collapse:collapse;font-size:12px} .print-table th,.print-table td{border:1px solid #000;padding:4px;text-align:left} .print-table th{background:#f0f0f0}</style></head><body>${inner}</body></html>`;
+}
+function printReport(){
+  const el = document.getElementById('print-version');
+  if(!el) return;
+  const html = buildPrintableHtml(el.innerHTML);
+  const iframe = document.createElement('iframe');
+  iframe.style.position='fixed';iframe.style.right='0';iframe.style.bottom='0';iframe.style.width='0';iframe.style.height='0';iframe.style.border='0';
+  document.body.appendChild(iframe);
+  const doc = iframe.contentWindow || iframe.contentDocument; const idoc = doc.document || doc; idoc.open(); idoc.write(html); idoc.close();
+  const cleanup=()=>{try{document.body.removeChild(iframe);}catch(_){}};
+  iframe.onload=function(){try{(iframe.contentWindow||iframe).focus();(iframe.contentWindow||iframe).print();}catch(_){}};
+  setTimeout(()=>{try{(iframe.contentWindow||iframe).focus();(iframe.contentWindow||iframe).print();}catch(_){}} ,300);
+  const w = iframe.contentWindow || iframe; if(w){ w.onafterprint = cleanup; }
+  setTimeout(cleanup,5000);
+}
+</script>
+
+{% endblock %}
+
+

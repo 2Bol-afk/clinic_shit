@@ -12,7 +12,9 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment variables from .env
+# Prefer project root (same dir as manage.py), but also load from settings dir if present
 load_dotenv(BASE_DIR / '.env')
+load_dotenv((BASE_DIR / 'clinic_qr_system' / '.env'))
 
 # Optional dependencies
 try:
@@ -20,6 +22,11 @@ try:
     WHITENOISE_AVAILABLE = True
 except Exception:
     WHITENOISE_AVAILABLE = False
+try:
+    import django_extensions  # type: ignore
+    DJANGO_EXTENSIONS_AVAILABLE = True
+except Exception:
+    DJANGO_EXTENSIONS_AVAILABLE = False
 
 # SECURITY
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-insecure-key')
@@ -39,6 +46,8 @@ INSTALLED_APPS = [
     # Third-party
     'crispy_forms',
     'crispy_bootstrap5',
+    'cloudinary',
+    'cloudinary_storage',
     # Local apps
     'patients',
     'visits',
@@ -46,6 +55,9 @@ INSTALLED_APPS = [
     'vaccinations',
     'gmail_test',
 ]
+
+if DJANGO_EXTENSIONS_AVAILABLE:
+    INSTALLED_APPS.append('django_extensions')
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -125,34 +137,51 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 if WHITENOISE_AVAILABLE:
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Media files (default local)
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+# Media files / Storage backends
+#
+# Priority:
+# 1) Cloudinary if CLOUDINARY_* env vars are present or USE_CLOUDINARY=true
+# 2) Local filesystem (default)
 
-# Optional: Supabase Storage via S3-compatible backend (django-storages)
-# Enable by setting USE_SUPABASE_STORAGE=true and the AWS_* env vars
-if os.getenv('USE_SUPABASE_STORAGE', 'false').lower() == 'true':
-    try:
-        import storages  # type: ignore
-    except Exception:
-        storages = None
-    else:
-        INSTALLED_APPS += ['storages']
-        DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
-        AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
-        AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
-        AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME', 'media')
-        AWS_S3_ENDPOINT_URL = os.getenv('AWS_S3_ENDPOINT_URL')  # e.g. https://<PROJECT-REF>.supabase.co/storage/v1/s3
-        AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'us-east-1')
-        AWS_S3_SIGNATURE_VERSION = 's3v4'
-        AWS_S3_ADDRESSING_STYLE = 'virtual'
-        AWS_S3_CUSTOM_DOMAIN = os.getenv(
-            'AWS_S3_CUSTOM_DOMAIN',
-            os.getenv('SUPABASE_PUBLIC_MEDIA_DOMAIN')  # optional alt env var
+# Cloudinary configuration (preferred for Render free tier)
+USE_CLOUDINARY = os.getenv('USE_CLOUDINARY', '').lower() == 'true'
+CLOUDINARY_CLOUD_NAME = os.getenv('CLOUDINARY_CLOUD_NAME')
+CLOUDINARY_API_KEY = os.getenv('CLOUDINARY_API_KEY')
+CLOUDINARY_API_SECRET = os.getenv('CLOUDINARY_API_SECRET')
+
+if USE_CLOUDINARY or (CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET):
+    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+    STORAGES = {
+        'default': {
+            'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage',
+        },
+        'staticfiles': {
+            'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage' if WHITENOISE_AVAILABLE else 'django.contrib.staticfiles.storage.StaticFilesStorage',
+        },
+    }
+    # django-cloudinary-storage configuration
+    CLOUDINARY_STORAGE = {
+        'CLOUD_NAME': CLOUDINARY_CLOUD_NAME,
+        'API_KEY': CLOUDINARY_API_KEY,
+        'API_SECRET': CLOUDINARY_API_SECRET,
+        'SECURE': True,
+    }
+    # Also configure the underlying cloudinary library (some versions rely on this)
+    CLOUDINARY = {
+        'cloud_name': CLOUDINARY_CLOUD_NAME,
+        'api_key': CLOUDINARY_API_KEY,
+        'api_secret': CLOUDINARY_API_SECRET,
+    }
+    # Ensure CLOUDINARY_URL is set for libraries expecting a single URL
+    if CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET:
+        os.environ.setdefault(
+            'CLOUDINARY_URL',
+            f"cloudinary://{CLOUDINARY_API_KEY}:{CLOUDINARY_API_SECRET}@{CLOUDINARY_CLOUD_NAME}"
         )
-        # Derive MEDIA_URL from custom domain if provided
-        if AWS_S3_CUSTOM_DOMAIN:
-            MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/"
+else:
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = BASE_DIR / 'media'
+
 
 # Crispy Forms
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"

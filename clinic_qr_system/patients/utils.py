@@ -2,14 +2,14 @@ import qrcode
 import os
 from django.conf import settings
 from django.core.mail import send_mail
+from django.core.files.base import ContentFile
 from django.template.loader import render_to_string
 from .models import Patient
 
 
 def generate_qr_code(patient):
-    """Generate QR code for a patient and save it to the file system"""
+    """Generate QR code for a patient and save via Django storage (Cloudinary/local)."""
     try:
-        # Create QR code with patient email
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_L,
@@ -18,24 +18,16 @@ def generate_qr_code(patient):
         )
         qr.add_data(patient.email)
         qr.make(fit=True)
-        
-        # Create image
         img = qr.make_image(fill_color="black", back_color="white")
-        
-        # Save to media directory
+
         qr_filename = f"qr_{patient.patient_code}.png"
-        qr_path = os.path.join(settings.MEDIA_ROOT, 'qr_codes', qr_filename)
-        
-        # Ensure directory exists
-        os.makedirs(os.path.dirname(qr_path), exist_ok=True)
-        
-        # Save image
-        img.save(qr_path)
-        
-        # Update patient record
-        patient.qr_code = f"qr_codes/{qr_filename}"
-        patient.save(update_fields=['qr_code'])
-        
+
+        # Save through the ImageField to active storage
+        from io import BytesIO
+        buffer = BytesIO()
+        img.save(buffer, format='PNG')
+        patient.qr_code.save(qr_filename, ContentFile(buffer.getvalue()), save=True)
+
         return True
     except Exception as e:
         print(f"Error generating QR code: {e}")
@@ -72,12 +64,13 @@ def send_qr_code_email(patient):
             to=[patient.email],
         )
         
-        # Attach QR code
+        # Attach QR code using storage
         if patient.qr_code:
-            qr_path = os.path.join(settings.MEDIA_ROOT, patient.qr_code.name)
-            if os.path.exists(qr_path):
-                with open(qr_path, 'rb') as f:
+            try:
+                with patient.qr_code.open('rb') as f:
                     email.attach(f"qr_code_{patient.patient_code}.png", f.read(), 'image/png')
+            except Exception:
+                pass
         
         email.send()
         return True

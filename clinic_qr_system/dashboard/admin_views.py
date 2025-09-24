@@ -66,6 +66,81 @@ def patient_report(request):
     lab_visits = visits.filter(service='lab')
     prescriptions = Prescription.objects.filter(visit__patient__user=request.user, created_at__range=[start_dt, end_dt]).select_related('visit', 'doctor')
     vaccinations = VaccinationRecord.objects.filter(visit__patient__user=request.user, created_at__range=[start_dt, end_dt]).select_related('visit')
+    # Exports
+    export = request.GET.get('export')
+    if export in ('csv','xlsx','pdf'):
+        from django.http import HttpResponse
+        filename_base = f"patient_report_{start_date}_to_{end_date}"
+        if export == 'csv':
+            import csv
+            resp = HttpResponse(content_type='text/csv')
+            resp['Content-Disposition'] = f'attachment; filename="{filename_base}.csv"'
+            w = csv.writer(resp)
+            w.writerow(['Type','Date','Patient','Doctor','Details','Status'])
+            for v in visits:
+                w.writerow(['Visit', v.timestamp.strftime('%Y-%m-%d %H:%M'), v.patient.full_name if v.patient else '', v.doctor_user.get_full_name() if v.doctor_user else '', (v.diagnosis or v.notes or ''), v.get_status_display()])
+            for pr in prescriptions:
+                meds = ', '.join([f"{m.drug_name} {m.dosage}" for m in pr.medicines.all()])
+                w.writerow(['Prescription', pr.created_at.strftime('%Y-%m-%d %H:%M'), pr.visit.patient.full_name if pr.visit and pr.visit.patient else '', pr.doctor.get_full_name() if pr.doctor else '', meds, pr.get_status_display()])
+            for v in lab_visits:
+                w.writerow(['Lab', v.timestamp.strftime('%Y-%m-%d %H:%M'), v.patient.full_name if v.patient else '', '', (v.lab_test_type or ''), v.get_status_display()])
+            for rec in vaccinations:
+                w.writerow(['Vaccination', rec.created_at.strftime('%Y-%m-%d %H:%M'), rec.visit.patient.full_name if rec.visit and rec.visit.patient else '', '', str(rec.vaccine_type), rec.get_status_display()])
+            return resp
+        if export == 'xlsx':
+            try:
+                from openpyxl import Workbook
+            except Exception:
+                messages.error(request, 'XLSX export requires openpyxl')
+                return redirect('patient_report')
+            wb = Workbook(); ws = wb.active; ws.title = 'Patient Report'
+            ws.append(['Type','Date','Patient','Doctor','Details','Status'])
+            for v in visits:
+                ws.append(['Visit', v.timestamp, v.patient.full_name if v.patient else '', v.doctor_user.get_full_name() if v.doctor_user else '', (v.diagnosis or v.notes or ''), v.get_status_display()])
+            for pr in prescriptions:
+                meds = ', '.join([f"{m.drug_name} {m.dosage}" for m in pr.medicines.all()])
+                ws.append(['Prescription', pr.created_at, pr.visit.patient.full_name if pr.visit and pr.visit.patient else '', pr.doctor.get_full_name() if pr.doctor else '', meds, pr.get_status_display()])
+            for v in lab_visits:
+                ws.append(['Lab', v.timestamp, v.patient.full_name if v.patient else '', '', (v.lab_test_type or ''), v.get_status_display()])
+            for rec in vaccinations:
+                ws.append(['Vaccination', rec.created_at, rec.visit.patient.full_name if rec.visit and rec.visit.patient else '', '', str(rec.vaccine_type), rec.get_status_display()])
+            resp = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            resp['Content-Disposition'] = f'attachment; filename="{filename_base}.xlsx"'
+            wb.save(resp)
+            return resp
+        if export == 'pdf':
+            try:
+                from reportlab.lib.pagesizes import A4
+                from reportlab.pdfgen import canvas
+            except Exception:
+                messages.error(request, 'PDF export requires reportlab')
+                return redirect('patient_report')
+            resp = HttpResponse(content_type='application/pdf')
+            resp['Content-Disposition'] = f'attachment; filename="{filename_base}.pdf"'
+            p = canvas.Canvas(resp, pagesize=A4); width, height = A4
+            y = height - 40
+            p.setFont('Helvetica-Bold', 14); p.drawString(40, y, 'Patient Report'); y -= 18
+            p.setFont('Helvetica', 10); p.drawString(40, y, f'Date Range: {start_date} to {end_date}'); y -= 18
+            def draw_row(cols):
+                nonlocal y
+                if y < 40: p.showPage(); y = height - 40; p.setFont('Helvetica', 10)
+                x = 40
+                for text, w in cols:
+                    p.drawString(x, y, str(text)[:w]); x += 140
+                y -= 12
+            p.setFont('Helvetica-Bold', 10); draw_row([('Type',20),('Date',20),('Patient',20),('Doctor',20),('Details',40),('Status',20)])
+            p.setFont('Helvetica', 9)
+            for v in visits:
+                draw_row([('Visit',20), (v.timestamp.strftime('%Y-%m-%d %H:%M'),20), (v.patient.full_name if v.patient else '',20), (v.doctor_user.get_full_name() if v.doctor_user else '',20), ((v.diagnosis or v.notes or '')[:60],40), (v.get_status_display(),20)])
+            for pr in prescriptions:
+                meds = ', '.join([f"{m.drug_name} {m.dosage}" for m in pr.medicines.all()])
+                draw_row([('Prescription',20), (pr.created_at.strftime('%Y-%m-%d %H:%M'),20), (pr.visit.patient.full_name if pr.visit and pr.visit.patient else '',20), (pr.doctor.get_full_name() if pr.doctor else '',20), (meds[:60],40), (pr.get_status_display(),20)])
+            for v in lab_visits:
+                draw_row([('Lab',20), (v.timestamp.strftime('%Y-%m-%d %H:%M'),20), (v.patient.full_name if v.patient else '',20), ('',20), ((v.lab_test_type or '')[:60],40), (v.get_status_display(),20)])
+            for rec in vaccinations:
+                draw_row([('Vaccination',20), (rec.created_at.strftime('%Y-%m-%d %H:%M'),20), (rec.visit.patient.full_name if rec.visit and rec.visit.patient else '',20), ('',20), (str(rec.vaccine_type)[:60],40), (rec.get_status_display(),20)])
+            p.showPage(); p.save(); return resp
+
     return render(request, 'dashboard/patient_report.html', {
         'start_date': start_date, 'end_date': end_date,
         'visits': visits,
@@ -86,6 +161,78 @@ def doctor_report(request):
     prescriptions = Prescription.objects.filter(doctor=request.user, created_at__range=[start_dt, end_dt]).select_related('visit')
     lab_requests = Visit.objects.filter(timestamp__range=[start_dt, end_dt], service='lab', created_by=request.user).order_by('-timestamp')
     vacc_requests = Visit.objects.filter(timestamp__range=[start_dt, end_dt], service='vaccination', created_by=request.user).order_by('-timestamp')
+    # Exports
+    export = request.GET.get('export')
+    if export in ('csv','xlsx','pdf'):
+        from django.http import HttpResponse
+        filename_base = f"doctor_report_{start_date}_to_{end_date}"
+        if export == 'csv':
+            import csv
+            resp = HttpResponse(content_type='text/csv')
+            resp['Content-Disposition'] = f'attachment; filename="{filename_base}.csv"'
+            w = csv.writer(resp)
+            w.writerow(['Type','Date','Patient','Status'])
+            for v in visits:
+                w.writerow(['Consultation', v.timestamp.strftime('%Y-%m-%d %H:%M'), v.patient.full_name if v.patient else '', v.get_status_display()])
+            for p in prescriptions:
+                w.writerow(['Prescription', p.created_at.strftime('%Y-%m-%d %H:%M'), p.visit.patient.full_name if p.visit and p.visit.patient else '', p.get_status_display()])
+            for l in lab_requests:
+                w.writerow(['Lab Request', l.timestamp.strftime('%Y-%m-%d %H:%M'), l.patient.full_name if l.patient else '', l.get_status_display()])
+            for v2 in vacc_requests:
+                w.writerow(['Vaccination Request', v2.timestamp.strftime('%Y-%m-%d %H:%M'), v2.patient.full_name if v2.patient else '', v2.get_status_display()])
+            return resp
+        if export == 'xlsx':
+            try:
+                from openpyxl import Workbook
+            except Exception:
+                messages.error(request, 'XLSX export requires openpyxl')
+                return redirect('doctor_report')
+            wb = Workbook(); ws = wb.active; ws.title = 'Doctor Report'
+            ws.append(['Type','Date','Patient','Status'])
+            for v in visits:
+                ws.append(['Consultation', v.timestamp, v.patient.full_name if v.patient else '', v.get_status_display()])
+            for p in prescriptions:
+                ws.append(['Prescription', p.created_at, p.visit.patient.full_name if p.visit and p.visit.patient else '', p.get_status_display()])
+            for l in lab_requests:
+                ws.append(['Lab Request', l.timestamp, l.patient.full_name if l.patient else '', l.get_status_display()])
+            for v2 in vacc_requests:
+                ws.append(['Vaccination Request', v2.timestamp, v2.patient.full_name if v2.patient else '', v2.get_status_display()])
+            resp = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            resp['Content-Disposition'] = f'attachment; filename="{filename_base}.xlsx"'
+            wb.save(resp)
+            return resp
+        if export == 'pdf':
+            try:
+                from reportlab.lib.pagesizes import A4
+                from reportlab.pdfgen import canvas
+            except Exception:
+                messages.error(request, 'PDF export requires reportlab')
+                return redirect('doctor_report')
+            resp = HttpResponse(content_type='application/pdf')
+            resp['Content-Disposition'] = f'attachment; filename="{filename_base}.pdf"'
+            p = canvas.Canvas(resp, pagesize=A4); width, height = A4
+            y = height - 40
+            p.setFont('Helvetica-Bold', 14); p.drawString(40, y, 'Doctor Report'); y -= 18
+            p.setFont('Helvetica', 10); p.drawString(40, y, f'Date Range: {start_date} to {end_date}'); y -= 18
+            def draw_row(cols):
+                nonlocal y
+                if y < 40: p.showPage(); y = height - 40; p.setFont('Helvetica', 10)
+                x = 40
+                for text, w in cols:
+                    p.drawString(x, y, str(text)[:w]); x += 160
+                y -= 12
+            p.setFont('Helvetica-Bold', 10); draw_row([('Type',24),('Date',24),('Patient',30),('Status',20)])
+            p.setFont('Helvetica', 9)
+            for v in visits:
+                draw_row([('Consultation',24), (v.timestamp.strftime('%Y-%m-%d %H:%M'),24), (v.patient.full_name if v.patient else '',30), (v.get_status_display(),20)])
+            for pr in prescriptions:
+                draw_row([('Prescription',24), (pr.created_at.strftime('%Y-%m-%d %H:%M'),24), (pr.visit.patient.full_name if pr.visit and pr.visit.patient else '',30), (pr.get_status_display(),20)])
+            for l in lab_requests:
+                draw_row([('Lab Request',24), (l.timestamp.strftime('%Y-%m-%d %H:%M'),24), (l.patient.full_name if l.patient else '',30), (l.get_status_display(),20)])
+            for v2 in vacc_requests:
+                draw_row([('Vaccination Request',24), (v2.timestamp.strftime('%Y-%m-%d %H:%M'),24), (v2.patient.full_name if v2.patient else '',30), (v2.get_status_display(),20)])
+            p.showPage(); p.save(); return resp
+
     return render(request, 'dashboard/doctor_report.html', {
         'start_date': start_date, 'end_date': end_date,
         'visits': visits, 'prescriptions': prescriptions,
@@ -102,9 +249,118 @@ def lab_report(request):
     lab_visits = Visit.objects.filter(timestamp__range=[start_dt, end_dt], service='lab').select_related('patient').order_by('-timestamp')
     # Verified/In Process from Visit
     verified = lab_visits.filter(status='in_process')
-    # Completed from Visit (handle both status and lab_completed flag)
-    from django.db.models import Q
-    completed = lab_visits.filter(Q(status='done') | Q(lab_completed=True))
+    # Completed from LabResult records to match template expectations (r.visit.*)
+    completed = LabResult.objects.filter(created_at__range=[start_dt, end_dt]).select_related('visit', 'visit__patient').order_by('-created_at')
+    # Export handling
+    export = request.GET.get('export')
+    if export in ('csv','excel','xlsx','pdf'):
+        from django.http import HttpResponse
+        filename_base = f"laboratory_report_{start_date}_to_{end_date}"
+        if export == 'csv':
+            import csv
+            resp = HttpResponse(content_type='text/csv')
+            resp['Content-Disposition'] = f'attachment; filename="{filename_base}.csv"'
+            w = csv.writer(resp)
+            w.writerow(['Type','Patient','Patient ID','Email','Date/Verified At','Test Type','Status'])
+            for r in completed:
+                w.writerow([
+                    'Completed',
+                    r.visit.patient.full_name if r.visit and r.visit.patient else '',
+                    r.visit.patient.patient_code if r.visit and r.visit.patient else '',
+                    r.visit.patient.email if r.visit and r.visit.patient else '',
+                    r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '',
+                    (r.lab_type or getattr(r.visit, 'lab_test_type', '') or 'Lab Test'),
+                    'Done'
+                ])
+            for v in verified:
+                w.writerow([
+                    'Verified/In Process',
+                    v.patient.full_name if v.patient else '',
+                    v.patient.patient_code if v.patient else '',
+                    v.patient.email if v.patient else '',
+                    v.timestamp.strftime('%Y-%m-%d %H:%M') if v.timestamp else '',
+                    (v.lab_test_type or 'Lab Test'),
+                    'In Process'
+                ])
+            return resp
+        if export in ('excel','xlsx'):
+            try:
+                from openpyxl import Workbook
+            except Exception:
+                messages.error(request, 'XLSX export requires openpyxl')
+                return redirect('lab_report')
+            wb = Workbook(); ws = wb.active; ws.title = 'Laboratory Report'
+            ws.append(['Type','Patient','Patient ID','Email','Date/Verified At','Test Type','Status'])
+            for r in completed:
+                ws.append([
+                    'Completed',
+                    r.visit.patient.full_name if r.visit and r.visit.patient else '',
+                    r.visit.patient.patient_code if r.visit and r.visit.patient else '',
+                    r.visit.patient.email if r.visit and r.visit.patient else '',
+                    r.created_at.replace(tzinfo=None) if r.created_at else '',
+                    (r.lab_type or getattr(r.visit, 'lab_test_type', '') or 'Lab Test'),
+                    'Done'
+                ])
+            for v in verified:
+                ws.append([
+                    'Verified/In Process',
+                    v.patient.full_name if v.patient else '',
+                    v.patient.patient_code if v.patient else '',
+                    v.patient.email if v.patient else '',
+                    v.timestamp.replace(tzinfo=None) if v.timestamp else '',
+                    (v.lab_test_type or 'Lab Test'),
+                    'In Process'
+                ])
+            resp = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            resp['Content-Disposition'] = f'attachment; filename="{filename_base}.xlsx"'
+            wb.save(resp)
+            return resp
+        if export == 'pdf':
+            try:
+                from reportlab.lib.pagesizes import A4
+                from reportlab.pdfgen import canvas
+            except Exception:
+                messages.error(request, 'PDF export requires reportlab')
+                return redirect('lab_report')
+            resp = HttpResponse(content_type='application/pdf')
+            resp['Content-Disposition'] = f'attachment; filename="{filename_base}.pdf"'
+            p = canvas.Canvas(resp, pagesize=A4); width, height = A4
+            y = height - 40
+            p.setFont('Helvetica-Bold', 14); p.drawString(40, y, 'Laboratory Report'); y -= 18
+            p.setFont('Helvetica', 10); p.drawString(40, y, f'Date Range: {start_date} to {end_date}'); y -= 18
+            def draw_row(cols):
+                nonlocal y
+                if y < 40:
+                    p.showPage(); y = height - 40; p.setFont('Helvetica', 10)
+                x = 40
+                for text, w in cols:
+                    p.drawString(x, y, str(text)[:w]); x += 110
+                y -= 12
+            p.setFont('Helvetica-Bold', 10)
+            draw_row([('Type',16),('Patient',26),('Patient ID',18),('Email',28),('Date',20),('Test Type',24),('Status',14)])
+            p.setFont('Helvetica', 9)
+            for r in completed:
+                draw_row([
+                    ('Completed',16),
+                    ((r.visit.patient.full_name if r.visit and r.visit.patient else ''),26),
+                    ((r.visit.patient.patient_code if r.visit and r.visit.patient else ''),18),
+                    ((r.visit.patient.email if r.visit and r.visit.patient else ''),28),
+                    ((r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else ''),20),
+                    (((r.lab_type or getattr(r.visit, 'lab_test_type', '') or 'Lab Test')),24),
+                    ('Done',14)
+                ])
+            for v in verified:
+                draw_row([
+                    ('Verified/In Process',16),
+                    ((v.patient.full_name if v.patient else ''),26),
+                    ((v.patient.patient_code if v.patient else ''),18),
+                    ((v.patient.email if v.patient else ''),28),
+                    ((v.timestamp.strftime('%Y-%m-%d %H:%M') if v.timestamp else ''),20),
+                    ((v.lab_test_type or 'Lab Test'),24),
+                    ('In Process',14)
+                ])
+            p.showPage(); p.save(); return resp
+
     return render(request, 'dashboard/lab_report.html', {
         'start_date': start_date, 'end_date': end_date,
         'verified': verified, 'completed': completed,
@@ -254,6 +510,96 @@ def vaccination_report(request):
         vaccine_types = list(VType.choices)
     except Exception:
         vaccine_types = []
+    # Export handling
+    export = request.GET.get('export')
+    if export in ('csv','xlsx','pdf'):
+        from django.http import HttpResponse
+        filename_base = f"vaccination_report_{start_date}_to_{end_date}"
+        if export == 'csv':
+            import csv
+            resp = HttpResponse(content_type='text/csv')
+            resp['Content-Disposition'] = f'attachment; filename="{filename_base}.csv"'
+            w = csv.writer(resp)
+            headers = ['Date','Patient','Vaccine','Status','Dose1','Dose2','Dose3'] + (['Booster'] if has_booster else [])
+            w.writerow(headers)
+            for r in filtered_records:
+                row = [
+                    r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '',
+                    r.visit.patient.full_name if r.visit and r.visit.patient else '',
+                    str(r.vaccine_type),
+                    r.get_status_display() if hasattr(r,'get_status_display') else r.status,
+                    getattr(r,'dose1_date', None) or '',
+                    getattr(r,'dose2_date', None) or '',
+                    getattr(r,'dose3_date', None) or '',
+                ]
+                if has_booster:
+                    row.append(getattr(r,'booster_date', None) or '')
+                w.writerow(row)
+            return resp
+        if export == 'xlsx':
+            try:
+                from openpyxl import Workbook
+            except Exception:
+                messages.error(request, 'XLSX export requires openpyxl')
+                return redirect('vaccination_report')
+            wb = Workbook(); ws = wb.active; ws.title = 'Vaccination Report'
+            headers = ['Date','Patient','Vaccine','Status','Dose1','Dose2','Dose3'] + (['Booster'] if has_booster else [])
+            ws.append(headers)
+            for r in filtered_records:
+                row = [
+                    r.created_at,
+                    r.visit.patient.full_name if r.visit and r.visit.patient else '',
+                    str(r.vaccine_type),
+                    r.get_status_display() if hasattr(r,'get_status_display') else r.status,
+                    getattr(r,'dose1_date', None) or '',
+                    getattr(r,'dose2_date', None) or '',
+                    getattr(r,'dose3_date', None) or '',
+                ]
+                if has_booster:
+                    row.append(getattr(r,'booster_date', None) or '')
+                ws.append(row)
+            resp = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            resp['Content-Disposition'] = f'attachment; filename="{filename_base}.xlsx"'
+            wb.save(resp)
+            return resp
+        if export == 'pdf':
+            try:
+                from reportlab.lib.pagesizes import A4, landscape
+                from reportlab.pdfgen import canvas
+            except Exception:
+                messages.error(request, 'PDF export requires reportlab')
+                return redirect('vaccination_report')
+            resp = HttpResponse(content_type='application/pdf')
+            resp['Content-Disposition'] = f'attachment; filename="{filename_base}.pdf"'
+            p = canvas.Canvas(resp, pagesize=landscape(A4)); width, height = landscape(A4)
+            y = height - 40
+            p.setFont('Helvetica-Bold', 14); p.drawString(40, y, 'Vaccination Report'); y -= 18
+            p.setFont('Helvetica', 10); p.drawString(40, y, f'Date Range: {start_date} to {end_date}'); y -= 18
+            def draw_row(cols):
+                nonlocal y
+                if y < 40: p.showPage(); y = height - 40; p.setFont('Helvetica', 10)
+                x = 40
+                for text, w in cols:
+                    p.drawString(x, y, str(text)[:w]); x += 120
+                y -= 12
+            headers = [('Date',20),('Patient',30),('Vaccine',30),('Status',20),('Dose1',14),('Dose2',14),('Dose3',14)] + (([('Booster',14)]) if has_booster else [])
+            p.setFont('Helvetica-Bold', 10); draw_row(headers)
+            p.setFont('Helvetica', 9)
+            for r in filtered_records:
+                row = [
+                    (r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '' ,20),
+                    ((r.visit.patient.full_name if r.visit and r.visit.patient else ''),30),
+                    (str(r.vaccine_type),30),
+                    ((r.get_status_display() if hasattr(r,'get_status_display') else r.status),20),
+                    (getattr(r,'dose1_date', None) or '',14),
+                    (getattr(r,'dose2_date', None) or '',14),
+                    (getattr(r,'dose3_date', None) or '',14),
+                ]
+                if has_booster:
+                    row.append((getattr(r,'booster_date', None) or '',14))
+                draw_row(row)
+            p.showPage(); p.save(); return resp
+
     return render(request, 'dashboard/vaccination_report.html', {
         'start_date': start_date, 'end_date': end_date,
         'records': filtered_records,
@@ -589,7 +935,48 @@ def export_admin_report(visits_qs, dept_stats, staff_activity, format_type, depa
         
         return response
     
-    # Add more export formats as needed
+    if format_type in ('excel','xlsx'):
+        try:
+            from openpyxl import Workbook
+        except Exception:
+            return HttpResponse('XLSX export requires openpyxl', status=500)
+        wb = Workbook(); ws = wb.active; ws.title = 'Admin Report'
+        ws.append(['Report Type','Count'])
+        for dept, count in dept_stats.items():
+            ws.append([f'{dept.title()} Visits', count])
+        if staff_activity:
+            ws.append([]); ws.append(['Staff Activity',''])
+            for s in staff_activity:
+                ws.append([f"{s['name']} ({s['role']})", s['visits']])
+        resp = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        filename = f"admin_report_{department_filter}.xlsx" if department_filter != 'all' else "admin_report.xlsx"
+        resp['Content-Disposition'] = f'attachment; filename="{filename}"'
+        wb.save(resp)
+        return resp
+    if format_type == 'pdf':
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.pdfgen import canvas
+        except Exception:
+            return HttpResponse('PDF export requires reportlab', status=500)
+        resp = HttpResponse(content_type='application/pdf')
+        filename = f"admin_report_{department_filter}.pdf" if department_filter != 'all' else "admin_report.pdf"
+        resp['Content-Disposition'] = f'attachment; filename="{filename}"'
+        p = canvas.Canvas(resp, pagesize=A4); width, height = A4
+        y = height - 40
+        p.setFont('Helvetica-Bold', 14); p.drawString(40, y, 'Admin Report'); y -= 18
+        p.setFont('Helvetica', 10); p.drawString(40, y, f'Filter: {department_filter}'); y -= 18
+        p.setFont('Helvetica-Bold', 10); p.drawString(40, y, 'Report Type'); p.drawString(240, y, 'Count'); y -= 14
+        p.setFont('Helvetica', 10)
+        for dept, count in dept_stats.items():
+            if y < 40: p.showPage(); y = height - 40; p.setFont('Helvetica', 10)
+            p.drawString(40, y, f'{dept.title()} Visits'); p.drawString(240, y, str(count)); y -= 12
+        if staff_activity:
+            y -= 8; p.setFont('Helvetica-Bold', 10); p.drawString(40, y, 'Staff Activity'); y -= 14; p.setFont('Helvetica', 10)
+            for s in staff_activity:
+                if y < 40: p.showPage(); y = height - 40; p.setFont('Helvetica', 10)
+                p.drawString(40, y, f"{s['name']} ({s['role']})"); p.drawString(300, y, str(s['visits'])); y -= 12
+        p.showPage(); p.save(); return resp
     return HttpResponse("Export format not supported", status=400)
 
 
@@ -998,7 +1385,7 @@ def system_reports(request):
     
     # Export functionality
     export_format = request.GET.get('export')
-    if export_format in ('csv', 'excel'):
+    if export_format in ('csv', 'excel', 'pdf', 'xlsx'):
         return export_system_reports_file(reports_data, role_filter, department_filter, start_date, end_date, export_format)
     
     context = {
@@ -1016,7 +1403,7 @@ def system_reports(request):
 
 def export_system_reports_file(reports_data, role_filter, department_filter, start_date, end_date, format_type='csv'):
     """Export system reports as CSV or Excel-compatible CSV."""
-    is_excel = (format_type == 'excel')
+    is_excel = (format_type in ('excel','xlsx'))
     content_type = 'application/vnd.ms-excel' if is_excel else 'text/csv'
     ext = 'xls' if is_excel else 'csv'
     response = HttpResponse(content_type=content_type)
@@ -1044,4 +1431,24 @@ def export_system_reports_file(reports_data, role_filter, department_filter, sta
             report['created_by'],
         ])
     
+    if format_type == 'pdf':
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.pdfgen import canvas
+        except Exception:
+            return HttpResponse('PDF export requires reportlab', status=500)
+        resp = HttpResponse(content_type='application/pdf')
+        filename = f"system_reports_{role_filter}" + (f"_{department_filter}" if department_filter else '') + f"_{start_date}_to_{end_date}.pdf"
+        resp['Content-Disposition'] = f'attachment; filename="{filename}"'
+        p = canvas.Canvas(resp, pagesize=A4); width, height = A4
+        y = height - 40
+        p.setFont('Helvetica-Bold', 14); p.drawString(40, y, 'System Reports'); y -= 18
+        p.setFont('Helvetica', 10); p.drawString(40, y, f'Role: {role_filter}  Dept: {department_filter or "all"}  Range: {start_date} to {end_date}'); y -= 18
+        p.setFont('Helvetica-Bold', 10)
+        p.drawString(40, y, 'Patient Name'); p.drawString(180, y, 'Patient ID'); p.drawString(280, y, 'Date & Time'); p.drawString(400, y, 'Service'); p.drawString(470, y, 'Department'); p.drawString(560, y, 'Status'); y -= 14
+        p.setFont('Helvetica', 9)
+        for r in reports_data:
+            if y < 40: p.showPage(); y = height - 40; p.setFont('Helvetica', 9)
+            p.drawString(40, y, str(r['patient_name'])[:24]); p.drawString(180, y, str(r['patient_id'])[:16]); p.drawString(280, y, r['date_time'].strftime('%Y-%m-%d %H:%M')); p.drawString(400, y, str(r['service_type'])[:12]); p.drawString(470, y, str(r['department'])[:12]); p.drawString(560, y, str(r['status'])[:12]); y -= 12
+        p.showPage(); p.save(); return resp
     return response

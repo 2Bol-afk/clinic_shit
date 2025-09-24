@@ -8,7 +8,7 @@
         <h5 class="mb-1">{{ patient.full_name }}</h5>
         <div class="small text-muted">ID: {{ patient.id }} · Code: <strong>{{ patient.patient_code }}</strong></div>
         <div class="mt-2">Age: {{ patient.age }}</div>
-        <div class="mt-2">Allergies: <span class="{% if patient.allergies %}text-danger{% else %}text-muted{% endif %}">{{ patient.allergies|default:'None reported' }}</span></div>
+        
         {% if patient.qr_code %}
           <img src="{{ patient.qr_code.url }}" class="img-fluid mt-3 rounded" alt="QR">
         {% endif %}

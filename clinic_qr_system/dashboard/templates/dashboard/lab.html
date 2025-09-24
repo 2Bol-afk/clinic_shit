@@ -247,7 +247,7 @@
           nameEl && (nameEl.textContent = p.full_name || '');
           codeEl && (codeEl.textContent = p.patient_code || '');
           mailEl && (mailEl.textContent = p.email || '');
-          if(photoEl){ if(p.profile_photo){ photoEl.src = p.profile_photo; photoEl.style.display='inline-block'; } else { photoEl.style.display='none'; } }
+          if(photoEl){ if(p.profile_photo_url){ photoEl.src = p.profile_photo_url; photoEl.style.display='inline-block'; } else { photoEl.style.display='none'; } }
           badgeEl && badgeEl.classList.remove('d-none');
           profileCard.classList.remove('d-none');
         } else {
@@ -415,7 +415,7 @@
               full_name: data.patient.full_name,
               patient_code: data.patient.patient_code,
               email: data.patient.email,
-              profile_photo: data.patient.profile_photo || ''
+              profile_photo_url: data.patient.profile_photo_url || ''
             };
             const profileCard = document.getElementById('labVerifiedProfile');
             const nameEl = document.getElementById('labPatientName');
@@ -427,7 +427,7 @@
               nameEl && (nameEl.textContent = profile.full_name || '');
               codeEl && (codeEl.textContent = profile.patient_code || '');
               mailEl && (mailEl.textContent = profile.email || '');
-              if(photoEl){ if(profile.profile_photo){ photoEl.src = profile.profile_photo; photoEl.style.display='inline-block'; } else { photoEl.style.display='none'; } }
+              if(photoEl){ if(profile.profile_photo_url){ photoEl.src = profile.profile_photo_url; photoEl.style.display='inline-block'; } else { photoEl.style.display='none'; } }
               badgeEl && badgeEl.classList.remove('d-none');
               profileCard.classList.remove('d-none');
             }

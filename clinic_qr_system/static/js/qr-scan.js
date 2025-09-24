@@ -119,7 +119,7 @@
     if(html5Qr){ try{ html5Qr.stop().then(()=>html5Qr.clear()).catch(()=>{}); }catch(_){ } }
     html5Qr = new Html5Qrcode('qr-reader');
     scannerReady = false;
-    html5Qr.start(camId, { fps:2, qrbox:{ width:250, height:250 } }, onScanSuccess, onScanFailure)
+    html5Qr.start(camId, { fps:2 }, onScanSuccess, onScanFailure)
       .then(()=>{ const s=document.getElementById('scanner-status'); if(s) s.textContent='Point camera at QR'; setTimeout(()=>{ scannerReady = true; }, 800); })
       .catch(()=>{ const s=document.getElementById('scanner-status'); if(s) s.textContent='Camera failed to start'; });
   }

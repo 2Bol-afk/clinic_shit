@@ -31,10 +31,11 @@
           <i class="bi bi-search me-1"></i>Filter
         </button>
       </div>
-      <div class="col-md-2 d-flex align-items-end">
-        <a href="?export=csv&start_date={{ start_date }}&end_date={{ end_date }}&department={{ department_filter }}" class="btn btn-outline-success w-100">
-          <i class="bi bi-filetype-csv me-1"></i>Export CSV
-        </a>
+      <div class="col-md-4 d-flex align-items-end gap-2">
+        <button type="button" class="btn btn-success btn-sm" onclick="printReport()"><i class="bi bi-printer me-1"></i>Print Report</button>
+        <a href="?export=pdf&start_date={{ start_date }}&end_date={{ end_date }}&department={{ department_filter }}" class="btn btn-outline-danger btn-sm"><i class="bi bi-file-earmark-pdf me-1"></i>Export PDF</a>
+        <a href="?export=csv&start_date={{ start_date }}&end_date={{ end_date }}&department={{ department_filter }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-filetype-csv me-1"></i>Export CSV</a>
+        <a href="?export=excel&start_date={{ start_date }}&end_date={{ end_date }}&department={{ department_filter }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-file-earmark-excel me-1"></i>Export XLSX</a>
       </div>
     </form>
   </div>

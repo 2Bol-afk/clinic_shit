@@ -17,23 +17,16 @@
         <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search me-1"></i>Filter</button>
       </div>
       <div class="col-md-6 d-flex align-items-end gap-2">
-        <a href="?start_date={{ start_date }}&end_date={{ end_date }}&export=csv" class="btn btn-outline-success">
-          <i class="bi bi-filetype-csv me-1"></i>CSV
-        </a>
-        <a href="?start_date={{ start_date }}&end_date={{ end_date }}&export=excel" class="btn btn-outline-primary">
-          <i class="bi bi-file-earmark-excel me-1"></i>Excel
-        </a>
-        <button type="button" class="btn btn-outline-danger" onclick="printLabReport(false)">
-          <i class="bi bi-printer me-1"></i>Print
-        </button>
-        <button type="button" class="btn btn-outline-secondary" onclick="printLabReport(true)">
-          <i class="bi bi-filetype-pdf me-1"></i>PDF
-        </button>
+        <button id="printLabReportBtn" type="button" class="btn btn-success btn-sm"><i class="bi bi-printer me-1"></i>Print Report</button>
+        <a href="?start_date={{ start_date }}&end_date={{ end_date }}&export=pdf" class="btn btn-outline-danger btn-sm"><i class="bi bi-file-earmark-pdf me-1"></i>Export PDF</a>
+        <a href="?start_date={{ start_date }}&end_date={{ end_date }}&export=csv" class="btn btn-outline-primary btn-sm"><i class="bi bi-filetype-csv me-1"></i>Export CSV</a>
+        <a href="?start_date={{ start_date }}&end_date={{ end_date }}&export=excel" class="btn btn-outline-primary btn-sm"><i class="bi bi-file-earmark-excel me-1"></i>Export XLSX</a>
       </div>
     </form>
   </div>
   </div>
 
+<div id="lab-print-version">
 <div class="row g-3">
   <div class="col-12">
     <div class="card">
@@ -113,28 +106,44 @@
     </div>
   </div>
 </div>
+</div>
 {% endblock %}
 
+{% block extra_scripts %}
 <script>
-function printLabReport(asPdf){
-  try{
-    // Prefer the completed table; if not present, use the entire card body
-    const table = document.querySelector('.card .table-responsive') || document.querySelector('.card-body');
-    if(!table){ window.print(); return; }
-    const w = window.open('', '_blank', 'width=1024,height=768');
-    const styles = document.querySelector('link[href*="bootstrap" ]') ? document.querySelector('link[href*="bootstrap" ]').outerHTML : '';
-    const custom = '<style>table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:6px}thead{background:#f8f9fa;font-weight:600}</style>';
-    w.document.write('<html><head><title>Laboratory Reports</title>' + styles + custom + '</head><body>');
-    // Clone both sections: completed and verified
-    const cards = document.querySelectorAll('.card');
-    cards.forEach(c => { if(c.querySelector('table')){ w.document.write(c.outerHTML); } });
-    w.document.write('</body></html>');
-    w.document.close();
-    w.focus();
-    w.onload = function(){
-      w.print();
-      if(asPdf){ setTimeout(()=>w.close(), 500); }
-    };
-  }catch(_){ window.print(); }
+function printLabReport(){
+  try {
+    const container = document.getElementById('lab-print-version');
+    const content = container ? container.innerHTML : '';
+    if (!content) { window.print(); return; }
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Laboratory Reports</title>
+      <style>
+        body { font-family: Arial, Helvetica, sans-serif; }
+        table{ width:100%; border-collapse:collapse }
+        th,td{ border:1px solid #ddd; padding:6px }
+        thead{ background:#f8f9fa; font-weight:600 }
+        h4{ margin:0 0 8px 0 }
+      </style>
+    </head><body>${content}</body></html>`;
+
+    // Hidden iframe print to avoid navigating the current tab
+    const iframe = document.createElement('iframe');
+    iframe.style.position='fixed'; iframe.style.right='0'; iframe.style.bottom='0';
+    iframe.style.width='0'; iframe.style.height='0'; iframe.style.border='0';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentWindow || iframe.contentDocument; const idoc = doc.document || doc;
+    idoc.open(); idoc.write(html); idoc.close();
+    const cleanup = () => { try { document.body.removeChild(iframe); } catch(_) {} };
+    iframe.onload = function(){ try { (iframe.contentWindow||iframe).focus(); (iframe.contentWindow||iframe).print(); } catch(_) {} };
+    setTimeout(() => { try { (iframe.contentWindow||iframe).focus(); (iframe.contentWindow||iframe).print(); } catch(_) {} }, 300);
+    const iw = iframe.contentWindow || iframe; if (iw) { iw.onafterprint = cleanup; }
+    setTimeout(cleanup, 7000);
+  } catch(_) { window.print(); }
 }
+// ensure globally accessible
+window.printLabReport = printLabReport;
+document.addEventListener('DOMContentLoaded', function(){
+  document.getElementById('printLabReportBtn')?.addEventListener('click', printLabReport);
+});
 </script>
+{% endblock %}
