@@ -63,6 +63,7 @@ urlpatterns = [
     path('patient/report/', admin_views.patient_report, name='patient_report'),
     path('doctor/report/', admin_views.doctor_report, name='doctor_report'),
     path('laboratory/report/', admin_views.lab_report, name='lab_report'),
+    path('reception/report/', admin_views.reception_report, name='reception_report'),
     path('pharmacy/report/', admin_views.pharmacy_report, name='pharmacy_report'),
     path('vaccination/report/', admin_views.vaccination_report, name='vaccination_report'),
 ]

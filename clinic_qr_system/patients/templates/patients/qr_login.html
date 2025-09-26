@@ -510,6 +510,12 @@ document.getElementById('qrLoginForm').addEventListener('submit', function(e) {
     return;
   }
   
+  // Check if the form has a data attribute indicating it should proceed
+  if (this.dataset.proceedToDashboard === 'true') {
+    // Allow form submission to proceed
+    return;
+  }
+  
   e.preventDefault();
   const email = this.querySelector('input[name="email"]').value.trim();
   if (!email) return;
@@ -560,6 +566,16 @@ async function loadPatientData(email) {
       currentPatientData = data;
       displayPatientInfo(data);
       showSuccessMessage(data.patient.full_name, data.patient.email);
+      // If came from QR scan, auto submit like manual
+      const form = document.getElementById('qrLoginForm');
+      form.querySelector('input[name="email"]').value = data.patient.email;
+      form.dataset.proceedToDashboard = 'true';
+      // Close scanner modal if open
+      const modalEl = document.getElementById('qrScannerModal');
+      if (modalEl) {
+        try { bootstrap.Modal.getInstance(modalEl)?.hide(); } catch (e) {}
+      }
+      form.submit();
     } else {
       // Handle different error types
       if (data.error_type === 'invalid_format') {
@@ -830,10 +846,9 @@ function proceedToDashboard(email) {
   
   // Submit the form to proceed to dashboard
   if (form) {
-    // Remove the event listener temporarily to allow form submission
-    const formClone = form.cloneNode(true);
-    form.parentNode.replaceChild(formClone, form);
-    formClone.submit();
+    // Set data attribute to indicate this is a proceed submission
+    form.dataset.proceedToDashboard = 'true';
+    form.submit();
   } else {
     // Fallback: redirect to dashboard with email
     window.location.href = `/patients/portal/?email=${encodeURIComponent(email)}`;
@@ -846,6 +861,7 @@ function loginAsPatient() {
     // Submit the form with the patient's email
     const form = document.getElementById('qrLoginForm');
     form.querySelector('input[name="email"]').value = currentPatientData.patient.email;
+    form.dataset.proceedToDashboard = 'true';
     form.submit();
   }
 }

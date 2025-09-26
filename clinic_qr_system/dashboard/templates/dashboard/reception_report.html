@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+{% block content %}
+<h4 class="d-flex align-items-center mb-3"><i class="bi bi-people text-success me-2"></i>Reception Reports</h4>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="get" class="row g-3">
+      <div class="col-md-3">
+        <label class="form-label">Start Date</label>
+        <input type="date" class="form-control" name="start_date" value="{{ start_date }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">End Date</label>
+        <input type="date" class="form-control" name="end_date" value="{{ end_date }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Status</label>
+        <select class="form-select" name="status">
+          <option value="" {% if not status_filter %}selected{% endif %}>All</option>
+          <option value="done" {% if status_filter == 'done' %}selected{% endif %}>Completed Visits</option>
+          <option value="in_process" {% if status_filter == 'in_process' %}selected{% endif %}>In Process</option>
+          <option value="queued" {% if status_filter == 'queued' %}selected{% endif %}>In Queue</option>
+        </select>
+      </div>
+      <div class="col-md-3 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search me-1"></i>Filter</button>
+      </div>
+      <div class="col-md-6 d-flex align-items-end gap-2">
+        <button id="printReceptionReportBtn" type="button" class="btn btn-success btn-sm"><i class="bi bi-printer me-1"></i>Print Report</button>
+        <a href="?start_date={{ start_date }}&end_date={{ end_date }}&status={{ status_filter }}&export=pdf" class="btn btn-outline-danger btn-sm"><i class="bi bi-file-earmark-pdf me-1"></i>Export PDF</a>
+        <a href="?start_date={{ start_date }}&end_date={{ end_date }}&status={{ status_filter }}&export=csv" class="btn btn-outline-primary btn-sm"><i class="bi bi-filetype-csv me-1"></i>Export CSV</a>
+        <a href="?start_date={{ start_date }}&end_date={{ end_date }}&status={{ status_filter }}&export=excel" class="btn btn-outline-primary btn-sm"><i class="bi bi-file-earmark-excel me-1"></i>Export XLSX</a>
+      </div>
+    </form>
+  </div>
+  </div>
+
+<div id="reception-print-version">
+<div class="row g-3">
+  {% if not status_filter or status_filter == 'done' %}
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-check2-circle me-2"></i>Completed Visits</span>
+        <span class="badge bg-success">{{ completed|length }}</span>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped mb-0">
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Patient ID</th>
+                <th>Email</th>
+                <th>Date</th>
+                <th>Service</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for v in completed %}
+                <tr>
+                  <td>{{ v.patient.full_name }}</td>
+                  <td>{{ v.patient.patient_code }}</td>
+                  <td>{{ v.patient.email }}</td>
+                  <td>{{ v.timestamp|date:'M d, Y H:i' }}</td>
+                  <td>{{ v.get_service_display }}</td>
+                  <td><span class="badge bg-success">{{ v.get_status_display }}</span></td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="6" class="text-center text-muted">No completed visits</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if not status_filter or status_filter == 'in_process' %}
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-hourglass-split me-2"></i>In Process</span>
+        <span class="badge bg-info">{{ in_process|length }}</span>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped mb-0">
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Patient ID</th>
+                <th>Email</th>
+                <th>Started</th>
+                <th>Service</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for v in in_process %}
+                <tr>
+                  <td>{{ v.patient.full_name }}</td>
+                  <td>{{ v.patient.patient_code }}</td>
+                  <td>{{ v.patient.email }}</td>
+                  <td>{{ v.timestamp|date:'M d, Y H:i' }}</td>
+                  <td>{{ v.get_service_display }}</td>
+                  <td><span class="badge bg-info">{{ v.get_status_display }}</span></td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="6" class="text-center text-muted">No in-process items</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if not status_filter or status_filter == 'queued' %}
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-list-ol me-2"></i>In Queue (incl. Claimed)</span>
+        <span class="badge bg-secondary">{{ queued|length }}</span>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped mb-0">
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Patient ID</th>
+                <th>Email</th>
+                <th>Queued At</th>
+                <th>Service</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for v in queued %}
+                <tr>
+                  <td>{{ v.patient.full_name }}</td>
+                  <td>{{ v.patient.patient_code }}</td>
+                  <td>{{ v.patient.email }}</td>
+                  <td>{{ v.timestamp|date:'M d, Y H:i' }}</td>
+                  <td>
+                    {{ v.get_service_display }}
+                    {% if v.queue_number %}
+                      <span class="badge bg-dark ms-2">Q-{{ v.queue_number }}</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if v.status == 'claimed' %}
+                      <span class="badge bg-warning text-dark">Claimed</span>
+                    {% else %}
+                      <span class="badge bg-secondary">{{ v.get_status_display }}</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="6" class="text-center text-muted">No queued items</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function printReceptionReport(){
+  try {
+    const container = document.getElementById('reception-print-version');
+    const content = container ? container.innerHTML : '';
+    if (!content) { window.print(); return; }
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Reception Reports</title>
+      <style>
+        body { font-family: Arial, Helvetica, sans-serif; }
+        table{ width:100%; border-collapse:collapse }
+        th,td{ border:1px solid #ddd; padding:6px }
+        thead{ background:#f8f9fa; font-weight:600 }
+        h4{ margin:0 0 8px 0 }
+      </style>
+    </head><body>${content}</body></html>`;
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position='fixed'; iframe.style.right='0'; iframe.style.bottom='0';
+    iframe.style.width='0'; iframe.style.height='0'; iframe.style.border='0';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentWindow || iframe.contentDocument; const idoc = doc.document || doc;
+    idoc.open(); idoc.write(html); idoc.close();
+    const cleanup = () => { try { document.body.removeChild(iframe); } catch(_) {} };
+    iframe.onload = function(){ try { (iframe.contentWindow||iframe).focus(); (iframe.contentWindow||iframe).print(); } catch(_) {} };
+    setTimeout(() => { try { (iframe.contentWindow||iframe).focus(); (iframe.contentWindow||iframe).print(); } catch(_) {} }, 300);
+    const iw = iframe.contentWindow || iframe; if (iw) { iw.onafterprint = cleanup; }
+    setTimeout(cleanup, 7000);
+  } catch(_) { window.print(); }
+}
+window.printReceptionReport = printReceptionReport;
+document.addEventListener('DOMContentLoaded', function(){
+  document.getElementById('printReceptionReportBtn')?.addEventListener('click', printReceptionReport);
+});
+</script>
+{% endblock %}
+
+

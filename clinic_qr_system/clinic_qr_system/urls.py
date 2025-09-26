@@ -22,10 +22,12 @@ from django.views.generic import RedirectView
 from django.contrib.auth import views as auth_views
 
 from dashboard import admin_views as dashboard_admin_views
+from patients import views as patient_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('django.contrib.auth.urls')),
+    path('accounts/forgot-password/', patient_views.forgot_password, name='forgot_password'),
     # Removed Django built-in password change view to prevent account selection issues
     # Custom password change views are used instead
     path('', RedirectView.as_view(url='/accounts/login/', permanent=False)),

@@ -29,6 +29,7 @@
           <option value="laboratory" {% if role_filter == 'laboratory' %}selected{% endif %}>Laboratory</option>
           <option value="pharmacy" {% if role_filter == 'pharmacy' %}selected{% endif %}>Pharmacy</option>
           <option value="vaccination" {% if role_filter == 'vaccination' %}selected{% endif %}>Vaccination</option>
+          <option value="reception" {% if role_filter == 'reception' %}selected{% endif %}>Reception/Triage</option>
         </select>
       </div>
       <div class="col-md-2" id="departmentFilter" style="display: none;">
@@ -119,6 +120,7 @@
               <th>Date & Time</th>
               <th>Service Type</th>
               <th>Department</th>
+              <th>Queue #</th>
               <th>Status</th>
               <th>Created By</th>
             </tr>
@@ -143,11 +145,20 @@
                     <span class="badge bg-warning">{{ report.service_type }}</span>
                   {% elif report.service_type == 'Vaccination' %}
                     <span class="badge bg-success">{{ report.service_type }}</span>
+                  {% elif report.service_type == 'Reception/Triage' %}
+                    <span class="badge bg-info">{{ report.service_type }}</span>
                   {% else %}
                     <span class="badge bg-secondary">{{ report.service_type }}</span>
                   {% endif %}
                 </td>
                 <td>{{ report.department }}</td>
+                <td>
+                  {% if report.queue_number %}
+                    <span class="badge bg-dark">Q-{{ report.queue_number }}</span>
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
                 <td>
                   {% if report.status == 'Completed' %}
                     <span class="badge bg-success">{{ report.status }}</span>
@@ -155,6 +166,8 @@
                     <span class="badge bg-warning">{{ report.status }}</span>
                   {% elif report.status == 'Queued' %}
                     <span class="badge bg-info">{{ report.status }}</span>
+                  {% elif report.status == 'Claimed' %}
+                    <span class="badge bg-secondary">{{ report.status }}</span>
                   {% elif report.status == 'Cancelled' %}
                     <span class="badge bg-danger">{{ report.status }}</span>
                   {% else %}
@@ -211,6 +224,11 @@
           <div class="col-md-2">
             <a href="{% url 'admin_system_reports' %}?role=vaccination&start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-outline-success w-100">
               <i class="bi bi-shield-plus me-1"></i>Vaccination Reports
+            </a>
+          </div>
+          <div class="col-md-2">
+            <a href="{% url 'admin_system_reports' %}?role=reception&start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-outline-info w-100">
+              <i class="bi bi-people me-1"></i>Reception Reports
             </a>
           </div>
           <div class="col-md-2">

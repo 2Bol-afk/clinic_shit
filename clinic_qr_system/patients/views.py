@@ -23,7 +23,7 @@ from django.contrib.auth.decorators import login_required
 from django.urls import reverse_lazy
 from django.contrib.auth.views import LoginView
 from django.http import HttpResponseForbidden
-from clinic_qr_system.email_utils import send_patient_registration_email
+from clinic_qr_system.email_utils import send_patient_registration_email, send_notification_email
 
 from .forms import PatientRegistrationForm, PatientSignupForm, AdminPatientForm, PatientAccountForm, PatientPasswordChangeForm, PatientDeleteForm
 from .models import Patient
@@ -461,14 +461,94 @@ def qr_login(request):
                 # Auto-login the patient with the correct backend
                 from clinic_qr_system.backends import EmailOrUsernameModelBackend
                 auth_login(request, patient.user, backend='clinic_qr_system.backends.EmailOrUsernameModelBackend')
-                return redirect('patient_portal')
+                
+                # Verify the user is now authenticated
+                if request.user.is_authenticated:
+                    # Redirect through post-login redirect to handle proper routing
+                    return redirect('post_login_redirect')
+                else:
+                    return render(request, 'patients/qr_login.html', {'error': 'Authentication failed. Please try again.'})
             else:
                 return render(request, 'patients/qr_login.html', {'error': 'Patient account not properly linked. Please contact support.'})
         except Patient.DoesNotExist:
             return render(request, 'patients/qr_login.html', {'error': 'No patient found with this email address. Please register first.'})
+        except Exception as e:
+            # Log the error for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"QR login error for email {email}: {str(e)}")
+            return render(request, 'patients/qr_login.html', {'error': 'Login failed. Please try again or contact support.'})
     
     return render(request, 'patients/qr_login.html')
 
+
+def forgot_password(request):
+    """Request a temporary password via email. Valid for one use; forces change on next login."""
+    ctx = {}
+    if request.method == 'POST':
+        email = (request.POST.get('email') or '').strip()
+        if not email:
+            ctx['error'] = 'Please enter your registered Gmail address.'
+            return render(request, 'registration/forgot_password.html', ctx)
+        # Find user by email (patients use email as username or linked Patient.email)
+        user = None
+        try:
+            user = User.objects.filter(email__iexact=email).first()
+        except Exception:
+            user = None
+        if not user:
+            # Try via Patient model
+            try:
+                patient = Patient.objects.get(email__iexact=email)
+                user = patient.user
+            except Patient.DoesNotExist:
+                user = None
+        if not user:
+            ctx['error'] = 'No account found with that email.'
+            return render(request, 'registration/forgot_password.html', ctx)
+
+        # Generate temporary password
+        temp_password = uuid.uuid4().hex[:12]
+        try:
+            with transaction.atomic():
+                user.set_password(temp_password)
+                user.save()
+                # Flag first-login change for roles we control
+                try:
+                    if hasattr(user, 'patient_profile') and user.patient_profile:
+                        user.patient_profile.must_change_password = True
+                        user.patient_profile.save(update_fields=['must_change_password'])
+                except Exception:
+                    pass
+                try:
+                    if hasattr(user, 'doctor_profile') and user.doctor_profile:
+                        user.doctor_profile.must_change_password = True
+                        user.doctor_profile.save(update_fields=['must_change_password'])
+                except Exception:
+                    pass
+
+            # Send email
+            subject = 'Password Reset – Clinic System'
+            login_url = (os.getenv('PUBLIC_APP_URL') or '') or 'https://127.0.0.1:8443/accounts/login/'
+            message = (
+                'You requested a password reset for your Clinic System account.\n\n'
+                f'Temporary Password: {temp_password}\n\n'
+                'Instructions:\n'
+                f'1) Go to: {login_url}\n'
+                '2) Log in using your email and the temporary password above.\n'
+                '3) You will be required to change your password immediately.\n\n'
+                'Note: This temporary password is valid for a single login only.\n'
+                'If it has already been used or has expired, please request another reset.'
+            )
+            send_notification_email([email], subject, message)
+
+            ctx['success'] = 'A temporary password has been sent to your email.'
+            return render(request, 'registration/forgot_password.html', ctx)
+        except Exception as e:
+            ctx['error'] = f'Failed to process reset: {e}'
+            return render(request, 'registration/forgot_password.html', ctx)
+
+    return render(request, 'registration/forgot_password.html', ctx)
 
 def qr_scan_api(request):
     """API endpoint for QR code scanning - returns patient data by email.

@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.utils import timezone
+from datetime import timedelta
 from django.db import models, transaction
 from django.db.models import Q
 from patients.models import Patient, Doctor
@@ -2165,6 +2166,13 @@ def reports(request):
     start = request.GET.get('start')
     end = request.GET.get('end')
     service = request.GET.get('service')
+    
+    # Set default dates if not provided
+    if not start:
+        start = timezone.now().strftime('%Y-%m-%d')
+    if not end:
+        end = (timezone.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+    
     qs = Visit.objects.select_related('patient').order_by('-timestamp')
     if start:
         qs = qs.filter(timestamp__date__gte=start)
@@ -2274,6 +2282,13 @@ def pharmacy_reports(request):
     end = request.GET.get('end')
     status = request.GET.get('status')
     doctor = request.GET.get('doctor')
+    
+    # Set default dates if not provided
+    if not start:
+        start = timezone.now().strftime('%Y-%m-%d')
+    if not end:
+        end = (timezone.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+    
     # Sanitize dates (handle accidental trailing punctuation like a period)
     import re
     def clean_date(value: str) -> str:
@@ -2711,6 +2726,61 @@ def doctor_consult(request, rid: int):
                             prescription=prescription,
                             **medicine_data
                         )
+            
+            # Auto-create prescription from free-text prescription_notes if no structured medicines were added
+            elif done and prescription_notes.strip() and not medicines_data:
+                from visits.models import Prescription, PrescriptionMedicine
+                import re
+                
+                # Try to parse prescription_notes for medicine information
+                # Look for patterns like "amoc — 500mg — 3 — 7 (30)" or similar
+                medicine_patterns = [
+                    r'([a-zA-Z\s]+?)\s*[—\-]\s*(\d+[a-zA-Z]*)\s*[—\-]\s*(\d+)\s*[—\-]\s*(\d+)\s*\((\d+)\)',  # amoc — 500mg — 3 — 7 (30)
+                    r'([a-zA-Z\s]+?)\s*[—\-]\s*(\d+[a-zA-Z]*)\s*[—\-]\s*(\d+)\s*[—\-]\s*(\d+)',  # amoc — 500mg — 3 — 7
+                    r'([a-zA-Z\s]+?)\s*[—\-]\s*(\d+[a-zA-Z]*)',  # amoc — 500mg
+                ]
+                
+                medicines_found = []
+                for pattern in medicine_patterns:
+                    matches = re.findall(pattern, prescription_notes, re.IGNORECASE)
+                    for match in matches:
+                        if len(match) >= 2:
+                            drug_name = match[0].strip()
+                            dosage = match[1].strip()
+                            frequency = match[2] if len(match) > 2 else ''
+                            duration = match[3] if len(match) > 3 else ''
+                            quantity = match[4] if len(match) > 4 else ''
+                            
+                            medicines_found.append({
+                                'drug_name': drug_name,
+                                'dosage': dosage,
+                                'frequency': frequency,
+                                'duration': duration,
+                                'quantity': quantity,
+                                'special_instructions': ''
+                            })
+                            break  # Use first pattern that matches
+                    if medicines_found:
+                        break
+                
+                # If we found medicines in the text, create prescription
+                if medicines_found:
+                    prescription, created = Prescription.objects.get_or_create(
+                        visit=draft,
+                        defaults={
+                            'doctor': request.user,
+                            'status': Prescription.Status.PENDING
+                        }
+                    )
+                    
+                    # Clear existing medicines and add parsed ones
+                    prescription.medicines.all().delete()
+                    
+                    for medicine_data in medicines_found:
+                        PrescriptionMedicine.objects.create(
+                            prescription=prescription,
+                            **medicine_data
+                        )
         # Update the reception ticket status according to action
         rec.doctor_status = 'finished' if done else 'in_consultation'
         # Also reflect unified status on the reception ticket
@@ -2745,6 +2815,61 @@ def doctor_finish_inprogress(request, rid: int):
     v.doctor_done = True
     v.doctor_done_at = timezone.now()
     v.status = Visit.Status.DONE
+    
+    # Auto-create prescription from free-text prescription_notes if no structured prescription exists
+    if v.prescription_notes.strip() and (not hasattr(v, 'prescription_records') or not v.prescription_records.exists()):
+        from visits.models import Prescription, PrescriptionMedicine
+        import re
+        
+        # Try to parse prescription_notes for medicine information
+        medicine_patterns = [
+            r'([a-zA-Z\s]+?)\s*[—\-]\s*(\d+[a-zA-Z]*)\s*[—\-]\s*(\d+)\s*[—\-]\s*(\d+)\s*\((\d+)\)',  # amoc — 500mg — 3 — 7 (30)
+            r'([a-zA-Z\s]+?)\s*[—\-]\s*(\d+[a-zA-Z]*)\s*[—\-]\s*(\d+)\s*[—\-]\s*(\d+)',  # amoc — 500mg — 3 — 7
+            r'([a-zA-Z\s]+?)\s*[—\-]\s*(\d+[a-zA-Z]*)',  # amoc — 500mg
+        ]
+        
+        medicines_found = []
+        for pattern in medicine_patterns:
+            matches = re.findall(pattern, v.prescription_notes, re.IGNORECASE)
+            for match in matches:
+                if len(match) >= 2:
+                    drug_name = match[0].strip()
+                    dosage = match[1].strip()
+                    frequency = match[2] if len(match) > 2 else ''
+                    duration = match[3] if len(match) > 3 else ''
+                    quantity = match[4] if len(match) > 4 else ''
+                    
+                    medicines_found.append({
+                        'drug_name': drug_name,
+                        'dosage': dosage,
+                        'frequency': frequency,
+                        'duration': duration,
+                        'quantity': quantity,
+                        'special_instructions': ''
+                    })
+                    break  # Use first pattern that matches
+            if medicines_found:
+                break
+        
+        # If we found medicines in the text, create prescription
+        if medicines_found:
+            prescription, created = Prescription.objects.get_or_create(
+                visit=v,
+                defaults={
+                    'doctor': request.user,
+                    'status': Prescription.Status.PENDING
+                }
+            )
+            
+            # Clear existing medicines and add parsed ones
+            prescription.medicines.all().delete()
+            
+            for medicine_data in medicines_found:
+                PrescriptionMedicine.objects.create(
+                    prescription=prescription,
+                    **medicine_data
+                )
+    
     v.save(update_fields=['doctor_done', 'doctor_done_at', 'status'])
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return JsonResponse({'success': True, 'status': 'Finished', 'patient_id': v.patient_id})
@@ -2776,6 +2901,63 @@ def doctor_consult_edit(request, did: int):
         if done:
             visit.doctor_done = True
             visit.doctor_done_at = timezone.now()
+            visit.status = Visit.Status.DONE
+            
+            # Auto-create prescription from free-text prescription_notes if no structured prescription exists
+            if visit.prescription_notes.strip() and (not hasattr(visit, 'prescription_records') or not visit.prescription_records.exists()):
+                from visits.models import Prescription, PrescriptionMedicine
+                import re
+                
+                # Try to parse prescription_notes for medicine information
+                medicine_patterns = [
+                    r'([a-zA-Z\s]+?)\s*[—\-]\s*(\d+[a-zA-Z]*)\s*[—\-]\s*(\d+)\s*[—\-]\s*(\d+)\s*\((\d+)\)',  # amoc — 500mg — 3 — 7 (30)
+                    r'([a-zA-Z\s]+?)\s*[—\-]\s*(\d+[a-zA-Z]*)\s*[—\-]\s*(\d+)\s*[—\-]\s*(\d+)',  # amoc — 500mg — 3 — 7
+                    r'([a-zA-Z\s]+?)\s*[—\-]\s*(\d+[a-zA-Z]*)',  # amoc — 500mg
+                ]
+                
+                medicines_found = []
+                for pattern in medicine_patterns:
+                    matches = re.findall(pattern, visit.prescription_notes, re.IGNORECASE)
+                    for match in matches:
+                        if len(match) >= 2:
+                            drug_name = match[0].strip()
+                            dosage = match[1].strip()
+                            frequency = match[2] if len(match) > 2 else ''
+                            duration = match[3] if len(match) > 3 else ''
+                            quantity = match[4] if len(match) > 4 else ''
+                            
+                            medicines_found.append({
+                                'drug_name': drug_name,
+                                'dosage': dosage,
+                                'frequency': frequency,
+                                'duration': duration,
+                                'quantity': quantity,
+                                'special_instructions': ''
+                            })
+                            break  # Use first pattern that matches
+                    if medicines_found:
+                        break
+                
+                # If we found medicines in the text, create prescription
+                if medicines_found:
+                    prescription, created = Prescription.objects.get_or_create(
+                        visit=visit,
+                        defaults={
+                            'doctor': request.user,
+                            'status': Prescription.Status.PENDING
+                        }
+                    )
+                    
+                    # Clear existing medicines and add parsed ones
+                    prescription.medicines.all().delete()
+                    
+                    for medicine_data in medicines_found:
+                        PrescriptionMedicine.objects.create(
+                            prescription=prescription,
+                            **medicine_data
+                        )
+        else:
+            visit.status = Visit.Status.IN_PROCESS
         visit.save()
         # Reflect status on reception ticket
         today = timezone.localdate()

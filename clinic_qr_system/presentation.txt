@@ -198,7 +198,18 @@ Subject: Your [Vaccine Name] dose schedule update
 Body: Hello [Patient Name], your [Vaccine Name] schedule has been updated. Upcoming dates: Dose 2: [date], Dose 3: [date], Booster: [date if any]. Please follow clinic instructions.
 
 ---
+Recent Updates & Fixes
+- Laboratory Module: Fixed "Complete" button 404 error by correcting URL routing to use lab_mark_done view
+- Report Date Filters: Updated all report modules (Reception/Triage, Vaccination, Doctor, Pharmacy, Patient, Admin) to automatically set start date to today and end date to tomorrow
+- Reception/Triage Reports: Added dedicated reception report with status filtering (Completed Visits, In Process, In Queue) and proper service filtering
+- QR Login: Fixed QR + Gmail fallback authentication to properly redirect to patient dashboard after verification
+- Forgot Password: Added password reset functionality with temporary password generation and email delivery
+- Pharmacy Integration: Enhanced doctor consultation workflow to automatically parse free-text prescription notes and create structured Prescription records for pharmacy visibility
+- Admin Reports: Added "Reception/Triage" role option and queue number columns across all report modules
+- Dependencies: Added cloudinary and django-cloudinary-storage packages for image storage and management
+
 Conclusion
 - The module fuses automation, safety, and clarity into a single workflow.
 - It shortens staff time per patient while lifting adherence and data quality.
 - With the roadmap, it becomes a comprehensive immunization management capability for the clinic.
+- Recent fixes ensure robust functionality across all modules with improved user experience and data consistency.

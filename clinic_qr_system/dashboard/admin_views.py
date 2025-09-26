@@ -35,6 +35,9 @@ def is_vaccination(user):
 def is_patient(user):
     return user.is_authenticated and hasattr(user, 'patient_profile')
 
+def is_reception(user):
+    return user.is_authenticated and user.groups.filter(name='Reception').exists()
+
 @login_required
 def reports_redirect(request):
     """Redirect /reports/ to the proper role-specific report."""
@@ -49,6 +52,8 @@ def reports_redirect(request):
         return redirect('pharmacy_reports')
     if is_vaccination(request.user):
         return redirect('vaccination_report')
+    if is_reception(request.user):
+        return redirect('reception_report')
     if is_patient(request.user):
         return redirect('patient_report')
     return redirect('admin_system_reports')
@@ -56,16 +61,28 @@ def reports_redirect(request):
 @login_required
 @user_passes_test(is_patient)
 def patient_report(request):
-    start_date = request.GET.get('start_date') or (timezone.now() - timedelta(days=30)).strftime('%Y-%m-%d')
-    end_date = request.GET.get('end_date') or timezone.now().strftime('%Y-%m-%d')
-    start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-    end_dt = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+    start_date = request.GET.get('start_date') or timezone.now().strftime('%Y-%m-%d')
+    end_date = request.GET.get('end_date') or (timezone.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+    # Use timezone-aware datetimes to avoid naive/aware mismatches
+    # Use date-based filtering to be robust against naive/aware timezone issues
     # Visits scoped to this patient
-    visits = Visit.objects.filter(timestamp__range=[start_dt, end_dt], patient__user=request.user).select_related('doctor_user').order_by('-timestamp')
+    visits = Visit.objects.filter(
+        timestamp__date__gte=start_date,
+        timestamp__date__lte=end_date,
+        patient__user=request.user
+    ).select_related('doctor_user').order_by('-timestamp')
     doctor_visits = visits.filter(service='doctor')
     lab_visits = visits.filter(service='lab')
-    prescriptions = Prescription.objects.filter(visit__patient__user=request.user, created_at__range=[start_dt, end_dt]).select_related('visit', 'doctor')
-    vaccinations = VaccinationRecord.objects.filter(visit__patient__user=request.user, created_at__range=[start_dt, end_dt]).select_related('visit')
+    prescriptions = Prescription.objects.filter(
+        visit__patient__user=request.user,
+        created_at__date__gte=start_date,
+        created_at__date__lte=end_date
+    ).select_related('visit', 'doctor')
+    vaccinations = VaccinationRecord.objects.filter(
+        visit__patient__user=request.user,
+        created_at__date__gte=start_date,
+        created_at__date__lte=end_date
+    ).select_related('visit')
     # Exports
     export = request.GET.get('export')
     if export in ('csv','xlsx','pdf'):
@@ -153,14 +170,32 @@ def patient_report(request):
 @login_required
 @user_passes_test(is_doctor)
 def doctor_report(request):
-    start_date = request.GET.get('start_date') or (timezone.now() - timedelta(days=30)).strftime('%Y-%m-%d')
-    end_date = request.GET.get('end_date') or timezone.now().strftime('%Y-%m-%d')
-    start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-    end_dt = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
-    visits = Visit.objects.filter(timestamp__range=[start_dt, end_dt], service='doctor', doctor_user=request.user).order_by('-timestamp')
-    prescriptions = Prescription.objects.filter(doctor=request.user, created_at__range=[start_dt, end_dt]).select_related('visit')
-    lab_requests = Visit.objects.filter(timestamp__range=[start_dt, end_dt], service='lab', created_by=request.user).order_by('-timestamp')
-    vacc_requests = Visit.objects.filter(timestamp__range=[start_dt, end_dt], service='vaccination', created_by=request.user).order_by('-timestamp')
+    start_date = request.GET.get('start_date') or timezone.now().strftime('%Y-%m-%d')
+    end_date = request.GET.get('end_date') or (timezone.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+    # Robust date-only filtering
+    visits = Visit.objects.filter(
+        timestamp__date__gte=start_date,
+        timestamp__date__lte=end_date,
+        service='doctor',
+        doctor_user=request.user
+    ).order_by('-timestamp')
+    prescriptions = Prescription.objects.filter(
+        doctor=request.user,
+        created_at__date__gte=start_date,
+        created_at__date__lte=end_date
+    ).select_related('visit')
+    lab_requests = Visit.objects.filter(
+        timestamp__date__gte=start_date,
+        timestamp__date__lte=end_date,
+        service='lab',
+        created_by=request.user
+    ).order_by('-timestamp')
+    vacc_requests = Visit.objects.filter(
+        timestamp__date__gte=start_date,
+        timestamp__date__lte=end_date,
+        service='vaccination',
+        created_by=request.user
+    ).order_by('-timestamp')
     # Exports
     export = request.GET.get('export')
     if export in ('csv','xlsx','pdf'):
@@ -242,15 +277,21 @@ def doctor_report(request):
 @login_required
 @user_passes_test(is_lab)
 def lab_report(request):
-    start_date = request.GET.get('start_date') or (timezone.now() - timedelta(days=30)).strftime('%Y-%m-%d')
-    end_date = request.GET.get('end_date') or timezone.now().strftime('%Y-%m-%d')
-    start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-    end_dt = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
-    lab_visits = Visit.objects.filter(timestamp__range=[start_dt, end_dt], service='lab').select_related('patient').order_by('-timestamp')
+    start_date = request.GET.get('start_date') or timezone.now().strftime('%Y-%m-%d')
+    end_date = request.GET.get('end_date') or (timezone.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+    # Robust date-only filtering
+    lab_visits = Visit.objects.filter(
+        timestamp__date__gte=start_date,
+        timestamp__date__lte=end_date,
+        service='lab'
+    ).select_related('patient').order_by('-timestamp')
     # Verified/In Process from Visit
     verified = lab_visits.filter(status='in_process')
     # Completed from LabResult records to match template expectations (r.visit.*)
-    completed = LabResult.objects.filter(created_at__range=[start_dt, end_dt]).select_related('visit', 'visit__patient').order_by('-created_at')
+    completed = LabResult.objects.filter(
+        created_at__date__gte=start_date,
+        created_at__date__lte=end_date
+    ).select_related('visit', 'visit__patient').order_by('-created_at')
     # Export handling
     export = request.GET.get('export')
     if export in ('csv','excel','xlsx','pdf'):
@@ -366,6 +407,130 @@ def lab_report(request):
         'verified': verified, 'completed': completed,
     })
 
+
+@login_required
+@user_passes_test(is_reception)
+def reception_report(request):
+    """Reception report modeled after laboratory layout, but across all visits."""
+    start_date = request.GET.get('start_date') or timezone.now().strftime('%Y-%m-%d')
+    end_date = request.GET.get('end_date') or (timezone.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+    tz = timezone.get_current_timezone()
+    start_dt = timezone.make_aware(datetime.strptime(start_date, '%Y-%m-%d'), tz)
+    end_dt = timezone.make_aware(datetime.strptime(end_date, '%Y-%m-%d'), tz) + timedelta(days=1)
+
+    visits = (Visit.objects
+              .filter(timestamp__date__gte=start_date, timestamp__date__lte=end_date, service='reception')
+              .select_related('patient')
+              .order_by('-timestamp'))
+
+    # Status filtering
+    status_filter = (request.GET.get('status') or '').strip()
+
+    in_process = visits.filter(status='in_process')
+    completed = visits.filter(status='done')
+    # Treat both 'queued' and 'claimed' as part of the queue for visibility
+    queued = visits.filter(status__in=['queued', 'claimed'])
+
+    # If a specific status is requested, narrow down for single-section rendering and exports
+    if status_filter in ('done', 'in_process', 'queued'):
+        if status_filter == 'queued':
+            filtered = visits.filter(status__in=['queued', 'claimed'])
+        else:
+            filtered = visits.filter(status=status_filter)
+    else:
+        filtered = None
+
+    export = request.GET.get('export')
+    if export in ('csv', 'excel', 'xlsx', 'pdf'):
+        from django.http import HttpResponse
+        filename_base = f"reception_report_{start_date}_to_{end_date}"
+        if export == 'csv':
+            import csv
+            resp = HttpResponse(content_type='text/csv')
+            resp['Content-Disposition'] = f'attachment; filename="{filename_base}.csv"'
+            w = csv.writer(resp)
+            w.writerow(['Type','Patient','Patient ID','Email','Date','Service','Status'])
+            rows_source = filtered if filtered is not None else list(completed) + list(in_process) + list(queued)
+            for v in rows_source:
+                w.writerow([
+                    ('Completed' if v.status == 'done' else ('In Process' if v.status == 'in_process' else 'In Queue')),
+                    v.patient.full_name if v.patient else '',
+                    v.patient.patient_code if v.patient else '',
+                    v.patient.email if v.patient else '',
+                    v.timestamp.strftime('%Y-%m-%d %H:%M') if v.timestamp else '',
+                    v.get_service_display(),
+                    v.get_status_display(),
+                ])
+            return resp
+        if export in ('excel', 'xlsx'):
+            try:
+                from openpyxl import Workbook
+            except Exception:
+                messages.error(request, 'XLSX export requires openpyxl')
+                return redirect('reception_report')
+            wb = Workbook(); ws = wb.active; ws.title = 'Reception Report'
+            ws.append(['Type','Patient','Patient ID','Email','Date','Service','Status'])
+            rows_source = filtered if filtered is not None else list(completed) + list(in_process) + list(queued)
+            for v in rows_source:
+                ws.append([
+                    ('Completed' if v.status == 'done' else ('In Process' if v.status == 'in_process' else 'In Queue')),
+                    v.patient.full_name if v.patient else '',
+                    v.patient.patient_code if v.patient else '',
+                    v.patient.email if v.patient else '',
+                    v.timestamp.replace(tzinfo=None) if v.timestamp else '',
+                    v.get_service_display(),
+                    v.get_status_display(),
+                ])
+            resp = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            resp['Content-Disposition'] = f'attachment; filename="{filename_base}.xlsx"'
+            wb.save(resp)
+            return resp
+        if export == 'pdf':
+            try:
+                from reportlab.lib.pagesizes import A4
+                from reportlab.pdfgen import canvas
+            except Exception:
+                messages.error(request, 'PDF export requires reportlab')
+                return redirect('reception_report')
+            resp = HttpResponse(content_type='application/pdf')
+            resp['Content-Disposition'] = f'attachment; filename="{filename_base}.pdf"'
+            p = canvas.Canvas(resp, pagesize=A4); width, height = A4
+            y = height - 40
+            p.setFont('Helvetica-Bold', 14); p.drawString(40, y, 'Reception Report'); y -= 18
+            p.setFont('Helvetica', 10); p.drawString(40, y, f'Date Range: {start_date} to {end_date}'); y -= 18
+            def draw_row(cols):
+                nonlocal y
+                if y < 40:
+                    p.showPage(); y = height - 40; p.setFont('Helvetica', 10)
+                x = 40
+                for text, w in cols:
+                    p.drawString(x, y, str(text)[:w]); x += 110
+                y -= 12
+            p.setFont('Helvetica-Bold', 10)
+            draw_row([('Type',16),('Patient',26),('Patient ID',18),('Email',28),('Date',20),('Service',24),('Status',14)])
+            p.setFont('Helvetica', 9)
+            rows_source = filtered if filtered is not None else list(completed) + list(in_process) + list(queued)
+            for v in rows_source:
+                draw_row([
+                    (('Completed' if v.status == 'done' else ('In Process' if v.status == 'in_process' else 'In Queue')),16),
+                    (v.patient.full_name if v.patient else '',26),
+                    (v.patient.patient_code if v.patient else '',18),
+                    (v.patient.email if v.patient else '',28),
+                    (v.timestamp.strftime('%Y-%m-%d %H:%M') if v.timestamp else '',20),
+                    (v.get_service_display(),24),
+                    (v.get_status_display(),14),
+                ])
+            p.showPage(); p.save(); return resp
+
+    return render(request, 'dashboard/reception_report.html', {
+        'start_date': start_date,
+        'end_date': end_date,
+        'in_process': in_process,
+        'completed': completed,
+        'queued': queued,
+        'status_filter': status_filter,
+    })
+
 @login_required
 @user_passes_test(is_pharmacy)
 def pharmacy_report(request):
@@ -411,13 +576,13 @@ def pharmacy_report(request):
 @login_required
 @user_passes_test(is_vaccination)
 def vaccination_report(request):
-    start_date = request.GET.get('start_date') or (timezone.now() - timedelta(days=30)).strftime('%Y-%m-%d')
-    end_date = request.GET.get('end_date') or timezone.now().strftime('%Y-%m-%d')
+    start_date = request.GET.get('start_date') or timezone.now().strftime('%Y-%m-%d')
+    end_date = request.GET.get('end_date') or (timezone.now() + timedelta(days=1)).strftime('%Y-%m-%d')
     dose_filter = (request.GET.get('dose') or '').strip()
     vaccine_filter = (request.GET.get('vtype') or '').strip()
     start_dt = datetime.strptime(start_date, '%Y-%m-%d')
     end_dt = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
-    records = VaccinationRecord.objects.filter(created_at__range=[start_dt, end_dt]).select_related('visit', 'visit__patient').order_by('-created_at')
+    records = VaccinationRecord.objects.filter(created_at__date__gte=start_date, created_at__date__lte=end_date).select_related('visit', 'visit__patient').order_by('-created_at')
     # Enrich each record with dose1_date/dose2_date/dose3_date and booster_date from vaccinations app (administered dates only)
     has_booster = False
     try:
@@ -794,16 +959,16 @@ def admin_reports(request):
     department_filter = request.GET.get('department', 'all')
     
     if not start_date:
-        start_date = (timezone.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        start_date = timezone.now().strftime('%Y-%m-%d')
     if not end_date:
-        end_date = timezone.now().strftime('%Y-%m-%d')
+        end_date = (timezone.now() + timedelta(days=1)).strftime('%Y-%m-%d')
     
     # Convert to datetime objects
     start_dt = datetime.strptime(start_date, '%Y-%m-%d')
     end_dt = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
     
     # Base queryset with date filter
-    visits_qs = Visit.objects.filter(timestamp__range=[start_dt, end_dt])
+    visits_qs = Visit.objects.filter(timestamp__date__gte=start_date, timestamp__date__lte=end_date)
     
     # Apply department filter
     if department_filter != 'all':
@@ -1191,9 +1356,9 @@ def system_reports(request):
     
     # Set default date range if not provided
     if not start_date:
-        start_date = (timezone.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        start_date = timezone.now().strftime('%Y-%m-%d')
     if not end_date:
-        end_date = timezone.now().strftime('%Y-%m-%d')
+        end_date = (timezone.now() + timedelta(days=1)).strftime('%Y-%m-%d')
     
     # Convert to datetime objects
     start_dt = datetime.strptime(start_date, '%Y-%m-%d')
@@ -1352,6 +1517,29 @@ def system_reports(request):
                 'created_by': visit.created_by.username if visit.created_by else 'N/A',
                 'doctor': visit.doctor_user.get_full_name() if visit.doctor_user else 'N/A',
                 'notes': visit.notes or '',
+            })
+    
+    elif role_filter == 'reception':
+        # Filter reception visits
+        reception_visits = visits_qs.filter(service='reception').order_by('-timestamp')
+        for visit in reception_visits:
+            reports_data.append({
+                'patient_name': visit.patient.full_name if visit.patient else 'N/A',
+                'patient_id': visit.patient.patient_code if visit.patient else 'N/A',
+                'patient_email': visit.patient.email if visit.patient else 'N/A',
+                'date_time': visit.timestamp,
+                'service_type': 'Reception/Triage',
+                'department': visit.department or 'N/A',
+                'status': (
+                    'Queued' if visit.status == 'queued' else
+                    'Claimed' if visit.status == 'claimed' else
+                    'In Process' if visit.status == 'in_process' else
+                    'Done' if visit.status == 'done' else visit.get_status_display()
+                ),
+                'created_by': visit.created_by.username if visit.created_by else 'N/A',
+                'doctor': visit.doctor_user.get_full_name() if visit.doctor_user else 'N/A',
+                'notes': (visit.notes or ''),
+                'queue_number': visit.queue_number or '',
             })
     
     elif role_filter == 'patient':
