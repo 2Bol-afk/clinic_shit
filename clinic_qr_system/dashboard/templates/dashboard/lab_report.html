@@ -113,9 +113,33 @@
 <script>
 function printLabReport(){
   try {
-    const container = document.getElementById('lab-print-version');
-    const content = container ? container.innerHTML : '';
-    if (!content) { window.print(); return; }
+    // Get the print version container directly
+    const printContainer = document.getElementById('lab-print-version');
+    if (!printContainer) { 
+      console.log('Print container not found, falling back to window.print()');
+      window.print(); 
+      return; 
+    }
+    
+    const content = printContainer.innerHTML;
+    if (!content) { 
+      console.log('Print content is empty, falling back to window.print()');
+      window.print(); 
+      return; 
+    }
+    
+    // Create a clean HTML structure for printing with structured layout
+    const printContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+        <h1 style="text-align: center; margin-bottom: 20px; color: #333;">Laboratory Report</h1>
+        <div style="margin-bottom: 30px; font-size: 14px; text-align: center; color: #666;">
+          <strong>Date Range:</strong> ${document.querySelector('input[name="start_date"]').value} to ${document.querySelector('input[name="end_date"]').value}
+        </div>
+        
+        ${content}
+      </div>
+    `;
+    
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Laboratory Reports</title>
       <style>
         body { font-family: Arial, Helvetica, sans-serif; }
@@ -123,8 +147,14 @@ function printLabReport(){
         th,td{ border:1px solid #ddd; padding:6px }
         thead{ background:#f8f9fa; font-weight:600 }
         h4{ margin:0 0 8px 0 }
+        .card { border: 1px solid #ddd; margin-bottom: 20px; }
+        .card-header { background: #f8f9fa; padding: 10px; border-bottom: 1px solid #ddd; font-weight: bold; }
+        .card-body { padding: 15px; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .bg-success { background-color: #28a745; color: white; }
+        .bg-info { background-color: #17a2b8; color: white; }
       </style>
-    </head><body>${content}</body></html>`;
+    </head><body>${printContent}</body></html>`;
 
     // Hidden iframe print to avoid navigating the current tab
     const iframe = document.createElement('iframe');
@@ -138,7 +168,10 @@ function printLabReport(){
     setTimeout(() => { try { (iframe.contentWindow||iframe).focus(); (iframe.contentWindow||iframe).print(); } catch(_) {} }, 300);
     const iw = iframe.contentWindow || iframe; if (iw) { iw.onafterprint = cleanup; }
     setTimeout(cleanup, 7000);
-  } catch(_) { window.print(); }
+  } catch(e) { 
+    console.log('Print error:', e);
+    window.print(); 
+  }
 }
 // ensure globally accessible
 window.printLabReport = printLabReport;

@@ -146,17 +146,78 @@ function buildPrintableHtml(inner){
   return `<!doctype html><html><head><meta charset="utf-8"><title>Patient Report</title><style>body{font-family:Arial} .print-table{width:100%;border-collapse:collapse;font-size:12px} .print-table th,.print-table td{border:1px solid #000;padding:4px;text-align:left} .print-table th{background:#f0f0f0}</style></head><body>${inner}</body></html>`;
 }
 function printReport(){
-  const el = document.querySelector('.card.mb-3 + .card'); // print the content area following filters
-  const html = buildPrintableHtml(document.body.innerHTML);
-  const iframe = document.createElement('iframe');
-  iframe.style.position='fixed';iframe.style.right='0';iframe.style.bottom='0';iframe.style.width='0';iframe.style.height='0';iframe.style.border='0';
-  document.body.appendChild(iframe);
-  const doc = iframe.contentWindow || iframe.contentDocument; const idoc = doc.document || doc; idoc.open(); idoc.write(html); idoc.close();
-  const cleanup=()=>{try{document.body.removeChild(iframe);}catch(_){}};
-  iframe.onload=function(){try{(iframe.contentWindow||iframe).focus();(iframe.contentWindow||iframe).print();}catch(_){}};
-  setTimeout(()=>{try{(iframe.contentWindow||iframe).focus();(iframe.contentWindow||iframe).print();}catch(_){}} ,300);
-  const w = iframe.contentWindow || iframe; if(w){ w.onafterprint = cleanup; }
-  setTimeout(cleanup,5000);
+  try {
+    // Get all report sections using simpler selectors
+    const consultationsCard = Array.from(document.querySelectorAll('.card')).find(card => 
+      card.querySelector('.card-header') && 
+      card.querySelector('.card-header').textContent.includes('Consultations'));
+    
+    const prescriptionsCard = Array.from(document.querySelectorAll('.card')).find(card => 
+      card.querySelector('.card-header') && 
+      card.querySelector('.card-header').textContent.includes('Prescriptions'));
+    
+    const labCard = Array.from(document.querySelectorAll('.card')).find(card => 
+      card.querySelector('.card-header') && 
+      card.querySelector('.card-header').textContent.includes('Laboratory'));
+    
+    const vaccinationCard = Array.from(document.querySelectorAll('.card')).find(card => 
+      card.querySelector('.card-header') && 
+      card.querySelector('.card-header').textContent.includes('Vaccinations'));
+    
+    if (!consultationsCard) { 
+      console.log('No consultations card found, falling back to window.print()');
+      window.print(); 
+      return; 
+    }
+    
+    // Create a clean HTML structure for printing with structured layout
+    const printContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+        <h1 style="text-align: center; margin-bottom: 20px; color: #333;">Patient Medical Report</h1>
+        <div style="margin-bottom: 30px; font-size: 14px; text-align: center; color: #666;">
+          <strong>Report Period:</strong> ${document.querySelector('input[name="start_date"]').value} to ${document.querySelector('input[name="end_date"]').value}
+        </div>
+        
+        <!-- CONSULTATIONS SECTION -->
+        <div style="margin-bottom: 30px;">
+          <h2 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px; margin-bottom: 15px;">CONSULTATIONS</h2>
+          ${consultationsCard ? consultationsCard.querySelector('.card-body').outerHTML : '<p>No consultation data available.</p>'}
+        </div>
+        
+        <!-- PRESCRIPTIONS SECTION -->
+        <div style="margin-bottom: 30px;">
+          <h2 style="color: #2c3e50; border-bottom: 2px solid #e74c3c; padding-bottom: 5px; margin-bottom: 15px;">PRESCRIPTIONS</h2>
+          ${prescriptionsCard ? prescriptionsCard.querySelector('.card-body').outerHTML : '<p>No prescription data available.</p>'}
+        </div>
+        
+        <!-- LABORATORY TESTS SECTION -->
+        <div style="margin-bottom: 30px;">
+          <h2 style="color: #2c3e50; border-bottom: 2px solid #f39c12; padding-bottom: 5px; margin-bottom: 15px;">LABORATORY TESTS</h2>
+          ${labCard ? labCard.querySelector('.card-body').outerHTML : '<p>No laboratory data available.</p>'}
+        </div>
+        
+        <!-- VACCINATIONS SECTION -->
+        <div style="margin-bottom: 30px;">
+          <h2 style="color: #2c3e50; border-bottom: 2px solid #27ae60; padding-bottom: 5px; margin-bottom: 15px;">VACCINATIONS</h2>
+          ${vaccinationCard ? vaccinationCard.querySelector('.card-body').outerHTML : '<p>No vaccination data available.</p>'}
+        </div>
+      </div>
+    `;
+    
+    const html = buildPrintableHtml(printContent);
+    const iframe = document.createElement('iframe');
+    iframe.style.position='fixed';iframe.style.right='0';iframe.style.bottom='0';iframe.style.width='0';iframe.style.height='0';iframe.style.border='0';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentWindow || iframe.contentDocument; const idoc = doc.document || doc; idoc.open(); idoc.write(html); idoc.close();
+    const cleanup=()=>{try{document.body.removeChild(iframe);}catch(_){}};
+    iframe.onload=function(){try{(iframe.contentWindow||iframe).focus();(iframe.contentWindow||iframe).print();}catch(_){}};
+    setTimeout(()=>{try{(iframe.contentWindow||iframe).focus();(iframe.contentWindow||iframe).print();}catch(_){}} ,300);
+    const w = iframe.contentWindow || iframe; if(w){ w.onafterprint = cleanup; }
+    setTimeout(cleanup,5000);
+  } catch(e) { 
+    console.log('Print error:', e);
+    window.print(); 
+  }
 }
 </script>
 {% endblock %}

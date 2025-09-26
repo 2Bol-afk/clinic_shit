@@ -93,37 +93,219 @@ def patient_report(request):
             resp = HttpResponse(content_type='text/csv')
             resp['Content-Disposition'] = f'attachment; filename="{filename_base}.csv"'
             w = csv.writer(resp)
-            w.writerow(['Type','Date','Patient','Doctor','Details','Status'])
-            for v in visits:
-                w.writerow(['Visit', v.timestamp.strftime('%Y-%m-%d %H:%M'), v.patient.full_name if v.patient else '', v.doctor_user.get_full_name() if v.doctor_user else '', (v.diagnosis or v.notes or ''), v.get_status_display()])
+            
+            # CONSULTATIONS SECTION
+            w.writerow(['CONSULTATIONS'])
+            w.writerow(['Date', 'Doctor', 'Diagnosis/Notes'])
+            for v in doctor_visits:
+                diagnosis_notes = v.diagnosis or ''
+                if v.prescription_notes:
+                    diagnosis_notes += f" | Rx: {v.prescription_notes}"
+                doctor_name = v.doctor_user.get_full_name() if v.doctor_user else ''
+                if v.doctor_user and hasattr(v.doctor_user, 'doctor') and v.doctor_user.doctor.department:
+                    doctor_name += f" ({v.doctor_user.doctor.department})"
+                w.writerow([
+                    v.timestamp.strftime('%Y-%m-%d %H:%M'),
+                    doctor_name,
+                    diagnosis_notes
+                ])
+            
+            # Empty row
+            w.writerow([])
+            
+            # PRESCRIPTIONS SECTION
+            w.writerow(['PRESCRIPTIONS'])
+            w.writerow(['Date', 'Doctor', 'Medicines', 'Status'])
             for pr in prescriptions:
-                meds = ', '.join([f"{m.drug_name} {m.dosage}" for m in pr.medicines.all()])
-                w.writerow(['Prescription', pr.created_at.strftime('%Y-%m-%d %H:%M'), pr.visit.patient.full_name if pr.visit and pr.visit.patient else '', pr.doctor.get_full_name() if pr.doctor else '', meds, pr.get_status_display()])
+                try:
+                    meds = []
+                    for m in pr.medicines.all():
+                        med_str = f"• {m.drug_name} {m.dosage}"
+                        if m.frequency:
+                            med_str += f" {m.frequency}"
+                        if m.duration:
+                            med_str += f" {m.duration}"
+                        meds.append(med_str)
+                    medicines_text = ' | '.join(meds) if meds else ''
+                except Exception:
+                    medicines_text = 'Error loading medicines'
+                
+                doctor_name = pr.doctor.get_full_name() if pr.doctor else ''
+                if pr.doctor and hasattr(pr.doctor, 'doctor') and pr.doctor.doctor.department:
+                    doctor_name += f" ({pr.doctor.doctor.department})"
+                
+                w.writerow([
+                    pr.created_at.strftime('%Y-%m-%d %H:%M'),
+                    doctor_name,
+                    medicines_text,
+                    pr.get_status_display()
+                ])
+            
+            # Empty row
+            w.writerow([])
+            
+            # LABORATORY TESTS SECTION
+            w.writerow(['LABORATORY TESTS'])
+            w.writerow(['Date', 'Test', 'Status', 'Results'])
             for v in lab_visits:
-                w.writerow(['Lab', v.timestamp.strftime('%Y-%m-%d %H:%M'), v.patient.full_name if v.patient else '', '', (v.lab_test_type or ''), v.get_status_display()])
-            for rec in vaccinations:
-                w.writerow(['Vaccination', rec.created_at.strftime('%Y-%m-%d %H:%M'), rec.visit.patient.full_name if rec.visit and rec.visit.patient else '', '', str(rec.vaccine_type), rec.get_status_display()])
+                w.writerow([
+                    v.timestamp.strftime('%Y-%m-%d %H:%M'),
+                    v.lab_test_type or v.lab_tests or 'Lab Test',
+                    v.get_status_display(),
+                    v.lab_results or ''
+                ])
+            
+            # Empty row
+            w.writerow([])
+            
+            # VACCINATIONS SECTION
+            w.writerow(['VACCINATIONS'])
+            w.writerow(['Date', 'Vaccine', 'Status'])
+            if vaccinations:
+                for rec in vaccinations:
+                    w.writerow([
+                        rec.created_at.strftime('%Y-%m-%d %H:%M'),
+                        str(rec.vaccine_type),
+                        rec.get_status_display()
+                    ])
+            else:
+                w.writerow(['No vaccination records.'])
+            
             return resp
         if export == 'xlsx':
             try:
                 from openpyxl import Workbook
+                from openpyxl.styles import Font, PatternFill
+                from io import BytesIO
             except Exception:
                 messages.error(request, 'XLSX export requires openpyxl')
                 return redirect('patient_report')
-            wb = Workbook(); ws = wb.active; ws.title = 'Patient Report'
-            ws.append(['Type','Date','Patient','Doctor','Details','Status'])
-            for v in visits:
-                ws.append(['Visit', v.timestamp, v.patient.full_name if v.patient else '', v.doctor_user.get_full_name() if v.doctor_user else '', (v.diagnosis or v.notes or ''), v.get_status_display()])
+            
+            wb = Workbook()
+            ws = wb.active
+            ws.title = 'Patient Report'
+            
+            # Header styling
+            header_font = Font(bold=True)
+            header_fill = PatternFill(start_color='CCCCCC', end_color='CCCCCC', fill_type='solid')
+            
+            # CONSULTATIONS SECTION
+            ws.append(['CONSULTATIONS'])
+            ws.append(['Date', 'Doctor', 'Diagnosis/Notes'])
+            # Apply header styling
+            for col in range(1, 4):
+                ws.cell(row=2, column=col).font = header_font
+                ws.cell(row=2, column=col).fill = header_fill
+            
+            for v in doctor_visits:
+                diagnosis_notes = v.diagnosis or ''
+                if v.prescription_notes:
+                    diagnosis_notes += f"\nRx: {v.prescription_notes}"
+                doctor_name = v.doctor_user.get_full_name() if v.doctor_user else ''
+                if v.doctor_user and hasattr(v.doctor_user, 'doctor') and v.doctor_user.doctor.department:
+                    doctor_name += f" ({v.doctor_user.doctor.department})"
+                ws.append([
+                    v.timestamp.strftime('%Y-%m-%d %H:%M'),
+                    doctor_name,
+                    diagnosis_notes
+                ])
+            
+            # Add empty row
+            ws.append([])
+            
+            # PRESCRIPTIONS SECTION
+            ws.append(['PRESCRIPTIONS'])
+            ws.append(['Date', 'Doctor', 'Medicines', 'Status'])
+            # Apply header styling
+            for col in range(1, 5):
+                ws.cell(row=ws.max_row, column=col).font = header_font
+                ws.cell(row=ws.max_row, column=col).fill = header_fill
+            
             for pr in prescriptions:
-                meds = ', '.join([f"{m.drug_name} {m.dosage}" for m in pr.medicines.all()])
-                ws.append(['Prescription', pr.created_at, pr.visit.patient.full_name if pr.visit and pr.visit.patient else '', pr.doctor.get_full_name() if pr.doctor else '', meds, pr.get_status_display()])
+                try:
+                    meds = []
+                    for m in pr.medicines.all():
+                        med_str = f"• {m.drug_name} {m.dosage}"
+                        if m.frequency:
+                            med_str += f" {m.frequency}"
+                        if m.duration:
+                            med_str += f" {m.duration}"
+                        meds.append(med_str)
+                    medicines_text = '\n'.join(meds) if meds else ''
+                except Exception:
+                    medicines_text = 'Error loading medicines'
+                
+                doctor_name = pr.doctor.get_full_name() if pr.doctor else ''
+                if pr.doctor and hasattr(pr.doctor, 'doctor') and pr.doctor.doctor.department:
+                    doctor_name += f" ({pr.doctor.doctor.department})"
+                
+                ws.append([
+                    pr.created_at.strftime('%Y-%m-%d %H:%M'),
+                    doctor_name,
+                    medicines_text,
+                    pr.get_status_display()
+                ])
+            
+            # Add empty row
+            ws.append([])
+            
+            # LABORATORY TESTS SECTION
+            ws.append(['LABORATORY TESTS'])
+            ws.append(['Date', 'Test', 'Status', 'Results'])
+            # Apply header styling
+            for col in range(1, 5):
+                ws.cell(row=ws.max_row, column=col).font = header_font
+                ws.cell(row=ws.max_row, column=col).fill = header_fill
+            
             for v in lab_visits:
-                ws.append(['Lab', v.timestamp, v.patient.full_name if v.patient else '', '', (v.lab_test_type or ''), v.get_status_display()])
-            for rec in vaccinations:
-                ws.append(['Vaccination', rec.created_at, rec.visit.patient.full_name if rec.visit and rec.visit.patient else '', '', str(rec.vaccine_type), rec.get_status_display()])
-            resp = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                ws.append([
+                    v.timestamp.strftime('%Y-%m-%d %H:%M'),
+                    v.lab_test_type or v.lab_tests or 'Lab Test',
+                    v.get_status_display(),
+                    v.lab_results or ''
+                ])
+            
+            # Add empty row
+            ws.append([])
+            
+            # VACCINATIONS SECTION
+            ws.append(['VACCINATIONS'])
+            ws.append(['Date', 'Vaccine', 'Status'])
+            # Apply header styling
+            for col in range(1, 4):
+                ws.cell(row=ws.max_row, column=col).font = header_font
+                ws.cell(row=ws.max_row, column=col).fill = header_fill
+            
+            if vaccinations:
+                for rec in vaccinations:
+                    ws.append([
+                        rec.created_at.strftime('%Y-%m-%d %H:%M'),
+                        str(rec.vaccine_type),
+                        rec.get_status_display()
+                    ])
+            else:
+                ws.append(['No vaccination records.'])
+            
+            # Auto-adjust column widths
+            for column in ws.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)  # Cap at 50 characters
+                ws.column_dimensions[column_letter].width = adjusted_width
+            
+            # Save to BytesIO buffer first
+            buffer = BytesIO()
+            wb.save(buffer)
+            buffer.seek(0)
+            
+            resp = HttpResponse(buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
             resp['Content-Disposition'] = f'attachment; filename="{filename_base}.xlsx"'
-            wb.save(resp)
             return resp
         if export == 'pdf':
             try:
@@ -136,26 +318,127 @@ def patient_report(request):
             resp['Content-Disposition'] = f'attachment; filename="{filename_base}.pdf"'
             p = canvas.Canvas(resp, pagesize=A4); width, height = A4
             y = height - 40
-            p.setFont('Helvetica-Bold', 14); p.drawString(40, y, 'Patient Report'); y -= 18
-            p.setFont('Helvetica', 10); p.drawString(40, y, f'Date Range: {start_date} to {end_date}'); y -= 18
-            def draw_row(cols):
+            
+            # Title and date range
+            p.setFont('Helvetica-Bold', 16); p.drawString(40, y, 'Patient Medical Report'); y -= 20
+            p.setFont('Helvetica', 10); p.drawString(40, y, f'Report Period: {start_date} to {end_date}'); y -= 30
+            
+            def draw_section_header(title):
                 nonlocal y
-                if y < 40: p.showPage(); y = height - 40; p.setFont('Helvetica', 10)
+                if y < 60: p.showPage(); y = height - 40
+                p.setFont('Helvetica-Bold', 12); p.drawString(40, y, title); y -= 20
+                return y
+            
+            def draw_table_header(headers):
+                nonlocal y
+                if y < 60: p.showPage(); y = height - 40
+                p.setFont('Helvetica-Bold', 10)
                 x = 40
-                for text, w in cols:
-                    p.drawString(x, y, str(text)[:w]); x += 140
+                for header, width in headers:
+                    p.drawString(x, y, header)
+                    x += width
+                y -= 15
+                # Draw line under headers
+                p.line(40, y, x, y)
+                y -= 5
+                return y
+            
+            def draw_row(cols, headers):
+                nonlocal y
+                if y < 40: p.showPage(); y = height - 40
+                p.setFont('Helvetica', 9)
+                x = 40
+                for i, (text, width) in enumerate(zip(cols, [h[1] for h in headers])):
+                    # Truncate text to fit column width
+                    max_chars = width // 6  # Approximate characters per unit width
+                    display_text = str(text)[:max_chars] if text else ''
+                    p.drawString(x, y, display_text)
+                    x += width
                 y -= 12
-            p.setFont('Helvetica-Bold', 10); draw_row([('Type',20),('Date',20),('Patient',20),('Doctor',20),('Details',40),('Status',20)])
-            p.setFont('Helvetica', 9)
-            for v in visits:
-                draw_row([('Visit',20), (v.timestamp.strftime('%Y-%m-%d %H:%M'),20), (v.patient.full_name if v.patient else '',20), (v.doctor_user.get_full_name() if v.doctor_user else '',20), ((v.diagnosis or v.notes or '')[:60],40), (v.get_status_display(),20)])
+                return y
+            
+            # CONSULTATIONS SECTION
+            draw_section_header('CONSULTATIONS')
+            headers = [('Date', 80), ('Doctor', 120), ('Diagnosis/Notes', 200)]
+            draw_table_header(headers)
+            
+            for v in doctor_visits:
+                diagnosis_notes = v.diagnosis or ''
+                if v.prescription_notes:
+                    diagnosis_notes += f" | Rx: {v.prescription_notes}"
+                doctor_name = v.doctor_user.get_full_name() if v.doctor_user else ''
+                if v.doctor_user and hasattr(v.doctor_user, 'doctor') and v.doctor_user.doctor.department:
+                    doctor_name += f" ({v.doctor_user.doctor.department})"
+                draw_row([
+                    v.timestamp.strftime('%Y-%m-%d %H:%M'),
+                    doctor_name,
+                    diagnosis_notes
+                ], headers)
+            
+            y -= 20  # Space between sections
+            
+            # PRESCRIPTIONS SECTION
+            draw_section_header('PRESCRIPTIONS')
+            headers = [('Date', 80), ('Doctor', 120), ('Medicines', 150), ('Status', 50)]
+            draw_table_header(headers)
+            
             for pr in prescriptions:
-                meds = ', '.join([f"{m.drug_name} {m.dosage}" for m in pr.medicines.all()])
-                draw_row([('Prescription',20), (pr.created_at.strftime('%Y-%m-%d %H:%M'),20), (pr.visit.patient.full_name if pr.visit and pr.visit.patient else '',20), (pr.doctor.get_full_name() if pr.doctor else '',20), (meds[:60],40), (pr.get_status_display(),20)])
+                try:
+                    meds = []
+                    for m in pr.medicines.all():
+                        med_str = f"• {m.drug_name} {m.dosage}"
+                        if m.frequency:
+                            med_str += f" {m.frequency}"
+                        if m.duration:
+                            med_str += f" {m.duration}"
+                        meds.append(med_str)
+                    medicines_text = ' | '.join(meds) if meds else ''
+                except Exception:
+                    medicines_text = 'Error loading medicines'
+                
+                doctor_name = pr.doctor.get_full_name() if pr.doctor else ''
+                if pr.doctor and hasattr(pr.doctor, 'doctor') and pr.doctor.doctor.department:
+                    doctor_name += f" ({pr.doctor.doctor.department})"
+                
+                draw_row([
+                    pr.created_at.strftime('%Y-%m-%d %H:%M'),
+                    doctor_name,
+                    medicines_text,
+                    pr.get_status_display()
+                ], headers)
+            
+            y -= 20  # Space between sections
+            
+            # LABORATORY TESTS SECTION
+            draw_section_header('LABORATORY TESTS')
+            headers = [('Date', 80), ('Test', 100), ('Status', 60), ('Results', 160)]
+            draw_table_header(headers)
+            
             for v in lab_visits:
-                draw_row([('Lab',20), (v.timestamp.strftime('%Y-%m-%d %H:%M'),20), (v.patient.full_name if v.patient else '',20), ('',20), ((v.lab_test_type or '')[:60],40), (v.get_status_display(),20)])
-            for rec in vaccinations:
-                draw_row([('Vaccination',20), (rec.created_at.strftime('%Y-%m-%d %H:%M'),20), (rec.visit.patient.full_name if rec.visit and rec.visit.patient else '',20), ('',20), (str(rec.vaccine_type)[:60],40), (rec.get_status_display(),20)])
+                draw_row([
+                    v.timestamp.strftime('%Y-%m-%d %H:%M'),
+                    v.lab_test_type or v.lab_tests or 'Lab Test',
+                    v.get_status_display(),
+                    v.lab_results or ''
+                ], headers)
+            
+            y -= 20  # Space between sections
+            
+            # VACCINATIONS SECTION
+            draw_section_header('VACCINATIONS')
+            headers = [('Date', 80), ('Vaccine', 150), ('Status', 70)]
+            draw_table_header(headers)
+            
+            if vaccinations:
+                for rec in vaccinations:
+                    draw_row([
+                        rec.created_at.strftime('%Y-%m-%d %H:%M'),
+                        str(rec.vaccine_type),
+                        rec.get_status_display()
+                    ], headers)
+            else:
+                draw_row(['No vaccination records.', '', ''], headers)
+            
             p.showPage(); p.save(); return resp
 
     return render(request, 'dashboard/patient_report.html', {
@@ -206,35 +489,163 @@ def doctor_report(request):
             resp = HttpResponse(content_type='text/csv')
             resp['Content-Disposition'] = f'attachment; filename="{filename_base}.csv"'
             w = csv.writer(resp)
-            w.writerow(['Type','Date','Patient','Status'])
+            
+            # CONSULTATIONS SECTION
+            w.writerow(['CONSULTATIONS'])
+            w.writerow(['Date/Time', 'Patient', 'Status'])
             for v in visits:
-                w.writerow(['Consultation', v.timestamp.strftime('%Y-%m-%d %H:%M'), v.patient.full_name if v.patient else '', v.get_status_display()])
+                w.writerow([
+                    v.timestamp.strftime('%Y-%m-%d %H:%M'),
+                    v.patient.full_name if v.patient else '',
+                    v.get_status_display()
+                ])
+            
+            # Empty row
+            w.writerow([])
+            
+            # PRESCRIPTIONS SECTION
+            w.writerow(['PRESCRIPTIONS'])
+            w.writerow(['Date/Time', 'Patient', 'Status'])
             for p in prescriptions:
-                w.writerow(['Prescription', p.created_at.strftime('%Y-%m-%d %H:%M'), p.visit.patient.full_name if p.visit and p.visit.patient else '', p.get_status_display()])
+                w.writerow([
+                    p.created_at.strftime('%Y-%m-%d %H:%M'),
+                    p.visit.patient.full_name if p.visit and p.visit.patient else '',
+                    p.get_status_display()
+                ])
+            
+            # Empty row
+            w.writerow([])
+            
+            # LAB REQUESTS SECTION
+            w.writerow(['LAB REQUESTS'])
+            w.writerow(['Date/Time', 'Patient', 'Status'])
             for l in lab_requests:
-                w.writerow(['Lab Request', l.timestamp.strftime('%Y-%m-%d %H:%M'), l.patient.full_name if l.patient else '', l.get_status_display()])
+                w.writerow([
+                    l.timestamp.strftime('%Y-%m-%d %H:%M'),
+                    l.patient.full_name if l.patient else '',
+                    l.get_status_display()
+                ])
+            
+            # Empty row
+            w.writerow([])
+            
+            # VACCINATION REQUESTS SECTION
+            w.writerow(['VACCINATION REQUESTS'])
+            w.writerow(['Date/Time', 'Patient', 'Status'])
             for v2 in vacc_requests:
-                w.writerow(['Vaccination Request', v2.timestamp.strftime('%Y-%m-%d %H:%M'), v2.patient.full_name if v2.patient else '', v2.get_status_display()])
+                w.writerow([
+                    v2.timestamp.strftime('%Y-%m-%d %H:%M'),
+                    v2.patient.full_name if v2.patient else '',
+                    v2.get_status_display()
+                ])
+            
             return resp
         if export == 'xlsx':
             try:
                 from openpyxl import Workbook
+                from openpyxl.styles import Font, PatternFill
+                from io import BytesIO
             except Exception:
                 messages.error(request, 'XLSX export requires openpyxl')
                 return redirect('doctor_report')
-            wb = Workbook(); ws = wb.active; ws.title = 'Doctor Report'
-            ws.append(['Type','Date','Patient','Status'])
+            
+            wb = Workbook()
+            ws = wb.active
+            ws.title = 'Doctor Report'
+            
+            # Header styling
+            header_font = Font(bold=True)
+            header_fill = PatternFill(start_color='CCCCCC', end_color='CCCCCC', fill_type='solid')
+            
+            # CONSULTATIONS SECTION
+            ws.append(['CONSULTATIONS'])
+            ws.append(['Date/Time', 'Patient', 'Status'])
+            # Apply header styling
+            for col in range(1, 4):
+                ws.cell(row=2, column=col).font = header_font
+                ws.cell(row=2, column=col).fill = header_fill
+            
             for v in visits:
-                ws.append(['Consultation', v.timestamp, v.patient.full_name if v.patient else '', v.get_status_display()])
+                ws.append([
+                    v.timestamp.strftime('%Y-%m-%d %H:%M'),
+                    v.patient.full_name if v.patient else '',
+                    v.get_status_display()
+                ])
+            
+            # Add empty row
+            ws.append([])
+            
+            # PRESCRIPTIONS SECTION
+            ws.append(['PRESCRIPTIONS'])
+            ws.append(['Date/Time', 'Patient', 'Status'])
+            # Apply header styling
+            for col in range(1, 4):
+                ws.cell(row=ws.max_row, column=col).font = header_font
+                ws.cell(row=ws.max_row, column=col).fill = header_fill
+            
             for p in prescriptions:
-                ws.append(['Prescription', p.created_at, p.visit.patient.full_name if p.visit and p.visit.patient else '', p.get_status_display()])
+                ws.append([
+                    p.created_at.strftime('%Y-%m-%d %H:%M'),
+                    p.visit.patient.full_name if p.visit and p.visit.patient else '',
+                    p.get_status_display()
+                ])
+            
+            # Add empty row
+            ws.append([])
+            
+            # LAB REQUESTS SECTION
+            ws.append(['LAB REQUESTS'])
+            ws.append(['Date/Time', 'Patient', 'Status'])
+            # Apply header styling
+            for col in range(1, 4):
+                ws.cell(row=ws.max_row, column=col).font = header_font
+                ws.cell(row=ws.max_row, column=col).fill = header_fill
+            
             for l in lab_requests:
-                ws.append(['Lab Request', l.timestamp, l.patient.full_name if l.patient else '', l.get_status_display()])
+                ws.append([
+                    l.timestamp.strftime('%Y-%m-%d %H:%M'),
+                    l.patient.full_name if l.patient else '',
+                    l.get_status_display()
+                ])
+            
+            # Add empty row
+            ws.append([])
+            
+            # VACCINATION REQUESTS SECTION
+            ws.append(['VACCINATION REQUESTS'])
+            ws.append(['Date/Time', 'Patient', 'Status'])
+            # Apply header styling
+            for col in range(1, 4):
+                ws.cell(row=ws.max_row, column=col).font = header_font
+                ws.cell(row=ws.max_row, column=col).fill = header_fill
+            
             for v2 in vacc_requests:
-                ws.append(['Vaccination Request', v2.timestamp, v2.patient.full_name if v2.patient else '', v2.get_status_display()])
-            resp = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                ws.append([
+                    v2.timestamp.strftime('%Y-%m-%d %H:%M'),
+                    v2.patient.full_name if v2.patient else '',
+                    v2.get_status_display()
+                ])
+            
+            # Auto-adjust column widths
+            for column in ws.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                ws.column_dimensions[column_letter].width = adjusted_width
+            
+            # Save to BytesIO buffer first
+            buffer = BytesIO()
+            wb.save(buffer)
+            buffer.seek(0)
+            
+            resp = HttpResponse(buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
             resp['Content-Disposition'] = f'attachment; filename="{filename_base}.xlsx"'
-            wb.save(resp)
             return resp
         if export == 'pdf':
             try:
@@ -247,25 +658,99 @@ def doctor_report(request):
             resp['Content-Disposition'] = f'attachment; filename="{filename_base}.pdf"'
             p = canvas.Canvas(resp, pagesize=A4); width, height = A4
             y = height - 40
-            p.setFont('Helvetica-Bold', 14); p.drawString(40, y, 'Doctor Report'); y -= 18
-            p.setFont('Helvetica', 10); p.drawString(40, y, f'Date Range: {start_date} to {end_date}'); y -= 18
-            def draw_row(cols):
+            
+            # Title and date range
+            p.setFont('Helvetica-Bold', 16); p.drawString(40, y, 'Doctor Report'); y -= 20
+            p.setFont('Helvetica', 10); p.drawString(40, y, f'Date Range: {start_date} to {end_date}'); y -= 30
+            
+            def draw_section_header(title):
                 nonlocal y
-                if y < 40: p.showPage(); y = height - 40; p.setFont('Helvetica', 10)
+                if y < 60: p.showPage(); y = height - 40
+                p.setFont('Helvetica-Bold', 12); p.drawString(40, y, title); y -= 20
+                return y
+            
+            def draw_table_header(headers):
+                nonlocal y
+                if y < 60: p.showPage(); y = height - 40
+                p.setFont('Helvetica-Bold', 10)
                 x = 40
-                for text, w in cols:
-                    p.drawString(x, y, str(text)[:w]); x += 160
+                for header, width in headers:
+                    p.drawString(x, y, header)
+                    x += width
+                y -= 15
+                # Draw line under headers
+                p.line(40, y, x, y)
+                y -= 5
+                return y
+            
+            def draw_row(cols, headers):
+                nonlocal y
+                if y < 40: p.showPage(); y = height - 40
+                p.setFont('Helvetica', 9)
+                x = 40
+                for i, (text, width) in enumerate(zip(cols, [h[1] for h in headers])):
+                    # Truncate text to fit column width
+                    max_chars = width // 6  # Approximate characters per unit width
+                    display_text = str(text)[:max_chars] if text else ''
+                    p.drawString(x, y, display_text)
+                    x += width
                 y -= 12
-            p.setFont('Helvetica-Bold', 10); draw_row([('Type',24),('Date',24),('Patient',30),('Status',20)])
-            p.setFont('Helvetica', 9)
+                return y
+            
+            # CONSULTATIONS SECTION
+            draw_section_header('CONSULTATIONS')
+            headers = [('Date/Time', 80), ('Patient', 200), ('Status', 80)]
+            draw_table_header(headers)
+            
             for v in visits:
-                draw_row([('Consultation',24), (v.timestamp.strftime('%Y-%m-%d %H:%M'),24), (v.patient.full_name if v.patient else '',30), (v.get_status_display(),20)])
-            for pr in prescriptions:
-                draw_row([('Prescription',24), (pr.created_at.strftime('%Y-%m-%d %H:%M'),24), (pr.visit.patient.full_name if pr.visit and pr.visit.patient else '',30), (pr.get_status_display(),20)])
+                draw_row([
+                    v.timestamp.strftime('%Y-%m-%d %H:%M'),
+                    v.patient.full_name if v.patient else '',
+                    v.get_status_display()
+                ], headers)
+            
+            y -= 20  # Space between sections
+            
+            # PRESCRIPTIONS SECTION
+            draw_section_header('PRESCRIPTIONS')
+            headers = [('Date/Time', 80), ('Patient', 200), ('Status', 80)]
+            draw_table_header(headers)
+            
+            for p in prescriptions:
+                draw_row([
+                    p.created_at.strftime('%Y-%m-%d %H:%M'),
+                    p.visit.patient.full_name if p.visit and p.visit.patient else '',
+                    p.get_status_display()
+                ], headers)
+            
+            y -= 20  # Space between sections
+            
+            # LAB REQUESTS SECTION
+            draw_section_header('LAB REQUESTS')
+            headers = [('Date/Time', 80), ('Patient', 200), ('Status', 80)]
+            draw_table_header(headers)
+            
             for l in lab_requests:
-                draw_row([('Lab Request',24), (l.timestamp.strftime('%Y-%m-%d %H:%M'),24), (l.patient.full_name if l.patient else '',30), (l.get_status_display(),20)])
+                draw_row([
+                    l.timestamp.strftime('%Y-%m-%d %H:%M'),
+                    l.patient.full_name if l.patient else '',
+                    l.get_status_display()
+                ], headers)
+            
+            y -= 20  # Space between sections
+            
+            # VACCINATION REQUESTS SECTION
+            draw_section_header('VACCINATION REQUESTS')
+            headers = [('Date/Time', 80), ('Patient', 200), ('Status', 80)]
+            draw_table_header(headers)
+            
             for v2 in vacc_requests:
-                draw_row([('Vaccination Request',24), (v2.timestamp.strftime('%Y-%m-%d %H:%M'),24), (v2.patient.full_name if v2.patient else '',30), (v2.get_status_display(),20)])
+                draw_row([
+                    v2.timestamp.strftime('%Y-%m-%d %H:%M'),
+                    v2.patient.full_name if v2.patient else '',
+                    v2.get_status_display()
+                ], headers)
+            
             p.showPage(); p.save(); return resp
 
     return render(request, 'dashboard/doctor_report.html', {
@@ -302,10 +787,12 @@ def lab_report(request):
             resp = HttpResponse(content_type='text/csv')
             resp['Content-Disposition'] = f'attachment; filename="{filename_base}.csv"'
             w = csv.writer(resp)
-            w.writerow(['Type','Patient','Patient ID','Email','Date/Verified At','Test Type','Status'])
+            
+            # COMPLETED LAB RESULTS SECTION
+            w.writerow(['COMPLETED LAB RESULTS'])
+            w.writerow(['Patient', 'Patient ID', 'Email', 'Date', 'Test Type', 'Status'])
             for r in completed:
                 w.writerow([
-                    'Completed',
                     r.visit.patient.full_name if r.visit and r.visit.patient else '',
                     r.visit.patient.patient_code if r.visit and r.visit.patient else '',
                     r.visit.patient.email if r.visit and r.visit.patient else '',
@@ -313,9 +800,15 @@ def lab_report(request):
                     (r.lab_type or getattr(r.visit, 'lab_test_type', '') or 'Lab Test'),
                     'Done'
                 ])
+            
+            # Empty row
+            w.writerow([])
+            
+            # VERIFIED/IN PROCESS SECTION
+            w.writerow(['VERIFIED / IN PROCESS'])
+            w.writerow(['Patient', 'Patient ID', 'Email', 'Verified At', 'Test Type', 'Status'])
             for v in verified:
                 w.writerow([
-                    'Verified/In Process',
                     v.patient.full_name if v.patient else '',
                     v.patient.patient_code if v.patient else '',
                     v.patient.email if v.patient else '',
@@ -323,38 +816,84 @@ def lab_report(request):
                     (v.lab_test_type or 'Lab Test'),
                     'In Process'
                 ])
+            
             return resp
         if export in ('excel','xlsx'):
             try:
                 from openpyxl import Workbook
+                from openpyxl.styles import Font, PatternFill
+                from io import BytesIO
             except Exception:
                 messages.error(request, 'XLSX export requires openpyxl')
                 return redirect('lab_report')
-            wb = Workbook(); ws = wb.active; ws.title = 'Laboratory Report'
-            ws.append(['Type','Patient','Patient ID','Email','Date/Verified At','Test Type','Status'])
+            
+            wb = Workbook()
+            ws = wb.active
+            ws.title = 'Laboratory Report'
+            
+            # Header styling
+            header_font = Font(bold=True)
+            header_fill = PatternFill(start_color='CCCCCC', end_color='CCCCCC', fill_type='solid')
+            
+            # COMPLETED LAB RESULTS SECTION
+            ws.append(['COMPLETED LAB RESULTS'])
+            ws.append(['Patient', 'Patient ID', 'Email', 'Date', 'Test Type', 'Status'])
+            # Apply header styling
+            for col in range(1, 7):
+                ws.cell(row=2, column=col).font = header_font
+                ws.cell(row=2, column=col).fill = header_fill
+            
             for r in completed:
                 ws.append([
-                    'Completed',
                     r.visit.patient.full_name if r.visit and r.visit.patient else '',
                     r.visit.patient.patient_code if r.visit and r.visit.patient else '',
                     r.visit.patient.email if r.visit and r.visit.patient else '',
-                    r.created_at.replace(tzinfo=None) if r.created_at else '',
+                    r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '',
                     (r.lab_type or getattr(r.visit, 'lab_test_type', '') or 'Lab Test'),
                     'Done'
                 ])
+            
+            # Add empty row
+            ws.append([])
+            
+            # VERIFIED/IN PROCESS SECTION
+            ws.append(['VERIFIED / IN PROCESS'])
+            ws.append(['Patient', 'Patient ID', 'Email', 'Verified At', 'Test Type', 'Status'])
+            # Apply header styling
+            for col in range(1, 7):
+                ws.cell(row=ws.max_row, column=col).font = header_font
+                ws.cell(row=ws.max_row, column=col).fill = header_fill
+            
             for v in verified:
                 ws.append([
-                    'Verified/In Process',
                     v.patient.full_name if v.patient else '',
                     v.patient.patient_code if v.patient else '',
                     v.patient.email if v.patient else '',
-                    v.timestamp.replace(tzinfo=None) if v.timestamp else '',
+                    v.timestamp.strftime('%Y-%m-%d %H:%M') if v.timestamp else '',
                     (v.lab_test_type or 'Lab Test'),
                     'In Process'
                 ])
-            resp = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            
+            # Auto-adjust column widths
+            for column in ws.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                ws.column_dimensions[column_letter].width = adjusted_width
+            
+            # Save to BytesIO buffer first
+            buffer = BytesIO()
+            wb.save(buffer)
+            buffer.seek(0)
+            
+            resp = HttpResponse(buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
             resp['Content-Disposition'] = f'attachment; filename="{filename_base}.xlsx"'
-            wb.save(resp)
             return resp
         if export == 'pdf':
             try:
@@ -367,39 +906,77 @@ def lab_report(request):
             resp['Content-Disposition'] = f'attachment; filename="{filename_base}.pdf"'
             p = canvas.Canvas(resp, pagesize=A4); width, height = A4
             y = height - 40
-            p.setFont('Helvetica-Bold', 14); p.drawString(40, y, 'Laboratory Report'); y -= 18
-            p.setFont('Helvetica', 10); p.drawString(40, y, f'Date Range: {start_date} to {end_date}'); y -= 18
-            def draw_row(cols):
+            
+            # Title and date range
+            p.setFont('Helvetica-Bold', 16); p.drawString(40, y, 'Laboratory Report'); y -= 20
+            p.setFont('Helvetica', 10); p.drawString(40, y, f'Date Range: {start_date} to {end_date}'); y -= 30
+            
+            def draw_section_header(title):
                 nonlocal y
-                if y < 40:
-                    p.showPage(); y = height - 40; p.setFont('Helvetica', 10)
+                if y < 60: p.showPage(); y = height - 40
+                p.setFont('Helvetica-Bold', 12); p.drawString(40, y, title); y -= 20
+                return y
+            
+            def draw_table_header(headers):
+                nonlocal y
+                if y < 60: p.showPage(); y = height - 40
+                p.setFont('Helvetica-Bold', 10)
                 x = 40
-                for text, w in cols:
-                    p.drawString(x, y, str(text)[:w]); x += 110
+                for header, width in headers:
+                    p.drawString(x, y, header)
+                    x += width
+                y -= 15
+                # Draw line under headers
+                p.line(40, y, x, y)
+                y -= 5
+                return y
+            
+            def draw_row(cols, headers):
+                nonlocal y
+                if y < 40: p.showPage(); y = height - 40
+                p.setFont('Helvetica', 9)
+                x = 40
+                for i, (text, width) in enumerate(zip(cols, [h[1] for h in headers])):
+                    # Truncate text to fit column width
+                    max_chars = width // 6  # Approximate characters per unit width
+                    display_text = str(text)[:max_chars] if text else ''
+                    p.drawString(x, y, display_text)
+                    x += width
                 y -= 12
-            p.setFont('Helvetica-Bold', 10)
-            draw_row([('Type',16),('Patient',26),('Patient ID',18),('Email',28),('Date',20),('Test Type',24),('Status',14)])
-            p.setFont('Helvetica', 9)
+                return y
+            
+            # COMPLETED LAB RESULTS SECTION
+            draw_section_header('COMPLETED LAB RESULTS')
+            headers = [('Patient', 120), ('Patient ID', 80), ('Email', 120), ('Date', 80), ('Test Type', 100), ('Status', 60)]
+            draw_table_header(headers)
+            
             for r in completed:
                 draw_row([
-                    ('Completed',16),
-                    ((r.visit.patient.full_name if r.visit and r.visit.patient else ''),26),
-                    ((r.visit.patient.patient_code if r.visit and r.visit.patient else ''),18),
-                    ((r.visit.patient.email if r.visit and r.visit.patient else ''),28),
-                    ((r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else ''),20),
-                    (((r.lab_type or getattr(r.visit, 'lab_test_type', '') or 'Lab Test')),24),
-                    ('Done',14)
-                ])
+                    r.visit.patient.full_name if r.visit and r.visit.patient else '',
+                    r.visit.patient.patient_code if r.visit and r.visit.patient else '',
+                    r.visit.patient.email if r.visit and r.visit.patient else '',
+                    r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '',
+                    (r.lab_type or getattr(r.visit, 'lab_test_type', '') or 'Lab Test'),
+                    'Done'
+                ], headers)
+            
+            y -= 20  # Space between sections
+            
+            # VERIFIED/IN PROCESS SECTION
+            draw_section_header('VERIFIED / IN PROCESS')
+            headers = [('Patient', 120), ('Patient ID', 80), ('Email', 120), ('Verified At', 80), ('Test Type', 100), ('Status', 60)]
+            draw_table_header(headers)
+            
             for v in verified:
                 draw_row([
-                    ('Verified/In Process',16),
-                    ((v.patient.full_name if v.patient else ''),26),
-                    ((v.patient.patient_code if v.patient else ''),18),
-                    ((v.patient.email if v.patient else ''),28),
-                    ((v.timestamp.strftime('%Y-%m-%d %H:%M') if v.timestamp else ''),20),
-                    ((v.lab_test_type or 'Lab Test'),24),
-                    ('In Process',14)
-                ])
+                    v.patient.full_name if v.patient else '',
+                    v.patient.patient_code if v.patient else '',
+                    v.patient.email if v.patient else '',
+                    v.timestamp.strftime('%Y-%m-%d %H:%M') if v.timestamp else '',
+                    (v.lab_test_type or 'Lab Test'),
+                    'In Process'
+                ], headers)
+            
             p.showPage(); p.save(); return resp
 
     return render(request, 'dashboard/lab_report.html', {
@@ -449,11 +1026,12 @@ def reception_report(request):
             resp = HttpResponse(content_type='text/csv')
             resp['Content-Disposition'] = f'attachment; filename="{filename_base}.csv"'
             w = csv.writer(resp)
-            w.writerow(['Type','Patient','Patient ID','Email','Date','Service','Status'])
-            rows_source = filtered if filtered is not None else list(completed) + list(in_process) + list(queued)
-            for v in rows_source:
+            
+            # COMPLETED VISITS SECTION
+            w.writerow(['COMPLETED VISITS'])
+            w.writerow(['Patient', 'Patient ID', 'Email', 'Date', 'Service', 'Status'])
+            for v in completed:
                 w.writerow([
-                    ('Completed' if v.status == 'done' else ('In Process' if v.status == 'in_process' else 'In Queue')),
                     v.patient.full_name if v.patient else '',
                     v.patient.patient_code if v.patient else '',
                     v.patient.email if v.patient else '',
@@ -461,29 +1039,139 @@ def reception_report(request):
                     v.get_service_display(),
                     v.get_status_display(),
                 ])
+            
+            # Empty row
+            w.writerow([])
+            
+            # IN PROCESS SECTION
+            w.writerow(['IN PROCESS'])
+            w.writerow(['Patient', 'Patient ID', 'Email', 'Started', 'Service', 'Status'])
+            for v in in_process:
+                w.writerow([
+                    v.patient.full_name if v.patient else '',
+                    v.patient.patient_code if v.patient else '',
+                    v.patient.email if v.patient else '',
+                    v.timestamp.strftime('%Y-%m-%d %H:%M') if v.timestamp else '',
+                    v.get_service_display(),
+                    v.get_status_display(),
+                ])
+            
+            # Empty row
+            w.writerow([])
+            
+            # IN QUEUE SECTION
+            w.writerow(['IN QUEUE'])
+            w.writerow(['Patient', 'Patient ID', 'Email', 'Date', 'Service', 'Status', 'Queue #'])
+            for v in queued:
+                w.writerow([
+                    v.patient.full_name if v.patient else '',
+                    v.patient.patient_code if v.patient else '',
+                    v.patient.email if v.patient else '',
+                    v.timestamp.strftime('%Y-%m-%d %H:%M') if v.timestamp else '',
+                    v.get_service_display(),
+                    v.get_status_display(),
+                    v.queue_number or '',
+                ])
+            
             return resp
         if export in ('excel', 'xlsx'):
             try:
                 from openpyxl import Workbook
+                from openpyxl.styles import Font, PatternFill
+                from io import BytesIO
             except Exception:
                 messages.error(request, 'XLSX export requires openpyxl')
                 return redirect('reception_report')
-            wb = Workbook(); ws = wb.active; ws.title = 'Reception Report'
-            ws.append(['Type','Patient','Patient ID','Email','Date','Service','Status'])
-            rows_source = filtered if filtered is not None else list(completed) + list(in_process) + list(queued)
-            for v in rows_source:
+            
+            wb = Workbook()
+            ws = wb.active
+            ws.title = 'Reception Report'
+            
+            # Header styling
+            header_font = Font(bold=True)
+            header_fill = PatternFill(start_color='CCCCCC', end_color='CCCCCC', fill_type='solid')
+            
+            # COMPLETED VISITS SECTION
+            ws.append(['COMPLETED VISITS'])
+            ws.append(['Patient', 'Patient ID', 'Email', 'Date', 'Service', 'Status'])
+            # Apply header styling
+            for col in range(1, 7):
+                ws.cell(row=2, column=col).font = header_font
+                ws.cell(row=2, column=col).fill = header_fill
+            
+            for v in completed:
                 ws.append([
-                    ('Completed' if v.status == 'done' else ('In Process' if v.status == 'in_process' else 'In Queue')),
                     v.patient.full_name if v.patient else '',
                     v.patient.patient_code if v.patient else '',
                     v.patient.email if v.patient else '',
-                    v.timestamp.replace(tzinfo=None) if v.timestamp else '',
+                    v.timestamp.strftime('%Y-%m-%d %H:%M') if v.timestamp else '',
                     v.get_service_display(),
                     v.get_status_display(),
                 ])
-            resp = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            
+            # Add empty row
+            ws.append([])
+            
+            # IN PROCESS SECTION
+            ws.append(['IN PROCESS'])
+            ws.append(['Patient', 'Patient ID', 'Email', 'Started', 'Service', 'Status'])
+            # Apply header styling
+            for col in range(1, 7):
+                ws.cell(row=ws.max_row, column=col).font = header_font
+                ws.cell(row=ws.max_row, column=col).fill = header_fill
+            
+            for v in in_process:
+                ws.append([
+                    v.patient.full_name if v.patient else '',
+                    v.patient.patient_code if v.patient else '',
+                    v.patient.email if v.patient else '',
+                    v.timestamp.strftime('%Y-%m-%d %H:%M') if v.timestamp else '',
+                    v.get_service_display(),
+                    v.get_status_display(),
+                ])
+            
+            # Add empty row
+            ws.append([])
+            
+            # IN QUEUE SECTION
+            ws.append(['IN QUEUE'])
+            ws.append(['Patient', 'Patient ID', 'Email', 'Date', 'Service', 'Status', 'Queue #'])
+            # Apply header styling
+            for col in range(1, 8):
+                ws.cell(row=ws.max_row, column=col).font = header_font
+                ws.cell(row=ws.max_row, column=col).fill = header_fill
+            
+            for v in queued:
+                ws.append([
+                    v.patient.full_name if v.patient else '',
+                    v.patient.patient_code if v.patient else '',
+                    v.patient.email if v.patient else '',
+                    v.timestamp.strftime('%Y-%m-%d %H:%M') if v.timestamp else '',
+                    v.get_service_display(),
+                    v.get_status_display(),
+                    v.queue_number or '',
+                ])
+            
+            # Auto-adjust column widths
+            for column in ws.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                ws.column_dimensions[column_letter].width = adjusted_width
+            
+            # Save to BytesIO buffer first
+            buffer = BytesIO()
+            wb.save(buffer)
+            buffer.seek(0)
+            
+            resp = HttpResponse(buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
             resp['Content-Disposition'] = f'attachment; filename="{filename_base}.xlsx"'
-            wb.save(resp)
             return resp
         if export == 'pdf':
             try:
@@ -496,30 +1184,95 @@ def reception_report(request):
             resp['Content-Disposition'] = f'attachment; filename="{filename_base}.pdf"'
             p = canvas.Canvas(resp, pagesize=A4); width, height = A4
             y = height - 40
-            p.setFont('Helvetica-Bold', 14); p.drawString(40, y, 'Reception Report'); y -= 18
-            p.setFont('Helvetica', 10); p.drawString(40, y, f'Date Range: {start_date} to {end_date}'); y -= 18
-            def draw_row(cols):
+            
+            # Title and date range
+            p.setFont('Helvetica-Bold', 16); p.drawString(40, y, 'Reception Report'); y -= 20
+            p.setFont('Helvetica', 10); p.drawString(40, y, f'Date Range: {start_date} to {end_date}'); y -= 30
+            
+            def draw_section_header(title):
                 nonlocal y
-                if y < 40:
-                    p.showPage(); y = height - 40; p.setFont('Helvetica', 10)
+                if y < 60: p.showPage(); y = height - 40
+                p.setFont('Helvetica-Bold', 12); p.drawString(40, y, title); y -= 20
+                return y
+            
+            def draw_table_header(headers):
+                nonlocal y
+                if y < 60: p.showPage(); y = height - 40
+                p.setFont('Helvetica-Bold', 10)
                 x = 40
-                for text, w in cols:
-                    p.drawString(x, y, str(text)[:w]); x += 110
+                for header, width in headers:
+                    p.drawString(x, y, header)
+                    x += width
+                y -= 15
+                # Draw line under headers
+                p.line(40, y, x, y)
+                y -= 5
+                return y
+            
+            def draw_row(cols, headers):
+                nonlocal y
+                if y < 40: p.showPage(); y = height - 40
+                p.setFont('Helvetica', 9)
+                x = 40
+                for i, (text, width) in enumerate(zip(cols, [h[1] for h in headers])):
+                    # Truncate text to fit column width
+                    max_chars = width // 6  # Approximate characters per unit width
+                    display_text = str(text)[:max_chars] if text else ''
+                    p.drawString(x, y, display_text)
+                    x += width
                 y -= 12
-            p.setFont('Helvetica-Bold', 10)
-            draw_row([('Type',16),('Patient',26),('Patient ID',18),('Email',28),('Date',20),('Service',24),('Status',14)])
-            p.setFont('Helvetica', 9)
-            rows_source = filtered if filtered is not None else list(completed) + list(in_process) + list(queued)
-            for v in rows_source:
+                return y
+            
+            # COMPLETED VISITS SECTION
+            draw_section_header('COMPLETED VISITS')
+            headers = [('Patient', 120), ('Patient ID', 80), ('Email', 120), ('Date', 80), ('Service', 100), ('Status', 60)]
+            draw_table_header(headers)
+            
+            for v in completed:
                 draw_row([
-                    (('Completed' if v.status == 'done' else ('In Process' if v.status == 'in_process' else 'In Queue')),16),
-                    (v.patient.full_name if v.patient else '',26),
-                    (v.patient.patient_code if v.patient else '',18),
-                    (v.patient.email if v.patient else '',28),
-                    (v.timestamp.strftime('%Y-%m-%d %H:%M') if v.timestamp else '',20),
-                    (v.get_service_display(),24),
-                    (v.get_status_display(),14),
-                ])
+                    v.patient.full_name if v.patient else '',
+                    v.patient.patient_code if v.patient else '',
+                    v.patient.email if v.patient else '',
+                    v.timestamp.strftime('%Y-%m-%d %H:%M') if v.timestamp else '',
+                    v.get_service_display(),
+                    v.get_status_display(),
+                ], headers)
+            
+            y -= 20  # Space between sections
+            
+            # IN PROCESS SECTION
+            draw_section_header('IN PROCESS')
+            headers = [('Patient', 120), ('Patient ID', 80), ('Email', 120), ('Started', 80), ('Service', 100), ('Status', 60)]
+            draw_table_header(headers)
+            
+            for v in in_process:
+                draw_row([
+                    v.patient.full_name if v.patient else '',
+                    v.patient.patient_code if v.patient else '',
+                    v.patient.email if v.patient else '',
+                    v.timestamp.strftime('%Y-%m-%d %H:%M') if v.timestamp else '',
+                    v.get_service_display(),
+                    v.get_status_display(),
+                ], headers)
+            
+            y -= 20  # Space between sections
+            
+            # IN QUEUE SECTION
+            draw_section_header('IN QUEUE')
+            headers = [('Patient', 120), ('Patient ID', 80), ('Email', 120), ('Date', 80), ('Service', 100), ('Status', 60), ('Queue #', 50)]
+            draw_table_header(headers)
+            
+            for v in queued:
+                draw_row([
+                    v.patient.full_name if v.patient else '',
+                    v.patient.patient_code if v.patient else '',
+                    v.patient.email if v.patient else '',
+                    v.timestamp.strftime('%Y-%m-%d %H:%M') if v.timestamp else '',
+                    v.get_service_display(),
+                    v.get_status_display(),
+                    v.queue_number or '',
+                ], headers)
+            
             p.showPage(); p.save(); return resp
 
     return render(request, 'dashboard/reception_report.html', {
@@ -562,6 +1315,190 @@ def pharmacy_report(request):
     }
 
     doctors = User.objects.filter(groups__name='Doctor').order_by('first_name', 'last_name')
+
+    # Export handling
+    export = request.GET.get('export')
+    if export in ('csv', 'xlsx', 'pdf'):
+        from django.http import HttpResponse
+        filename_base = f"pharmacy_report_{start}_to_{end}"
+        if export == 'csv':
+            import csv
+            resp = HttpResponse(content_type='text/csv')
+            resp['Content-Disposition'] = f'attachment; filename="{filename_base}.csv"'
+            w = csv.writer(resp)
+            
+            # PRESCRIPTIONS SECTION
+            w.writerow(['PRESCRIPTIONS'])
+            w.writerow(['Date', 'Patient', 'Status', 'Medicines', 'Dispensed At'])
+            for p in qs:
+                try:
+                    meds = []
+                    for m in p.medicines.all():
+                        med_str = f"• {m.drug_name} {m.dosage}"
+                        if m.frequency:
+                            med_str += f" {m.frequency}"
+                        if m.duration:
+                            med_str += f" {m.duration}"
+                        meds.append(med_str)
+                    medicines_text = ' | '.join(meds) if meds else ''
+                except Exception:
+                    medicines_text = 'Error loading medicines'
+                
+                w.writerow([
+                    p.created_at.strftime('%Y-%m-%d %H:%M'),
+                    p.visit.patient.full_name if p.visit and p.visit.patient else '',
+                    p.get_status_display(),
+                    medicines_text,
+                    p.dispensed_at.strftime('%Y-%m-%d %H:%M') if p.dispensed_at else '',
+                ])
+            
+            return resp
+        if export == 'xlsx':
+            try:
+                from openpyxl import Workbook
+                from openpyxl.styles import Font, PatternFill
+                from io import BytesIO
+            except Exception:
+                messages.error(request, 'XLSX export requires openpyxl')
+                return redirect('pharmacy_reports')
+            
+            wb = Workbook()
+            ws = wb.active
+            ws.title = 'Pharmacy Report'
+            
+            # Header styling
+            header_font = Font(bold=True)
+            header_fill = PatternFill(start_color='CCCCCC', end_color='CCCCCC', fill_type='solid')
+            
+            # PRESCRIPTIONS SECTION
+            ws.append(['PRESCRIPTIONS'])
+            ws.append(['Date', 'Patient', 'Status', 'Medicines', 'Dispensed At'])
+            # Apply header styling
+            for col in range(1, 6):
+                ws.cell(row=2, column=col).font = header_font
+                ws.cell(row=2, column=col).fill = header_fill
+            
+            for p in qs:
+                try:
+                    meds = []
+                    for m in p.medicines.all():
+                        med_str = f"• {m.drug_name} {m.dosage}"
+                        if m.frequency:
+                            med_str += f" {m.frequency}"
+                        if m.duration:
+                            med_str += f" {m.duration}"
+                        meds.append(med_str)
+                    medicines_text = '\n'.join(meds) if meds else ''
+                except Exception:
+                    medicines_text = 'Error loading medicines'
+                
+                ws.append([
+                    p.created_at.strftime('%Y-%m-%d %H:%M'),
+                    p.visit.patient.full_name if p.visit and p.visit.patient else '',
+                    p.get_status_display(),
+                    medicines_text,
+                    p.dispensed_at.strftime('%Y-%m-%d %H:%M') if p.dispensed_at else '',
+                ])
+            
+            # Auto-adjust column widths
+            for column in ws.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                ws.column_dimensions[column_letter].width = adjusted_width
+            
+            # Save to BytesIO buffer first
+            buffer = BytesIO()
+            wb.save(buffer)
+            buffer.seek(0)
+            
+            resp = HttpResponse(buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            resp['Content-Disposition'] = f'attachment; filename="{filename_base}.xlsx"'
+            return resp
+        if export == 'pdf':
+            try:
+                from reportlab.lib.pagesizes import A4
+                from reportlab.pdfgen import canvas
+            except Exception:
+                messages.error(request, 'PDF export requires reportlab')
+                return redirect('pharmacy_reports')
+            resp = HttpResponse(content_type='application/pdf')
+            resp['Content-Disposition'] = f'attachment; filename="{filename_base}.pdf"'
+            p = canvas.Canvas(resp, pagesize=A4); width, height = A4
+            y = height - 40
+            
+            # Title and date range
+            p.setFont('Helvetica-Bold', 16); p.drawString(40, y, 'Pharmacy Report'); y -= 20
+            p.setFont('Helvetica', 10); p.drawString(40, y, f'Date Range: {start} to {end}'); y -= 30
+            
+            def draw_section_header(title):
+                nonlocal y
+                if y < 60: p.showPage(); y = height - 40
+                p.setFont('Helvetica-Bold', 12); p.drawString(40, y, title); y -= 20
+                return y
+            
+            def draw_table_header(headers):
+                nonlocal y
+                if y < 60: p.showPage(); y = height - 40
+                p.setFont('Helvetica-Bold', 10)
+                x = 40
+                for header, width in headers:
+                    p.drawString(x, y, header)
+                    x += width
+                y -= 15
+                # Draw line under headers
+                p.line(40, y, x, y)
+                y -= 5
+                return y
+            
+            def draw_row(cols, headers):
+                nonlocal y
+                if y < 40: p.showPage(); y = height - 40
+                p.setFont('Helvetica', 9)
+                x = 40
+                for i, (text, width) in enumerate(zip(cols, [h[1] for h in headers])):
+                    # Truncate text to fit column width
+                    max_chars = width // 6  # Approximate characters per unit width
+                    display_text = str(text)[:max_chars] if text else ''
+                    p.drawString(x, y, display_text)
+                    x += width
+                y -= 12
+                return y
+            
+            # PRESCRIPTIONS SECTION
+            draw_section_header('PRESCRIPTIONS')
+            headers = [('Date', 80), ('Patient', 150), ('Status', 80), ('Medicines', 200), ('Dispensed At', 80)]
+            draw_table_header(headers)
+            
+            for p in qs:
+                try:
+                    meds = []
+                    for m in p.medicines.all():
+                        med_str = f"• {m.drug_name} {m.dosage}"
+                        if m.frequency:
+                            med_str += f" {m.frequency}"
+                        if m.duration:
+                            med_str += f" {m.duration}"
+                        meds.append(med_str)
+                    medicines_text = ' | '.join(meds) if meds else ''
+                except Exception:
+                    medicines_text = 'Error loading medicines'
+                
+                draw_row([
+                    p.created_at.strftime('%Y-%m-%d %H:%M'),
+                    p.visit.patient.full_name if p.visit and p.visit.patient else '',
+                    p.get_status_display(),
+                    medicines_text,
+                    p.dispensed_at.strftime('%Y-%m-%d %H:%M') if p.dispensed_at else '',
+                ], headers)
+            
+            p.showPage(); p.save(); return resp
 
     return render(request, 'dashboard/pharmacy_reports.html', {
         'prescriptions': qs,
@@ -723,9 +1660,14 @@ def vaccination_report(request):
                 if has_booster:
                     row.append(getattr(r,'booster_date', None) or '')
                 ws.append(row)
-            resp = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            # Save to BytesIO buffer first
+            from io import BytesIO
+            buffer = BytesIO()
+            wb.save(buffer)
+            buffer.seek(0)
+            
+            resp = HttpResponse(buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
             resp['Content-Disposition'] = f'attachment; filename="{filename_base}.xlsx"'
-            wb.save(resp)
             return resp
         if export == 'pdf':
             try:
@@ -1113,10 +2055,15 @@ def export_admin_report(visits_qs, dept_stats, staff_activity, format_type, depa
             ws.append([]); ws.append(['Staff Activity',''])
             for s in staff_activity:
                 ws.append([f"{s['name']} ({s['role']})", s['visits']])
-        resp = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        # Save to BytesIO buffer first
+        from io import BytesIO
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        
+        resp = HttpResponse(buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         filename = f"admin_report_{department_filter}.xlsx" if department_filter != 'all' else "admin_report.xlsx"
         resp['Content-Disposition'] = f'attachment; filename="{filename}"'
-        wb.save(resp)
         return resp
     if format_type == 'pdf':
         try:
@@ -1415,6 +2362,7 @@ def system_reports(request):
                 'created_by': visit.created_by.username if visit.created_by else 'N/A',
                 'doctor': visit.doctor_user.get_full_name() if visit.doctor_user else 'N/A',
                 'notes': visit.notes or '',
+                'queue_number': visit.queue_number or '',
             })
     
     elif role_filter == 'doctor':
@@ -1444,6 +2392,7 @@ def system_reports(request):
                 'created_by': visit.created_by.username if visit.created_by else 'N/A',
                 'doctor': visit.doctor_user.get_full_name() if visit.doctor_user else 'N/A',
                 'notes': visit.notes or '',
+                'queue_number': visit.queue_number or '',
             })
     
     elif role_filter == 'laboratory':
@@ -1461,6 +2410,7 @@ def system_reports(request):
                 'created_by': visit.created_by.username if visit.created_by else 'N/A',
                 'doctor': visit.doctor_user.get_full_name() if visit.doctor_user else 'N/A',
                 'notes': visit.notes or '',
+                'queue_number': visit.queue_number or '',
             })
     
     elif role_filter == 'pharmacy':
@@ -1484,6 +2434,7 @@ def system_reports(request):
                     'created_by': (p.doctor.get_full_name() or p.doctor.username) if p.doctor else 'N/A',
                     'doctor': (p.doctor.get_full_name() or p.doctor.username) if p.doctor else 'N/A',
                     'notes': p.pharmacy_notes or '',
+                    'queue_number': '',
                 })
         except Exception:
             # Fallback to visits if prescriptions are unavailable
@@ -1517,6 +2468,7 @@ def system_reports(request):
                 'created_by': visit.created_by.username if visit.created_by else 'N/A',
                 'doctor': visit.doctor_user.get_full_name() if visit.doctor_user else 'N/A',
                 'notes': visit.notes or '',
+                'queue_number': visit.queue_number or '',
             })
     
     elif role_filter == 'reception':
@@ -1565,6 +2517,7 @@ def system_reports(request):
                 'created_by': visit.created_by.username if visit.created_by else 'N/A',
                 'doctor': visit.doctor_user.get_full_name() if visit.doctor_user else 'N/A',
                 'notes': visit.notes or '',
+                'queue_number': visit.queue_number or '',
             })
     
     # Get available departments for doctor role from Patient model choices
@@ -1590,21 +2543,85 @@ def system_reports(request):
 
 
 def export_system_reports_file(reports_data, role_filter, department_filter, start_date, end_date, format_type='csv'):
-    """Export system reports as CSV or Excel-compatible CSV."""
-    is_excel = (format_type in ('excel','xlsx'))
-    content_type = 'application/vnd.ms-excel' if is_excel else 'text/csv'
-    ext = 'xls' if is_excel else 'csv'
-    response = HttpResponse(content_type=content_type)
+    """Export system reports as CSV, XLSX, or PDF."""
+    if format_type == 'xlsx':
+        try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, PatternFill
+            from io import BytesIO
+        except Exception:
+            return HttpResponse('XLSX export requires openpyxl', status=500)
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'System Reports'
+        
+        # Header styling
+        header_font = Font(bold=True)
+        header_fill = PatternFill(start_color='CCCCCC', end_color='CCCCCC', fill_type='solid')
+        
+        # Headers
+        headers = ['Patient Name', 'Patient ID', 'Patient Email', 'Date & Time', 
+                  'Service Type', 'Department', 'Queue #', 'Status', 'Created By']
+        ws.append(headers)
+        
+        # Apply header styling
+        for col in range(1, len(headers) + 1):
+            ws.cell(row=1, column=col).font = header_font
+            ws.cell(row=1, column=col).fill = header_fill
+        
+        # Data rows
+        for report in reports_data:
+            ws.append([
+                report['patient_name'],
+                report['patient_id'],
+                report['patient_email'],
+                report['date_time'].strftime('%Y-%m-%d %H:%M:%S'),
+                report['service_type'],
+                report['department'],
+                report.get('queue_number', ''),
+                report['status'],
+                report['created_by'],
+            ])
+        
+        # Auto-adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        # Save to BytesIO buffer first
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        
+        response = HttpResponse(buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        filename = f"system_reports_{role_filter}"
+        if department_filter:
+            filename += f"_{department_filter}"
+        filename += f"_{start_date}_to_{end_date}.xlsx"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+    
+    # CSV export
+    response = HttpResponse(content_type='text/csv')
     filename = f"system_reports_{role_filter}"
     if department_filter:
         filename += f"_{department_filter}"
-    filename += f"_{start_date}_to_{end_date}.{ext}"
+    filename += f"_{start_date}_to_{end_date}.csv"
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
     writer = csv.writer(response)
     writer.writerow([
         'Patient Name', 'Patient ID', 'Patient Email', 'Date & Time', 
-        'Service Type', 'Department', 'Status', 'Created By'
+        'Service Type', 'Department', 'Queue #', 'Status', 'Created By'
     ])
     
     for report in reports_data:
@@ -1615,6 +2632,7 @@ def export_system_reports_file(reports_data, role_filter, department_filter, sta
             report['date_time'].strftime('%Y-%m-%d %H:%M:%S'),
             report['service_type'],
             report['department'],
+            report.get('queue_number', ''),
             report['status'],
             report['created_by'],
         ])
@@ -1623,6 +2641,7 @@ def export_system_reports_file(reports_data, role_filter, department_filter, sta
         try:
             from reportlab.lib.pagesizes import A4
             from reportlab.pdfgen import canvas
+            from reportlab.lib.colors import Color
         except Exception:
             return HttpResponse('PDF export requires reportlab', status=500)
         resp = HttpResponse(content_type='application/pdf')
@@ -1630,13 +2649,103 @@ def export_system_reports_file(reports_data, role_filter, department_filter, sta
         resp['Content-Disposition'] = f'attachment; filename="{filename}"'
         p = canvas.Canvas(resp, pagesize=A4); width, height = A4
         y = height - 40
-        p.setFont('Helvetica-Bold', 14); p.drawString(40, y, 'System Reports'); y -= 18
-        p.setFont('Helvetica', 10); p.drawString(40, y, f'Role: {role_filter}  Dept: {department_filter or "all"}  Range: {start_date} to {end_date}'); y -= 18
+        
+        # Title
+        p.setFont('Helvetica-Bold', 18); p.drawString(40, y, 'System Reports'); y -= 30
+        
+        # Summary Section
+        p.setFont('Helvetica-Bold', 14); p.drawString(40, y, 'SUMMARY'); y -= 20
+        
+        # Summary boxes (simulating the card layout)
+        box_width = 150
+        box_height = 60
+        box_y = y - box_height
+        
+        # Total Records Box
+        p.setFillColor(Color(0.13, 0.55, 0.13))  # Dark green background
+        p.rect(40, box_y, box_width, box_height, fill=1)
+        p.setFillColor(Color(1, 1, 1))  # White text
+        p.setFont('Helvetica-Bold', 16); p.drawString(50, box_y + 35, str(len(reports_data)))
+        p.setFont('Helvetica', 10); p.drawString(50, box_y + 20, 'Total Records')
+        p.setFont('Helvetica', 8); p.drawString(50, box_y + 8, f'{start_date} to {end_date}')
+        
+        # Role Filter Box
+        p.setFillColor(Color(0.0, 0.5, 0.8))  # Blue background
+        p.rect(210, box_y, box_width, box_height, fill=1)
+        p.setFillColor(Color(1, 1, 1))  # White text
+        p.setFont('Helvetica-Bold', 14); p.drawString(220, box_y + 35, role_filter.title())
+        p.setFont('Helvetica', 10); p.drawString(220, box_y + 20, 'Role Filter')
+        if department_filter:
+            p.setFont('Helvetica', 8); p.drawString(220, box_y + 8, department_filter)
+        
+        # Filter Summary Box
+        p.setFillColor(Color(0.9, 0.9, 0.9))  # Light gray background
+        p.rect(380, box_y, 200, box_height, fill=1)
+        p.setFillColor(Color(0, 0, 0))  # Black text
+        p.setFont('Helvetica-Bold', 10); p.drawString(390, box_y + 45, 'Filter Summary')
+        p.setFont('Helvetica', 9); 
+        summary_text = f'Showing {len(reports_data)} records for {role_filter.title()}'
+        if department_filter:
+            summary_text += f' in {department_filter}'
+        summary_text += f' from {start_date} to {end_date}'
+        p.drawString(390, box_y + 25, summary_text[:50])
+        if len(summary_text) > 50:
+            p.drawString(390, box_y + 15, summary_text[50:100])
+        
+        y = box_y - 30
+        
+        # Reports Data Section
+        p.setFont('Helvetica-Bold', 14); p.drawString(40, y, 'REPORTS DATA'); y -= 20
+        
+        # Table headers
         p.setFont('Helvetica-Bold', 10)
-        p.drawString(40, y, 'Patient Name'); p.drawString(180, y, 'Patient ID'); p.drawString(280, y, 'Date & Time'); p.drawString(400, y, 'Service'); p.drawString(470, y, 'Department'); p.drawString(560, y, 'Status'); y -= 14
-        p.setFont('Helvetica', 9)
+        headers = [
+            ('Patient Name', 120),
+            ('Patient ID', 80),
+            ('Patient Email', 120),
+            ('Date & Time', 80),
+            ('Service Type', 100),
+            ('Department', 80),
+            ('Queue #', 50),
+            ('Status', 80),
+            ('Created By', 100)
+        ]
+        
+        x = 40
+        for header, width in headers:
+            p.drawString(x, y, header)
+            x += width
+        y -= 15
+        
+        # Draw line under headers
+        p.line(40, y, x, y)
+        y -= 10
+        
+        # Table data
+        p.setFont('Helvetica', 8)
         for r in reports_data:
-            if y < 40: p.showPage(); y = height - 40; p.setFont('Helvetica', 9)
-            p.drawString(40, y, str(r['patient_name'])[:24]); p.drawString(180, y, str(r['patient_id'])[:16]); p.drawString(280, y, r['date_time'].strftime('%Y-%m-%d %H:%M')); p.drawString(400, y, str(r['service_type'])[:12]); p.drawString(470, y, str(r['department'])[:12]); p.drawString(560, y, str(r['status'])[:12]); y -= 12
+            if y < 60:  # Check if we need a new page
+                p.showPage()
+                y = height - 40
+                p.setFont('Helvetica', 8)
+            
+            x = 40
+            row_data = [
+                str(r['patient_name'])[:20],
+                str(r['patient_id'])[:12],
+                str(r['patient_email'])[:20],
+                r['date_time'].strftime('%Y-%m-%d %H:%M'),
+                str(r['service_type'])[:15],
+                str(r['department'])[:12],
+                str(r.get('queue_number', ''))[:8],
+                str(r['status'])[:12],
+                str(r['created_by'])[:15]
+            ]
+            
+            for i, (text, width) in enumerate(zip(row_data, [h[1] for h in headers])):
+                p.drawString(x, y, text)
+                x += width
+            y -= 12
+        
         p.showPage(); p.save(); return resp
     return response

@@ -56,9 +56,9 @@
         <button type="button" class="btn btn-outline-danger" onclick="printReport(false)">
           <i class="bi bi-printer me-1"></i>Print
         </button>
-        <button type="button" class="btn btn-outline-secondary" onclick="printReport(true)">
+        <a href="?export=pdf&role={{ role_filter }}&department={{ department_filter }}&start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-outline-secondary">
           <i class="bi bi-filetype-pdf me-1"></i>PDF
-        </button>
+        </a>
       </div>
     </form>
   </div>
@@ -266,24 +266,71 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <script>
-// Print or Save-as-PDF the reports table only
+// Print or Save-as-PDF with structured layout
 function printReport(asPdf){
   try{
-    const section = document.querySelector('.card .table-responsive') || document.querySelector('.card-body');
-    if(!section){ window.print(); return; }
+    // Get summary cards
+    const summaryCards = document.querySelector('.row.g-3.mb-4');
+    const reportsCard = document.querySelector('.card:has(.card-header:contains("Reports Data"))') || 
+                       Array.from(document.querySelectorAll('.card')).find(card => 
+                         card.querySelector('.card-header') && 
+                         card.querySelector('.card-header').textContent.includes('Reports Data'));
+    
+    if (!reportsCard) { window.print(); return; }
+    
+    // Create structured print content
+    const printContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px;">
+        <h1 style="text-align: center; margin-bottom: 30px; color: #333;">System Reports</h1>
+        
+        <!-- SUMMARY SECTION -->
+        <div style="margin-bottom: 30px;">
+          <h2 style="color: #2c3e50; border-bottom: 2px solid #007bff; padding-bottom: 5px; margin-bottom: 15px;">SUMMARY</h2>
+          ${summaryCards ? summaryCards.outerHTML : '<p>No summary data available.</p>'}
+        </div>
+        
+        <!-- REPORTS DATA SECTION -->
+        <div style="margin-bottom: 30px;">
+          <h2 style="color: #2c3e50; border-bottom: 2px solid #28a745; padding-bottom: 5px; margin-bottom: 15px;">REPORTS DATA</h2>
+          ${reportsCard ? reportsCard.querySelector('.card-body').outerHTML : '<p>No reports data available.</p>'}
+        </div>
+      </div>
+    `;
+    
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>System Reports</title>
+      <style>
+        body { font-family: Arial, Helvetica, sans-serif; }
+        table{ width:100%; border-collapse:collapse }
+        th,td{ border:1px solid #ddd; padding:6px }
+        thead{ background:#f8f9fa; font-weight:600 }
+        .card { border: 1px solid #ddd; margin-bottom: 15px; }
+        .card-header { background: #f8f9fa; padding: 10px; border-bottom: 1px solid #ddd; font-weight: bold; }
+        .card-body { padding: 15px; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .bg-primary { background-color: #007bff; color: white; }
+        .bg-info { background-color: #17a2b8; color: white; }
+        .bg-light { background-color: #f8f9fa; color: black; }
+        .bg-success { background-color: #28a745; color: white; }
+        .bg-warning { background-color: #ffc107; color: black; }
+        .bg-secondary { background-color: #6c757d; color: white; }
+        .bg-danger { background-color: #dc3545; color: white; }
+        .bg-dark { background-color: #343a40; color: white; }
+        h4{ margin:0 0 8px 0 }
+      </style>
+    </head><body>${printContent}</body></html>`;
+
     const printWindow = window.open('', '_blank', 'width=1024,height=768');
-    const styles = document.querySelector('link[href*="bootstrap" ]') ? document.querySelector('link[href*="bootstrap" ]').outerHTML : '';
-    const custom = '<style>table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:6px}thead{background:#f8f9fa;font-weight:600}</style>';
-    printWindow.document.write('<html><head><title>System Reports</title>' + styles + custom + '</head><body>');
-    printWindow.document.write(section.outerHTML);
-    printWindow.document.write('</body></html>');
+    printWindow.document.write(html);
     printWindow.document.close();
     printWindow.focus();
     printWindow.onload = function(){
       printWindow.print();
       if(asPdf){ setTimeout(()=>printWindow.close(), 500); }
     };
-  }catch(_){ window.print(); }
+  }catch(e){ 
+    console.log('Print error:', e);
+    window.print(); 
+  }
 }
 </script>
 
